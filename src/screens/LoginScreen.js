@@ -109,17 +109,25 @@ const LoginScreen = ({ navigation }) => {
     };
     setErrors(newErrors);
     if (newErrors.phone || newErrors.email || newErrors.password) return;
+
+    navigation.getParent()?.reset({
+      index: 0,
+      routes: [{ name: SCREEN_NAMES.MAIN }],
+    });
   };
 
   return (
     <SafeAreaView style={[flex, styles.safeArea]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
         <ScrollView
           bounces={false}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={styles.scrollContent}>
           {/* Promo card */}
           <View style={styles.promoCard}>

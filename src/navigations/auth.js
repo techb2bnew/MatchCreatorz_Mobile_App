@@ -1,13 +1,7 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import AuthStack from './authStack';
+import RootNavigator from './RootNavigator';
 
-const AuthNavigation = () => {
-  return (
-    <NavigationContainer>
-      <AuthStack />
-    </NavigationContainer>
-  );
-};
+/** @deprecated Use RootNavigator — kept for backward compatibility */
+const AuthNavigation = () => <RootNavigator />;
 
 export default AuthNavigation;

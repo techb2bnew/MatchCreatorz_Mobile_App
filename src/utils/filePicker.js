@@ -1,8 +1,24 @@
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, PermissionsAndroid } from 'react-native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 
 export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+
+const requestAndroidCameraPermission = async () => {
+  if (Platform.OS !== 'android') return true;
+
+  const alreadyGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
+  if (alreadyGranted) return true;
+
+  const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA, {
+    title: 'Camera Permission',
+    message: 'MatchCreators needs camera access to take a profile photo.',
+    buttonPositive: 'Allow',
+    buttonNegative: 'Deny',
+  });
+
+  return result === PermissionsAndroid.RESULTS.GRANTED;
+};
 
 const mapAsset = asset => ({
   uri: asset.uri,
@@ -41,11 +57,27 @@ export const pickImagesFromGallery = async (allowMultiple = true) => {
 };
 
 export const pickImageFromCamera = async () => {
+  const hasPermission = await requestAndroidCameraPermission();
+  if (!hasPermission) {
+    Alert.alert('Permission required', 'Please allow camera access to take a photo.');
+    return [];
+  }
+
   const result = await launchCamera({
     mediaType: 'photo',
+    cameraType: 'front',
     quality: 0.8,
     saveToPhotos: false,
+    includeBase64: false,
   });
+
+  if (result.errorCode) {
+    Alert.alert(
+      'Camera unavailable',
+      result.errorMessage || 'Unable to open camera. Please try again or pick from gallery.',
+    );
+    return [];
+  }
 
   if (result.didCancel || !result.assets?.length) return [];
 

@@ -17,10 +17,10 @@ import CustomButton from '../components/CustomButton';
 import CustomTextInput from '../components/CustomTextInput';
 import FormLabel from '../components/FormLabel';
 import SocialButton from '../components/SocialButton';
-import StepIndicator from '../components/CreateAccount/StepIndicator';
-import ProfileDetailsStep from '../components/CreateAccount/ProfileDetailsStep';
-import PortfolioStep from '../components/CreateAccount/PortfolioStep';
-import SuccessModal from '../components/Modal/SuccessModal';
+import StepIndicator from '../components/StepIndicator';
+import ProfileDetailsStep from '../components/ProfileDetailsStep';
+import PortfolioStep from '../components/PortfolioStep';
+import SuccessModal from '../components/SuccessModal';
 import { BaseStyle } from '../constans/Style';
 import {
   blackColor,
@@ -266,11 +266,14 @@ const CreateAccountScreen = ({ navigation }) => {
     <SafeAreaView style={[flex, styles.safeArea]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
         <ScrollView
           bounces={false}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={styles.scrollContent}>
           {/* Promo card */}
           {isAccountStep ? (
@@ -533,7 +536,10 @@ const CreateAccountScreen = ({ navigation }) => {
         message={ACCOUNT_CREATED_MESSAGE}
         onPress={() => {
           setShowSuccess(false);
-          navigation.navigate(SCREEN_NAMES.LOGIN);
+          navigation.getParent()?.reset({
+            index: 0,
+            routes: [{ name: SCREEN_NAMES.MAIN }],
+          });
         }}
       />
     </SafeAreaView>

@@ -14,7 +14,7 @@ import OTPTextInput from 'react-native-otp-textinput';
 import CustomButton from '../components/CustomButton';
 import CustomTextInput from '../components/CustomTextInput';
 import FormLabel from '../components/FormLabel';
-import SuccessModal from '../components/Modal/SuccessModal';
+import SuccessModal from '../components/SuccessModal';
 import { BaseStyle } from '../constans/Style';
 import {
   blackColor,
@@ -310,7 +310,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
         <View style={[styles.header, flexDirectionRow, alignItemsCenter]}>
           <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
             <Icon name="arrow-left" size={20} color={blackColor} />
@@ -321,6 +322,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
           showsVerticalScrollIndicator={false}
           bounces={false}>
           <View style={styles.contentBox}>

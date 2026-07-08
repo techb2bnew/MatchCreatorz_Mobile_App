@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import CustomTextInput from '../CustomTextInput';
-import FormLabel from '../FormLabel';
+import CustomTextInput from './CustomTextInput';
+import FormLabel from './FormLabel';
 import UploadOptionsModal from './UploadOptionsModal';
-import { BaseStyle } from '../../constans/Style';
+import { BaseStyle } from '../constans/Style';
 import {
   blackColor,
   borderLightColor,
@@ -13,8 +13,8 @@ import {
   lightPink,
   redColor,
   whiteColor,
-} from '../../constans/Color';
-import { style, spacings } from '../../constans/Fonts';
+} from '../constans/Color';
+import { style, spacings } from '../constans/Fonts';
 import {
   ACCEPT_TERMS,
   ADD_MORE_FILES,
@@ -34,15 +34,15 @@ import {
   TERMS_AND_CONDITIONS,
   UPLOAD_FILES,
   UPLOAD_FILES_HINT,
-} from '../../constans/Constants';
+} from '../constans/Constants';
 import {
   formatFileSize,
   isImageFile,
   pickDocuments,
   pickImageFromCamera,
   pickImagesFromGallery,
-} from '../../utils/filePicker';
-import { heightPercentageToDP as hp } from '../../utils';
+} from '../utils/filePicker';
+import { heightPercentageToDP as hp } from '../utils';
 
 const { flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween, flexWrap } = BaseStyle;
 

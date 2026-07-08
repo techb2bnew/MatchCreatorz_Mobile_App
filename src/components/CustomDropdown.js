@@ -1,14 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, StyleSheet, TextInput } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { BaseStyle } from '../../constans/Style';
-import { blackColor, borderLightColor, grayColor, inputBgColor, redColor, whiteColor } from '../../constans/Color';
-import { style, spacings } from '../../constans/Fonts';
-import { heightPercentageToDP as hp } from '../../utils';
+import { BaseStyle } from '../constans/Style';
+import { blackColor, borderLightColor, grayColor, inputBgColor, redColor, whiteColor } from '../constans/Color';
+import { style, spacings } from '../constans/Fonts';
+import { heightPercentageToDP as hp } from '../utils';
 
 const { flexDirectionRow, alignItemsCenter } = BaseStyle;
 
-import FormLabel from '../FormLabel';
+import FormLabel from './FormLabel';
 
 const CustomDropdown = ({ label, value, options, onSelect, style: customStyle, searchable = false, required = false }) => {
   const [visible, setVisible] = useState(false);

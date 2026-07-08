@@ -3,6 +3,35 @@ export const SCREEN_NAMES = {
   LOGIN: 'Login',
   CREATE_ACCOUNT: 'CreateAccount',
   FORGOT_PASSWORD: 'ForgotPassword',
+  MAIN: 'Main',
+  BUYER_TABS: 'BuyerTabs',
+  DASHBOARD_STACK: 'DashboardStack',
+  JOBS_STACK: 'JobsStack',
+  CHAT_STACK: 'ChatStack',
+  WALLET_STACK: 'WalletStack',
+  PROFILE_STACK: 'ProfileStack',
+  DASHBOARD: 'Dashboard',
+  JOBS_BOOKINGS: 'JobsBookings',
+  VIEW_BIDS: 'ViewBids',
+  BOOKING_DETAILS: 'BookingDetails',
+  CHAT: 'Chat',
+  CHAT_CONVERSATION: 'ChatConversation',
+  WALLET: 'Wallet',
+  PROFILE: 'Profile',
+  NOTIFICATIONS: 'Notifications',
+};
+
+export const BUYER_TABS = {
+  DASHBOARD_STACK: 'DashboardStack',
+  JOBS_STACK: 'JobsStack',
+  CHAT_STACK: 'ChatStack',
+  WALLET_STACK: 'WalletStack',
+  PROFILE_STACK: 'ProfileStack',
+};
+
+export const JOBS_BOOKINGS_TABS = {
+  JOBS: 'jobs',
+  BOOKINGS: 'bookings',
 };
 
 export const SPLASH_DURATION = 2500;
@@ -213,3 +242,288 @@ export const OTP_LENGTH = 6;
 export const RESEND_OTP_SECONDS = 60;
 export const ERROR_OTP_REQUIRED = 'OTP is required';
 export const ERROR_OTP_INVALID = 'Please enter a valid 6-digit OTP';
+
+// Bottom tabs
+export const TAB_DASHBOARD = 'Dashboard';
+export const TAB_JOBS = 'Jobs/Bookings';
+export const TAB_CHAT = 'Chat';
+
+export const CHAT_MESSAGES_TITLE = 'Messages';
+export const CHAT_SEARCH_PLACEHOLDER = 'Search conversations...';
+export const CHAT_UNREAD_LABEL = 'unread';
+export const CHAT_ONLINE = 'Online';
+export const CHAT_VIEW_ORDER = 'View Order';
+export const CHAT_TYPE_MESSAGE = 'Type a message...';
+export const CHAT_PRESS_ENTER = 'Tap send to deliver your message';
+export const CHAT_TODAY = 'Today';
+export const CHAT_MENU_TITLE = 'Chat Options';
+export const CHAT_MENU_VIEW_PROFILE = 'View Profile';
+export const CHAT_MENU_MUTE = 'Mute Notifications';
+export const CHAT_MENU_CLEAR_CHAT = 'Clear Chat';
+export const CHAT_MENU_REPORT = 'Report User';
+export const CHAT_MUTED_TOAST = 'Notifications muted for this chat';
+export const CHAT_CLEARED_TOAST = 'Chat cleared';
+export const CHAT_REPORTED_TOAST = 'Report submitted. We will review shortly.';
+export const CHAT_EMPTY_CONVERSATION_MESSAGE = 'Send a message to start the conversation.';
+
+export const EMPTY_BIDS_TITLE = 'No bids yet';
+export const EMPTY_BIDS_MESSAGE = 'Creators will appear here once they bid on your job.';
+
+export const EMPTY_SEARCH_TITLE = 'No results found';
+export const EMPTY_SEARCH_MESSAGE = 'Try adjusting your search terms';
+
+export const EMPTY_JOBS_TITLE = 'No jobs posted yet';
+export const EMPTY_JOBS_MESSAGE = 'Post a job to start receiving bids from talented creators.';
+
+export const EMPTY_BOOKINGS_TITLE = 'No bookings yet';
+export const EMPTY_BOOKINGS_MESSAGE = 'Your bookings will appear here once you hire a creator.';
+
+export const EMPTY_CHATS_TITLE = 'No conversations yet';
+export const EMPTY_CHATS_MESSAGE = 'Start a chat with a creator after hiring them for a job.';
+
+export const EMPTY_DASHBOARD_BOOKINGS_TITLE = 'No recent bookings';
+export const EMPTY_DASHBOARD_BOOKINGS_MESSAGE = 'Book a creator to see your bookings here.';
+
+export const EMPTY_DASHBOARD_CREATORS_TITLE = 'No creators yet';
+export const EMPTY_DASHBOARD_CREATORS_MESSAGE = 'Browse creators and your favourites will show up here.';
+
+export const EMPTY_NOTIFICATIONS_TITLE = 'No notifications yet';
+export const EMPTY_NOTIFICATIONS_MESSAGE = 'You are all caught up! New alerts will appear here.';
+export const TAB_WALLET = 'Wallet';
+export const WALLET_TITLE = 'Wallet';
+export const WALLET_BALANCE_LABEL = 'Wallet Balance';
+export const WALLET_AVAILABLE_SUBTITLE = 'Available';
+export const WALLET_TOTAL_SPENT_LABEL = 'Total Spent';
+export const WALLET_TOTAL_REFUNDED_LABEL = 'Total Refunded';
+export const WALLET_ALL_TIME = 'All time';
+export const WALLET_ADD_MONEY_TITLE = 'Add Money to Wallet';
+export const WALLET_ADD_MONEY_DESC = 'Funds added instantly via Stripe. Use for booking services.';
+export const WALLET_CURRENT_BALANCE = 'Current balance';
+export const WALLET_ADD_MONEY_BTN = 'Add Money';
+export const WALLET_TRANSACTION_HISTORY = 'Transaction History';
+export const WALLET_ADD_MONEY_TOAST = 'Stripe payment coming soon.';
+export const EMPTY_WALLET_TRANSACTIONS_TITLE = 'No transactions yet';
+export const EMPTY_WALLET_TRANSACTIONS_MESSAGE = 'Your wallet activity will show up here.';
+export const TAB_PROFILE = 'Profile';
+export const PROFILE_TITLE = 'My Account';
+export const PROFILE_TAB_PROFILE = 'Profile';
+export const PROFILE_TAB_SECURITY = 'Security';
+export const PROFILE_TAB_SETTINGS = 'Settings';
+export const PROFILE_PERSONAL_INFO = 'Personal Information';
+export const PROFILE_SAVE = 'Save';
+export const PROFILE_EDIT = 'Edit';
+export const PROFILE_CANCEL = 'Cancel';
+export const PROFILE_UPLOAD_PHOTO = 'Update Profile Photo';
+export const PROFILE_REMOVE_PHOTO = 'Remove Photo';
+export const PROFILE_SAVED_TITLE = 'Profile Updated';
+export const PROFILE_SAVED_MESSAGE = 'Your profile has been saved successfully.';
+export const PROFILE_FULL_NAME = 'FULL NAME';
+export const PROFILE_EMAIL = 'EMAIL ADDRESS';
+export const PROFILE_PHONE = 'PHONE NUMBER';
+export const PROFILE_LOCATION = 'LOCATION';
+export const PROFILE_BIO = 'BIO';
+export const PROFILE_BUYER_ROLE = 'Buyer';
+export const PROFILE_STAT_WALLET = 'Wallet';
+export const PROFILE_STAT_BOOKINGS = 'Bookings';
+export const PROFILE_STAT_JOBS = 'Jobs Posted';
+export const PROFILE_STAT_FAVOURITES = 'Favourites';
+export const PROFILE_SECURITY_TITLE = 'Security Settings';
+export const PROFILE_CURRENT_PASSWORD = 'CURRENT PASSWORD';
+export const PROFILE_NEW_PASSWORD = 'NEW PASSWORD';
+export const PROFILE_CONFIRM_NEW_PASSWORD = 'CONFIRM NEW PASSWORD';
+export const PROFILE_UPDATE_PASSWORD = 'Update Password';
+export const PROFILE_PASSWORD_UPDATED = 'Password updated successfully.';
+export const PROFILE_SETTINGS_TITLE = 'Account Settings';
+export const PROFILE_NOTIFICATION_SETTINGS = 'Notification Settings';
+export const PROFILE_NOTIFICATION_SETTINGS_DESC = 'Control which alerts you receive';
+export const PROFILE_LOGOUT = 'Logout';
+export const PROFILE_LOGOUT_TITLE = 'Logout?';
+export const PROFILE_LOGOUT_MESSAGE = 'Are you sure you want to logout from your account?';
+export const PROFILE_LOGOUT_CONFIRM = 'Yes, Logout';
+export const PROFILE_DELETE_ACCOUNT = 'Delete Account';
+export const PROFILE_DANGER_ZONE = 'Danger Zone';
+export const PROFILE_DELETE_DESC = 'Permanently delete your account and all data.';
+export const PROFILE_DELETE_TITLE = 'Delete Account?';
+export const PROFILE_DELETE_MESSAGE =
+  'This action cannot be undone. All your data, bookings and wallet balance will be permanently removed.';
+export const PROFILE_DELETE_CONFIRM = 'Yes, Delete';
+export const NOTIFICATION_PREFS_TITLE = 'Notification Preferences';
+export const NOTIFICATION_PREFS_SUBTITLE = 'Control which alerts you receive';
+export const NOTIF_EMAIL = 'Email Notifications';
+export const NOTIF_EMAIL_DESC = 'Receive updates via email';
+export const NOTIF_SMS = 'SMS Notifications';
+export const NOTIF_SMS_DESC = 'Receive alerts on your phone';
+export const NOTIF_NEW_OFFERS = 'New Offers';
+export const NOTIF_NEW_OFFERS_DESC = 'When sellers send you an offer';
+export const NOTIF_BOOKING_UPDATES = 'Booking Updates';
+export const NOTIF_BOOKING_UPDATES_DESC = 'Updates on your bookings';
+export const NOTIF_PAYMENT_ALERTS = 'Payment Alerts';
+export const NOTIF_PAYMENT_ALERTS_DESC = 'Alerts for wallet transactions';
+export const NOTIF_CHAT_MESSAGES = 'Chat Messages';
+export const NOTIF_CHAT_MESSAGES_DESC = 'New messages from sellers';
+export const TAB_MY_JOBS = 'My Jobs';
+export const TAB_BOOKINGS = 'Bookings';
+
+// Dashboard
+export const DASHBOARD_TITLE = 'Dashboard';
+export const DASHBOARD_SEARCH_PLACEHOLDER = 'Search creators, jobs...';
+export const DASHBOARD_WELCOME_PREFIX = 'Welcome back,';
+export const DASHBOARD_POST_JOB = 'Post a Job';
+export const DASHBOARD_QUICK_ACTIONS = 'Quick Actions';
+export const DASHBOARD_RECENT_BOOKINGS = 'Recent Bookings';
+export const DASHBOARD_TOP_CREATORS = 'Top Creators';
+export const DASHBOARD_SEE_ALL = 'See all';
+export const DASHBOARD_AVAILABLE_TO_SPEND = 'Available to spend';
+export const DASHBOARD_NEEDS_ATTENTION = 'needs attention';
+export const DASHBOARD_RECEIVING_BIDS = 'receiving bids';
+export const DASHBOARD_SAVED_CREATORS = 'Saved creators';
+
+export const BUYER_STATIC_USER = {
+  name: 'Sarah Lee',
+  role: 'Buyer',
+  initials: 'SL',
+};
+
+export const PLACEHOLDER_COMING_SOON = 'Coming soon';
+export const NOTIFICATIONS_TITLE = 'Notifications';
+export const NO_NOTIFICATIONS = 'No notifications yet';
+export const MARK_ALL_READ = 'Mark all as read';
+export const UNREAD_NOTIFICATIONS_COUNT = 3;
+
+export const NOTIFICATION_FILTER_TABS = {
+  ALL: 'all',
+  BOOKINGS: 'bookings',
+  PAYMENTS: 'payments',
+  SYSTEM: 'system',
+};
+
+export const NOTIFICATION_FILTER_LABELS = {
+  ALL: 'All',
+  BOOKINGS: 'Bookings',
+  PAYMENTS: 'Payments',
+  SYSTEM: 'System',
+};
+
+// Jobs & Bookings screen
+export const JOBS_SCREEN_TITLE = 'My Jobs';
+export const BOOKINGS_SCREEN_TITLE = 'My Bookings';
+export const JOBS_SEARCH_PLACEHOLDER = 'Search...';
+
+export const MY_JOBS_SUB_TABS = {
+  POSTED: 'posted',
+  NEW_JOB: 'new_job',
+};
+
+export const MY_JOBS_POSTED_TAB = 'My Posted Jobs';
+export const MY_JOBS_POST_NEW_TAB = 'Post New Job';
+export const POST_JOB_TITLE = 'Post a New Job';
+export const POST_JOB_SUBTITLE = 'Fill in the details to attract the right creators';
+export const POST_JOB_BTN = 'Post Job';
+export const TIPS_TITLE = 'Tips for a Great Post';
+export const PLATFORM_STATS_TITLE = 'Platform Stats';
+
+export const MY_JOBS_STATS_CONFIG = [
+  { id: 'total', label: 'Total Posted', icon: 'briefcase', color: '#E94545' },
+  { id: 'open', label: 'Open', icon: 'circle', color: '#1B7A45' },
+  { id: 'progress', label: 'In Progress', icon: 'loader', color: '#3B6981' },
+  { id: 'bids', label: 'Total Bids', icon: 'award', color: '#FFA928' },
+];
+
+export const JOB_CATEGORIES = ['Design', 'Development', 'Video', 'Writing', 'Marketing', 'Photography'];
+export const JOB_TYPES = ['Fixed Price', 'Hourly'];
+export const EXPERIENCE_LEVELS = ['Any Level', 'Entry Level', 'Intermediate', 'Expert'];
+
+export const POST_JOB_PLACEHOLDERS = {
+  title: 'e.g. Logo Design for My Startup',
+  description:
+    'Describe your project requirements, deliverables, timeline expectations, and any references...',
+  budgetMin: '500',
+  budgetMax: '5000',
+  deadline: 'dd-mm-yyyy',
+  skills: 'e.g. Photoshop, Illustrator, Branding (comma separated)',
+};
+
+export const POST_JOB_LABELS = {
+  title: 'Job Title',
+  description: 'Description',
+  category: 'Category',
+  jobType: 'Job Type',
+  budgetMin: 'Budget Min (₹)',
+  budgetMax: 'Budget Max (₹)',
+  deadline: 'Deadline',
+  experienceLevel: 'Experience Level',
+  skills: 'Required Skills',
+};
+
+export const POST_JOB_TIPS = [
+  'Write a clear, specific title',
+  'Describe requirements in detail',
+  'Set a realistic budget range',
+  'Add relevant skills and tools',
+  'Include examples or references if possible',
+];
+
+export const PLATFORM_STATS = [
+  { id: '1', label: 'Avg. Bids per Job', value: '8-12', color: '#E94545' },
+  { id: '2', label: 'Avg. Hire Time', value: '24 hours', color: '#3B6981' },
+  { id: '3', label: 'Active Creators', value: '12,000+', color: '#1B7A45' },
+];
+
+export const BUYER_PROTECTION = {
+  title: 'Buyer Protection',
+  text: 'Your payment is held in escrow and released only when you approve the work.',
+};
+
+export const JOB_ACTIONS = {
+  VIEW_BIDS: 'View Bids',
+  EDIT: 'Edit',
+};
+
+export const BOOKINGS_FILTER_TABS = {
+  ACTIVE: 'active',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+};
+
+export const BOOKINGS_FILTER_LABELS = {
+  ACTIVE: 'Active',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+};
+
+export const BOOKING_ACTIONS = {
+  DETAILS: 'Details',
+  CANCEL: 'Cancel',
+  ACCEPT: 'Accept',
+  REJECT: 'Reject',
+};
+
+export const SELLER_PREFIX = 'Seller:';
+export const BIDS_SUFFIX = 'bids';
+export const FEE_INCL_PREFIX = 'incl.';
+export const FEE_SUFFIX = 'fee';
+
+export const VIEW_BIDS_TITLE = 'View Bids';
+export const BOOKING_DETAILS_TITLE = 'Booking Details';
+export const BOOKING_ID_PREFIX = 'Booking ID';
+export const BOOKING_TIMELINE = 'Timeline';
+export const BOOKING_PRICE_BREAKDOWN = 'Price Breakdown';
+export const BOOKING_SUBTOTAL = 'Subtotal';
+export const BOOKING_SERVICE_FEE = 'Service Fee';
+export const BOOKING_TOTAL = 'Total';
+export const BOOKING_DESCRIPTION = 'Description';
+export const HIRE_CREATOR = 'Hire Creator';
+export const UPDATE_JOB_BTN = 'Update Job';
+
+export const CONFIRM_CANCEL = 'Cancel';
+export const CONFIRM_YES = 'Yes, Confirm';
+
+export const BOOKING_ACCEPT_TITLE = 'Accept Delivery?';
+export const BOOKING_ACCEPT_MESSAGE =
+  'Are you sure you want to accept this delivery? Payment will be released to the seller.';
+export const BOOKING_REJECT_TITLE = 'Reject Delivery?';
+export const BOOKING_REJECT_MESSAGE =
+  'Are you sure you want to reject this delivery? The seller will be notified to revise the work.';
+export const BOOKING_CANCEL_TITLE = 'Cancel Booking?';
+export const BOOKING_CANCEL_MESSAGE =
+  'Are you sure you want to cancel this booking? This action cannot be undone.';

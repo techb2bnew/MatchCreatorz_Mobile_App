@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { BaseStyle } from '../../constans/Style';
-import { blackColor, borderLightColor, grayColor, greenColor, redColor, whiteColor } from '../../constans/Color';
-import { style, spacings } from '../../constans/Fonts';
-import { STEP_ACCOUNT, STEP_PORTFOLIO, STEP_PROFILE } from '../../constans/Constants';
+import { BaseStyle } from '../constans/Style';
+import { blackColor, borderLightColor, grayColor, greenColor, redColor, whiteColor } from '../constans/Color';
+import { style, spacings } from '../constans/Fonts';
+import { STEP_ACCOUNT, STEP_PORTFOLIO, STEP_PROFILE } from '../constans/Constants';
 
 const { flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween } = BaseStyle;
 

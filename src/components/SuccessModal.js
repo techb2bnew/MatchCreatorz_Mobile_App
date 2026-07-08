@@ -1,18 +1,18 @@
 import React from 'react';
 import { Modal, View, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import CustomButton from '../CustomButton';
-import { BaseStyle } from '../../constans/Style';
+import CustomButton from './CustomButton';
+import { BaseStyle } from '../constans/Style';
 import {
   blackColor,
   grayColor,
   lightPink,
   redColor,
   whiteColor,
-} from '../../constans/Color';
-import { style, spacings } from '../../constans/Fonts';
-import { OK } from '../../constans/Constants';
-import { widthPercentageToDP as wp } from '../../utils';
+} from '../constans/Color';
+import { style, spacings } from '../constans/Fonts';
+import { OK } from '../constans/Constants';
+import { widthPercentageToDP as wp } from '../utils';
 
 const { alignItemsCenter, alignJustifyCenter } = BaseStyle;
 

@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import CustomTextInput from '../CustomTextInput';
-import FormLabel from '../FormLabel';
+import CustomTextInput from './CustomTextInput';
+import FormLabel from './FormLabel';
 import CustomDropdown from './CustomDropdown';
-import { BaseStyle } from '../../constans/Style';
+import { BaseStyle } from '../constans/Style';
 import {
   blackColor,
   borderLightColor,
@@ -12,9 +12,9 @@ import {
   inputBgColor,
   lightPink,
   redColor,
-} from '../../constans/Color';
-import { style, spacings } from '../../constans/Fonts';
-import { getCountryNames, getDefaultStateForCountry, getStateNamesForCountry } from '../../utils/locationData';
+} from '../constans/Color';
+import { style, spacings } from '../constans/Fonts';
+import { getCountryNames, getDefaultStateForCountry, getStateNamesForCountry } from '../utils/locationData';
 import {
   BIO,
   BIO_PLACEHOLDER,
@@ -39,9 +39,9 @@ import {
   TAGS_SKILLS,
   UPLOAD_RESUME,
   ZIP_PLACEHOLDER,
-} from '../../constans/Constants';
-import { formatFileSize, showResumePicker } from '../../utils/filePicker';
-import { heightPercentageToDP as hp } from '../../utils';
+} from '../constans/Constants';
+import { formatFileSize, showResumePicker } from '../utils/filePicker';
+import { heightPercentageToDP as hp } from '../utils';
 
 const { flexDirectionRow, flexWrap, alignItemsCenter, alignItemsFlexStart } = BaseStyle;
 
