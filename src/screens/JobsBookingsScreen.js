@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -82,6 +81,11 @@ import ScreenHeader, { screenContentStyles } from '../components/ScreenHeader';
 import ConfirmationModal from '../components/ConfirmationModal';
 import EmptyState from '../components/EmptyState';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
+import {
+  keyboardAvoidingBehavior,
+  scrollInputAboveKeyboard,
+  useKeyboardBottomInset,
+} from '../utils/keyboard';
 
 const {
   flex,
@@ -122,6 +126,8 @@ const EMPTY_POST_JOB_FORM = {
 };
 
 const JobsBookingsScreen = ({ navigation, route }) => {
+  const scrollRef = useRef(null);
+  const keyboardBottom = useKeyboardBottomInset(40);
   const [activeTab, setActiveTab] = useState(JOBS_BOOKINGS_TABS.JOBS);
   const [jobsSubTab, setJobsSubTab] = useState(MY_JOBS_SUB_TABS.POSTED);
   const [bookingFilter, setBookingFilter] = useState(BOOKINGS_FILTER_TABS.ACTIVE);
@@ -309,6 +315,10 @@ const JobsBookingsScreen = ({ navigation, route }) => {
 
   const updateForm = (key, value) => {
     setPostJobForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleInputFocus = event => {
+    scrollInputAboveKeyboard(scrollRef, event, 160);
   };
 
   const resetPostJobForm = () => {
@@ -640,6 +650,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           onChangeText={v => updateForm('title', v)}
           placeholder={POST_JOB_PLACEHOLDERS.title}
           leftIcon="edit-2"
+          onFocus={handleInputFocus}
         />
 
         <CustomTextInput
@@ -648,6 +659,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           onChangeText={v => updateForm('description', v)}
           placeholder={POST_JOB_PLACEHOLDERS.description}
           leftIcon="file-text"
+          onFocus={handleInputFocus}
           style={styles.formField}
         />
 
@@ -675,6 +687,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
             placeholder={POST_JOB_PLACEHOLDERS.budgetMin}
             keyboardType="numeric"
             leftIcon="dollar-sign"
+            onFocus={handleInputFocus}
             style={styles.budgetField}
           />
           <CustomTextInput
@@ -684,6 +697,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
             placeholder={POST_JOB_PLACEHOLDERS.budgetMax}
             keyboardType="numeric"
             leftIcon="dollar-sign"
+            onFocus={handleInputFocus}
             style={styles.budgetField}
           />
         </View>
@@ -694,6 +708,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           onChangeText={v => updateForm('deadline', v)}
           placeholder={POST_JOB_PLACEHOLDERS.deadline}
           leftIcon="calendar"
+          onFocus={handleInputFocus}
           style={styles.formField}
         />
 
@@ -711,6 +726,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           onChangeText={v => updateForm('skills', v)}
           placeholder={POST_JOB_PLACEHOLDERS.skills}
           leftIcon="code"
+          onFocus={handleInputFocus}
           style={styles.formField}
         />
 
@@ -878,20 +894,21 @@ const JobsBookingsScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={[flex, screenContentStyles.safeArea]} edges={['top']}>
-      <KeyboardAvoidingView
-        style={flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+      <KeyboardAvoidingView style={flex} behavior={keyboardAvoidingBehavior}>
         <ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             screenContentStyles.scrollContent,
             jobsSubTab === MY_JOBS_SUB_TABS.NEW_JOB && styles.formScrollContent,
+            {
+              paddingBottom:
+                (jobsSubTab === MY_JOBS_SUB_TABS.NEW_JOB ? hp(12) : hp(3)) + keyboardBottom,
+            },
           ]}
           bounces={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets>
+          keyboardDismissMode="on-drag">
           {renderHeader()}
           {renderSearch()}
           {renderMainTabs()}

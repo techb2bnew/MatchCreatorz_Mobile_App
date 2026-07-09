@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -81,6 +80,11 @@ import {
 } from '../constans/Constants';
 import { getDefaultStateForCountry, DEFAULT_COUNTRY } from '../utils/locationData';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp, formatPhoneInput, validateConfirmPassword, validateFullName, validatePassword, validatePhone, validateTerms } from '../utils';
+import {
+  keyboardAvoidingBehavior,
+  scrollInputAboveKeyboard,
+  useKeyboardBottomInset,
+} from '../utils/keyboard';
 
 const {
   flex,
@@ -119,6 +123,8 @@ const INITIAL_PORTFOLIO_FORM = {
 };
 
 const CreateAccountScreen = ({ navigation }) => {
+  const scrollRef = useRef(null);
+  const keyboardBottom = useKeyboardBottomInset(32);
   const [currentStep, setCurrentStep] = useState(SIGNUP_STEPS.ACCOUNT);
   const [selectedRole, setSelectedRole] = useState(USER_ROLES.BUYER);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -211,6 +217,10 @@ const CreateAccountScreen = ({ navigation }) => {
     else if (isPortfolioStep) setCurrentStep(SIGNUP_STEPS.PROFILE);
   };
 
+  const handleInputFocus = event => {
+    scrollInputAboveKeyboard(scrollRef, event, 160);
+  };
+
   const handlePrimaryAction = () => {
     if (isAccountStep) {
       if (!validateAccountStep()) return;
@@ -218,6 +228,18 @@ const CreateAccountScreen = ({ navigation }) => {
         setCurrentStep(SIGNUP_STEPS.PROFILE);
         return;
       }
+
+      const buyerPayload = {
+        role: selectedRole,
+        fullName,
+        email,
+        phone,
+        password,
+        confirmPassword,
+        acceptTerms,
+        acceptSms,
+      };
+      console.log('Create Account Submit Details (Buyer):', buyerPayload);
       setShowSuccess(true);
       return;
     }
@@ -229,6 +251,20 @@ const CreateAccountScreen = ({ navigation }) => {
 
     if (isPortfolioStep) {
       if (!validatePortfolioStep()) return;
+
+      const sellerPayload = {
+        role: selectedRole,
+        fullName,
+        email,
+        phone,
+        password,
+        confirmPassword,
+        acceptTerms,
+        acceptSms,
+        profile: profileForm,
+        portfolio: portfolioForm,
+      };
+      console.log('Create Account Submit Details (Seller):', sellerPayload);
       setShowSuccess(true);
     }
   };
@@ -264,17 +300,14 @@ const CreateAccountScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[flex, styles.safeArea]} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+      <KeyboardAvoidingView style={flex} behavior={keyboardAvoidingBehavior}>
         <ScrollView
+          ref={scrollRef}
           bounces={false}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets
-          contentContainerStyle={styles.scrollContent}>
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: spacings.xxLarge + keyboardBottom }]}>
           {/* Promo card */}
           {isAccountStep ? (
             <View style={styles.promoCard}>
@@ -349,6 +382,7 @@ const CreateAccountScreen = ({ navigation }) => {
                 placeholder={FULL_NAME}
                 leftIcon="user"
                 error={errors.fullName}
+                onFocus={handleInputFocus}
                 style={styles.inputSpacing}
               />
               <CustomTextInput
@@ -358,6 +392,7 @@ const CreateAccountScreen = ({ navigation }) => {
                 placeholder={EMAIL_OPTIONAL}
                 keyboardType="email-address"
                 leftIcon="mail"
+                onFocus={handleInputFocus}
                 style={styles.inputSpacing}
               />
 
@@ -379,7 +414,11 @@ const CreateAccountScreen = ({ navigation }) => {
                   codeTextStyle={[styles.phoneCode, style.fontSizeNormal2x]}
                   textInputStyle={[styles.phoneText, style.fontSizeNormal2x]}
                   renderDropdownImage={<Icon name="chevron-down" size={14} color={grayColor} />}
-                  textInputProps={{ placeholderTextColor: grayColor, maxLength: PHONE_MAX_LENGTH }}
+                  textInputProps={{
+                    placeholderTextColor: grayColor,
+                    maxLength: PHONE_MAX_LENGTH,
+                    onFocus: handleInputFocus,
+                  }}
                 />
                 {errors.phone ? <Text style={styles.errorText}>{errors.phone}</Text> : null}
               </View>
@@ -398,6 +437,7 @@ const CreateAccountScreen = ({ navigation }) => {
                     leftIcon="lock"
                     secureTextEntry
                     error={errors.password}
+                    onFocus={handleInputFocus}
                     style={styles.inputSpacing}
                   />
                   <CustomTextInput
@@ -412,11 +452,12 @@ const CreateAccountScreen = ({ navigation }) => {
                     leftIcon="lock"
                     secureTextEntry
                     error={errors.confirmPassword}
+                    onFocus={handleInputFocus}
                     style={styles.inputSpacing}
                   />
                 </>
               ) : (
-                <Text style={[styles.sellerHint, style.fontWeightThin]}></Text>
+                <Text style={[styles.sellerHint, style.fontWeightThin]}>{SELLER_PASSWORD_HINT}</Text>
               )}
 
               {!isSeller ? (

@@ -26,6 +26,9 @@ const CustomTextInput = ({
   editable = true,
   error,
   maxLength,
+  onFocus,
+  onBlur,
+  ...rest
 }) => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const isSecure = secureTextEntry && !isPasswordVisible;
@@ -54,7 +57,10 @@ const CustomTextInput = ({
           autoCapitalize={autoCapitalize}
           editable={editable}
           maxLength={maxLength}
+          onFocus={onFocus}
+          onBlur={onBlur}
           style={[styles.input, style.fontSizeNormal2x, inputStyle]}
+          {...rest}
         />
 
         {secureTextEntry ? (

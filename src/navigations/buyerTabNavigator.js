@@ -98,6 +98,7 @@ const BuyerTabNavigator = () => {
         tabBarActiveTintColor: redColor,
         tabBarInactiveTintColor: grayColor,
         tabBarStyle: defaultTabBarStyle,
+        tabBarHideOnKeyboard: false,
         tabBarLabelStyle: {
           fontSize: style.fontSizeExtraSmall.fontSize,
           fontWeight: '600',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   TextInput,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -77,6 +76,11 @@ import NotificationSettingsModal from '../components/NotificationSettingsModal';
 import UploadOptionsModal from '../components/UploadOptionsModal';
 import { pickImageFromCamera, pickImagesFromGallery, isImageFile } from '../utils/filePicker';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
+import {
+  keyboardAvoidingBehavior,
+  scrollInputAboveKeyboard,
+  useKeyboardBottomInset,
+} from '../utils/keyboard';
 
 const {
   flex,
@@ -97,6 +101,8 @@ const INITIAL_PROFILE = {
 };
 
 const ProfileScreen = ({ navigation }) => {
+  const scrollRef = useRef(null);
+  const keyboardBottom = useKeyboardBottomInset(40);
   const [isEditing, setIsEditing] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -162,6 +168,10 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const handleEdit = () => setIsEditing(true);
+
+  const handleInputFocus = event => {
+    scrollInputAboveKeyboard(scrollRef, event, 160);
+  };
 
   const handleCancel = () => {
     setProfileForm(savedProfile);
@@ -263,6 +273,7 @@ const ProfileScreen = ({ navigation }) => {
             label={PROFILE_FULL_NAME}
             value={profileForm.fullName}
             onChangeText={value => updateProfileField('fullName', value)}
+            onFocus={handleInputFocus}
             style={styles.fieldGap}
           />
           <CustomTextInput
@@ -270,6 +281,7 @@ const ProfileScreen = ({ navigation }) => {
             value={profileForm.email}
             onChangeText={value => updateProfileField('email', value)}
             keyboardType="email-address"
+            onFocus={handleInputFocus}
             style={styles.fieldGap}
           />
           <CustomTextInput
@@ -277,12 +289,14 @@ const ProfileScreen = ({ navigation }) => {
             value={profileForm.phone}
             onChangeText={value => updateProfileField('phone', value)}
             keyboardType="phone-pad"
+            onFocus={handleInputFocus}
             style={styles.fieldGap}
           />
           <CustomTextInput
             label={PROFILE_LOCATION}
             value={profileForm.location}
             onChangeText={value => updateProfileField('location', value)}
+            onFocus={handleInputFocus}
             style={styles.fieldGap}
           />
           <View style={styles.fieldGap}>
@@ -293,6 +307,7 @@ const ProfileScreen = ({ navigation }) => {
               multiline
               textAlignVertical="top"
               placeholderTextColor={grayColor}
+              onFocus={handleInputFocus}
               style={[styles.bioInput, style.fontSizeNormal2x]}
             />
           </View>
@@ -313,20 +328,18 @@ const ProfileScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[flex, screenContentStyles.safeArea]} edges={['top']}>
-      <KeyboardAvoidingView
-        style={flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+      <KeyboardAvoidingView style={flex} behavior={keyboardAvoidingBehavior}>
         <ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             screenContentStyles.scrollContent,
             isEditing && styles.editScrollContent,
+            { paddingBottom: (isEditing ? hp(12) : hp(3)) + keyboardBottom },
           ]}
           bounces={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets>
+          keyboardDismissMode="on-drag">
           <ScreenHeader title={PROFILE_TITLE} navigation={navigation} />
 
         <View style={styles.profileCard}>

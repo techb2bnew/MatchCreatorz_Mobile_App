@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -57,6 +56,11 @@ import {
   WELCOME_BACK,
 } from '../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp, formatPhoneInput, validateEmail, validatePassword, validatePhone } from '../utils';
+import {
+  keyboardAvoidingBehavior,
+  scrollInputAboveKeyboard,
+  useKeyboardBottomInset,
+} from '../utils/keyboard';
 
 const {
   flex,
@@ -75,11 +79,17 @@ const STAT_ITEMS = [
 ];
 
 const LoginScreen = ({ navigation }) => {
+  const scrollRef = useRef(null);
+  const keyboardBottom = useKeyboardBottomInset(32);
   const [activeTab, setActiveTab] = useState(LOGIN_TABS.PHONE);
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({ phone: '', email: '', password: '' });
+
+  const handleInputFocus = event => {
+    scrollInputAboveKeyboard(scrollRef, event, 140);
+  };
 
   const handleTabChange = tab => {
     setActiveTab(tab);
@@ -110,6 +120,14 @@ const LoginScreen = ({ navigation }) => {
     setErrors(newErrors);
     if (newErrors.phone || newErrors.email || newErrors.password) return;
 
+    const loginPayload = {
+      loginType: activeTab,
+      phone: activeTab === LOGIN_TABS.PHONE ? phone : '',
+      email: activeTab === LOGIN_TABS.EMAIL ? email : '',
+      password,
+    };
+    console.log('Login Submit Details:', loginPayload);
+
     navigation.getParent()?.reset({
       index: 0,
       routes: [{ name: SCREEN_NAMES.MAIN }],
@@ -118,17 +136,14 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[flex, styles.safeArea]} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+      <KeyboardAvoidingView style={flex} behavior={keyboardAvoidingBehavior}>
         <ScrollView
+          ref={scrollRef}
           bounces={false}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets
-          contentContainerStyle={styles.scrollContent}>
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: spacings.xxLarge + keyboardBottom }]}>
           {/* Promo card */}
           <View style={styles.promoCard}>
             <View style={styles.logoBox}>
@@ -199,7 +214,11 @@ const LoginScreen = ({ navigation }) => {
                 codeTextStyle={[styles.phoneCode, style.fontSizeNormal2x]}
                 textInputStyle={[styles.phoneText, style.fontSizeNormal2x]}
                 renderDropdownImage={<Icon name="chevron-down" size={14} color={grayColor} />}
-                textInputProps={{ placeholderTextColor: grayColor, maxLength: PHONE_MAX_LENGTH }}
+                textInputProps={{
+                  placeholderTextColor: grayColor,
+                  maxLength: PHONE_MAX_LENGTH,
+                  onFocus: handleInputFocus,
+                }}
               />
               {errors.phone ? <Text style={styles.errorText}>{errors.phone}</Text> : null}
             </View>
@@ -213,6 +232,7 @@ const LoginScreen = ({ navigation }) => {
               keyboardType="email-address"
               leftIcon="mail"
               error={errors.email}
+              onFocus={handleInputFocus}
               style={styles.inputSpacing}
             />
           )}
@@ -226,6 +246,7 @@ const LoginScreen = ({ navigation }) => {
             leftIcon="lock"
             secureTextEntry
             error={errors.password}
+            onFocus={handleInputFocus}
             style={styles.inputSpacing}
           />
 
