@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet } from 'rea
 import Icon from 'react-native-vector-icons/Feather';
 import CustomTextInput from './CustomTextInput';
 import FormLabel from './FormLabel';
-import UploadOptionsModal from './UploadOptionsModal';
+import UploadOptionsModal from './modal/UploadOptionsModal';
 import { BaseStyle } from '../constans/Style';
 import {
   blackColor,

@@ -1,16 +1,25 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import BuyerTabNavigator from './buyerTabNavigator';
+import { useRoute } from '@react-navigation/native';
+import BuyerTabNavigator from './buyer/buyerTabNavigator';
+import SellerTabNavigator from './seller/sellerTabNavigator';
 import NotificationsScreen from '../screens/NotificationsScreen';
-import BookingDetailsScreen from '../screens/BookingDetailsScreen';
-import { SCREEN_NAMES } from '../constans/Constants';
+import BookingDetailsScreen from '../screens/buyer/BookingDetailsScreen';
+import { SCREEN_NAMES, USER_ROLES } from '../constans/Constants';
 
 const Stack = createNativeStackNavigator();
 
 const MainStack = () => {
+  const route = useRoute();
+  const userRole = route.params?.userRole ?? USER_ROLES.BUYER;
+  const isSeller = userRole === USER_ROLES.CREATOR;
+
   return (
     <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-      <Stack.Screen name={SCREEN_NAMES.BUYER_TABS} component={BuyerTabNavigator} />
+      <Stack.Screen
+        name={isSeller ? SCREEN_NAMES.SELLER_TABS : SCREEN_NAMES.BUYER_TABS}
+        component={isSeller ? SellerTabNavigator : BuyerTabNavigator}
+      />
       <Stack.Screen
         name={SCREEN_NAMES.NOTIFICATIONS}
         component={NotificationsScreen}

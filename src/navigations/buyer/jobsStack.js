@@ -1,9 +1,9 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import JobsBookingsScreen from '../screens/JobsBookingsScreen';
-import ViewBidsScreen from '../screens/ViewBidsScreen';
-import BookingDetailsScreen from '../screens/BookingDetailsScreen';
-import { SCREEN_NAMES } from '../constans/Constants';
+import JobsBookingsScreen from '../../screens/buyer/JobsBookingsScreen';
+import ViewBidsScreen from '../../screens/buyer/ViewBidsScreen';
+import BookingDetailsScreen from '../../screens/buyer/BookingDetailsScreen';
+import { SCREEN_NAMES } from '../../constans/Constants';
 
 const Stack = createNativeStackNavigator();
 

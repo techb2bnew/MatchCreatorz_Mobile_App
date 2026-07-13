@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { BaseStyle } from '../constans/Style';
+import { BaseStyle } from '../../constans/Style';
 import {
   blackColor,
   borderLightColor,
@@ -9,10 +9,10 @@ import {
   lightPink,
   redColor,
   whiteColor,
-} from '../constans/Color';
-import { style, spacings } from '../constans/Fonts';
-import { CONFIRM_CANCEL, CONFIRM_YES } from '../constans/Constants';
-import { widthPercentageToDP as wp } from '../utils';
+} from '../../constans/Color';
+import { style, spacings } from '../../constans/Fonts';
+import { CONFIRM_CANCEL, CONFIRM_YES } from '../../constans/Constants';
+import { widthPercentageToDP as wp } from '../../utils';
 
 const { alignItemsCenter, alignJustifyCenter, flexDirectionRow } = BaseStyle;
 

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { BaseStyle } from '../constans/Style';
+import { BaseStyle } from '../../constans/Style';
 import {
   blackColor,
   blueColor,
@@ -22,8 +22,8 @@ import {
   lightPink,
   redColor,
   whiteColor,
-} from '../constans/Color';
-import { style, spacings } from '../constans/Fonts';
+} from '../../constans/Color';
+import { style, spacings } from '../../constans/Fonts';
 import {
   NOTIF_BOOKING_UPDATES,
   NOTIF_BOOKING_UPDATES_DESC,
@@ -46,6 +46,8 @@ import {
   PROFILE_DELETE_TITLE,
   PROFILE_EDIT,
   PROFILE_EMAIL,
+  PROFILE_EMAIL_LOGIN_HINT,
+  PROFILE_ACCOUNT_SETTINGS,
   PROFILE_FULL_NAME,
   PROFILE_LOCATION,
   PROFILE_LOGOUT,
@@ -65,22 +67,22 @@ import {
   PROFILE_TITLE,
   PROFILE_UPLOAD_PHOTO,
   SCREEN_NAMES,
-} from '../constans/Constants';
-import CustomTextInput from '../components/CustomTextInput';
-import CustomButton from '../components/CustomButton';
-import FormLabel from '../components/FormLabel';
-import ScreenHeader, { screenContentStyles } from '../components/ScreenHeader';
-import ConfirmationModal from '../components/ConfirmationModal';
-import SuccessModal from '../components/SuccessModal';
-import NotificationSettingsModal from '../components/NotificationSettingsModal';
-import UploadOptionsModal from '../components/UploadOptionsModal';
-import { pickImageFromCamera, pickImagesFromGallery, isImageFile } from '../utils/filePicker';
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
+} from '../../constans/Constants';
+import CustomTextInput from '../../components/CustomTextInput';
+import CustomButton from '../../components/CustomButton';
+import FormLabel from '../../components/FormLabel';
+import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
+import ConfirmationModal from '../../components/modal/ConfirmationModal';
+import SuccessModal from '../../components/modal/SuccessModal';
+import NotificationSettingsModal from '../../components/modal/NotificationSettingsModal';
+import UploadOptionsModal from '../../components/modal/UploadOptionsModal';
+import { pickImageFromCamera, pickImagesFromGallery, isImageFile } from '../../utils/filePicker';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import {
   keyboardAvoidingBehavior,
   scrollInputAboveKeyboard,
   useKeyboardBottomInset,
-} from '../utils/keyboard';
+} from '../../utils/keyboard';
 
 const {
   flex,
@@ -240,14 +242,6 @@ const ProfileScreen = ({ navigation }) => {
       onPress: () => setShowNotificationModal(true),
     },
     {
-      id: 'logout',
-      title: PROFILE_LOGOUT,
-      icon: 'log-out',
-      iconBg: '#E8F0F8',
-      iconColor: blueColor,
-      onPress: () => setShowLogoutModal(true),
-    },
-    {
       id: 'delete',
       title: PROFILE_DELETE_ACCOUNT,
       icon: 'trash-2',
@@ -256,12 +250,35 @@ const ProfileScreen = ({ navigation }) => {
       onPress: () => setShowDeleteModal(true),
       danger: true,
     },
+    {
+      id: 'logout',
+      title: PROFILE_LOGOUT,
+      icon: 'log-out',
+      iconBg: '#E8F0F8',
+      iconColor: blueColor,
+      onPress: () => setShowLogoutModal(true),
+    }
+    
   ];
 
   const renderViewField = (label, value) => (
     <View style={styles.fieldGap}>
       <FormLabel label={label} />
       <Text style={[styles.viewValue, style.fontWeightThin]}>{value}</Text>
+    </View>
+  );
+
+  const renderReadOnlyEmailField = () => (
+    <View style={styles.fieldGap}>
+      <FormLabel label={PROFILE_EMAIL} />
+      <View style={[styles.readOnlyField, flexDirectionRow, alignItemsCenter]}>
+        <Icon name="mail" size={16} color={grayColor} />
+        <Text style={[styles.readOnlyText, style.fontWeightThin]} numberOfLines={1}>
+          {profileForm.email}
+        </Text>
+        <Icon name="lock" size={14} color={grayColor} />
+      </View>
+      <Text style={[styles.fieldHint, style.fontWeightThin]}>{PROFILE_EMAIL_LOGIN_HINT}</Text>
     </View>
   );
 
@@ -276,14 +293,7 @@ const ProfileScreen = ({ navigation }) => {
             onFocus={handleInputFocus}
             style={styles.fieldGap}
           />
-          <CustomTextInput
-            label={PROFILE_EMAIL}
-            value={profileForm.email}
-            onChangeText={value => updateProfileField('email', value)}
-            keyboardType="email-address"
-            onFocus={handleInputFocus}
-            style={styles.fieldGap}
-          />
+          {renderReadOnlyEmailField()}
           <CustomTextInput
             label={PROFILE_PHONE}
             value={profileForm.phone}
@@ -409,20 +419,7 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={[styles.cardTitle, style.fontWeightMedium]}>{PROFILE_PERSONAL_INFO}</Text>
             </View>
 
-            {isEditing ? (
-              <View style={[flexDirectionRow, styles.editActions]}>
-                <TouchableOpacity style={[styles.cancelBtn, alignJustifyCenter]} onPress={handleCancel}>
-                  <Text style={[styles.cancelBtnText, style.fontWeightMedium]}>{PROFILE_CANCEL}</Text>
-                </TouchableOpacity>
-                <CustomButton
-                  title={PROFILE_SAVE}
-                  iconName="save"
-                  onPress={handleSave}
-                  style={styles.saveBtn}
-                  textStyle={styles.saveBtnText}
-                />
-              </View>
-            ) : (
+            {isEditing ? null : (
               <TouchableOpacity style={[styles.editBtn, flexDirectionRow, alignItemsCenter]} onPress={handleEdit}>
                 <Icon name="edit-2" size={14} color={redColor} />
                 <Text style={[styles.editBtnText, style.fontWeightMedium]}>{PROFILE_EDIT}</Text>
@@ -431,9 +428,25 @@ const ProfileScreen = ({ navigation }) => {
           </View>
 
           {renderProfileFields()}
+          {isEditing ? (
+            <View style={[styles.formActions, flexDirectionRow]}>
+              <TouchableOpacity style={[styles.cancelBtnFull, flex, alignJustifyCenter]} onPress={handleCancel}>
+                <Text style={[styles.cancelBtnText, style.fontWeightMedium]}>{PROFILE_CANCEL}</Text>
+              </TouchableOpacity>
+              <CustomButton
+                title={PROFILE_SAVE}
+                iconName="save"
+                onPress={handleSave}
+                style={[styles.saveBtnFull, flex]}
+                textStyle={styles.saveBtnText}
+              />
+            </View>
+          ) : null}
         </View>
 
+        {!isEditing ? (
         <View style={styles.contentCard}>
+          <Text style={[styles.sectionTitle, style.fontWeightMedium]}>{PROFILE_ACCOUNT_SETTINGS}</Text>
           {actionItems.map((item, index) => (
             <TouchableOpacity
               key={item.id}
@@ -467,6 +480,7 @@ const ProfileScreen = ({ navigation }) => {
             </TouchableOpacity>
           ))}
         </View>
+        ) : null}
       </ScrollView>
       </KeyboardAvoidingView>
 
@@ -650,6 +664,21 @@ const styles = StyleSheet.create({
     gap: spacings.small,
     flexShrink: 0,
   },
+  formActions: {
+    gap: spacings.normal,
+    marginTop: spacings.small,
+  },
+  cancelBtnFull: {
+    minHeight: hp(5.5),
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: borderLightColor,
+    backgroundColor: whiteColor,
+  },
+  saveBtnFull: {
+    minHeight: hp(5.5),
+    borderRadius: 10,
+  },
   cancelBtn: {
     minHeight: hp(5),
     paddingHorizontal: spacings.large,
@@ -688,6 +717,33 @@ const styles = StyleSheet.create({
     color: blackColor,
     borderWidth: 1,
     borderColor: 'transparent',
+  },
+  readOnlyField: {
+    borderRadius: 10,
+    backgroundColor: inputBgColor,
+    paddingHorizontal: spacings.large,
+    minHeight: hp(6),
+    gap: spacings.normal,
+    borderWidth: 1,
+    borderColor: borderLightColor,
+  },
+  readOnlyText: {
+    flex: 1,
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: grayColor,
+  },
+  fieldHint: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: grayColor,
+    marginTop: spacings.xsmall,
+    marginLeft: spacings.xsmall,
+  },
+  sectionTitle: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: grayColor,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: spacings.normal,
   },
   actionRow: {
     paddingVertical: spacings.large,

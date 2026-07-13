@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { BaseStyle } from '../constans/Style';
+import { BaseStyle } from '../../constans/Style';
 import {
   blackColor,
   borderLightColor,
@@ -19,8 +19,8 @@ import {
   lightPink,
   redColor,
   whiteColor,
-} from '../constans/Color';
-import { style, spacings } from '../constans/Fonts';
+} from '../../constans/Color';
+import { style, spacings } from '../../constans/Fonts';
 import {
   BIDS_SUFFIX,
   EMPTY_BIDS_MESSAGE,
@@ -29,10 +29,10 @@ import {
   EMPTY_SEARCH_TITLE,
   HIRE_CREATOR,
   VIEW_BIDS_TITLE,
-} from '../constans/Constants';
-import SearchBar from '../components/SearchBar';
-import EmptyState from '../components/EmptyState';
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
+} from '../../constans/Constants';
+import SearchBar from '../../components/SearchBar';
+import EmptyState from '../../components/EmptyState';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 
 const {
   flex,

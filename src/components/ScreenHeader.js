@@ -27,6 +27,7 @@ const ScreenHeader = ({
   showAvatar = true,
   leftAccessory = null,
   onBack,
+  user = BUYER_STATIC_USER,
 }) => {
   const openNotifications = () => {
     navigation.getParent()?.getParent()?.navigate(SCREEN_NAMES.NOTIFICATIONS);
@@ -63,7 +64,7 @@ const ScreenHeader = ({
           {showAvatar ? (
             <View style={[styles.avatar, alignJustifyCenter]}>
               <Text style={[styles.avatarText, style.fontWeightMedium]}>
-                {BUYER_STATIC_USER.initials}
+                {user.initials}
               </Text>
             </View>
           ) : null}

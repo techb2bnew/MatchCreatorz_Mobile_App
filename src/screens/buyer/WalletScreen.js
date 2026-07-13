@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { BaseStyle } from '../constans/Style';
+import { BaseStyle } from '../../constans/Style';
 import {
   blackColor,
   blueColor,
@@ -18,8 +18,8 @@ import {
   lightPink,
   redColor,
   whiteColor,
-} from '../constans/Color';
-import { style, spacings } from '../constans/Fonts';
+} from '../../constans/Color';
+import { style, spacings } from '../../constans/Fonts';
 import {
   EMPTY_WALLET_TRANSACTIONS_MESSAGE,
   EMPTY_WALLET_TRANSACTIONS_TITLE,
@@ -35,11 +35,11 @@ import {
   WALLET_TOTAL_REFUNDED_LABEL,
   WALLET_TOTAL_SPENT_LABEL,
   WALLET_TRANSACTION_HISTORY,
-} from '../constans/Constants';
-import ScreenHeader, { screenContentStyles } from '../components/ScreenHeader';
-import CustomButton from '../components/CustomButton';
-import EmptyState from '../components/EmptyState';
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
+} from '../../constans/Constants';
+import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
+import CustomButton from '../../components/CustomButton';
+import EmptyState from '../../components/EmptyState';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 
 const {
   flex,

@@ -5,6 +5,7 @@ export const SCREEN_NAMES = {
   FORGOT_PASSWORD: 'ForgotPassword',
   MAIN: 'Main',
   BUYER_TABS: 'BuyerTabs',
+  SELLER_TABS: 'SellerTabs',
   DASHBOARD_STACK: 'DashboardStack',
   JOBS_STACK: 'JobsStack',
   CHAT_STACK: 'ChatStack',
@@ -19,6 +20,13 @@ export const SCREEN_NAMES = {
   WALLET: 'Wallet',
   PROFILE: 'Profile',
   NOTIFICATIONS: 'Notifications',
+  SELLER_DASHBOARD: 'SellerDashboard',
+  SELLER_JOBS: 'SellerJobs',
+  SELLER_WORK: 'SellerWork',
+  SELLER_PROFILE: 'SellerProfile',
+  SELLER_WALLET: 'SellerWallet',
+  SELLER_MY_SERVICES: 'SellerMyServices',
+  SELLER_CONNECTS: 'SellerConnects',
 };
 
 export const BUYER_TABS = {
@@ -27,6 +35,20 @@ export const BUYER_TABS = {
   CHAT_STACK: 'ChatStack',
   WALLET_STACK: 'WalletStack',
   PROFILE_STACK: 'ProfileStack',
+};
+
+export const SELLER_TABS = {
+  DASHBOARD_STACK: 'SellerDashboardStack',
+  JOBS_STACK: 'SellerJobsStack',
+  WORK_STACK: 'SellerWorkStack',
+  CHAT_STACK: 'SellerChatStack',
+  PROFILE_STACK: 'SellerProfileStack',
+};
+
+export const SELLER_WORK_TABS = {
+  BIDS: 'bids',
+  BOOKINGS: 'bookings',
+  OFFERS: 'offers',
 };
 
 export const JOBS_BOOKINGS_TABS = {
@@ -44,6 +66,26 @@ export const USER_ROLES = {
 export const LOGIN_TABS = {
   PHONE: 'phone',
   EMAIL: 'email',
+};
+
+// TODO: Remove when API login is integrated
+export const MOCK_LOGIN_PASSWORD = '12345678';
+export const MOCK_LOGIN_BUYER_EMAIL = 'buyer@yopmail.com';
+export const MOCK_LOGIN_SELLER_EMAIL = 'seller@yopmail.com';
+
+export const MOCK_LOGIN_USERS = {
+  [MOCK_LOGIN_BUYER_EMAIL]: USER_ROLES.BUYER,
+  [MOCK_LOGIN_SELLER_EMAIL]: USER_ROLES.CREATOR,
+};
+
+export const INVALID_LOGIN_MESSAGE = 'Invalid email or password';
+
+export const getMockLoginRole = (email, password) => {
+  const key = email.trim().toLowerCase();
+  if (MOCK_LOGIN_USERS[key] && password === MOCK_LOGIN_PASSWORD) {
+    return MOCK_LOGIN_USERS[key];
+  }
+  return null;
 };
 
 // Splash
@@ -246,6 +288,11 @@ export const ERROR_OTP_INVALID = 'Please enter a valid 6-digit OTP';
 // Bottom tabs
 export const TAB_DASHBOARD = 'Dashboard';
 export const TAB_JOBS = 'Jobs/Bookings';
+export const TAB_SELLER_JOBS = 'Jobs';
+export const TAB_SELLER_WORK = 'Work';
+export const TAB_SELLER_MY_BIDS = 'My Bids';
+export const TAB_SELLER_BOOKINGS_SEGMENT = 'Bookings';
+export const TAB_SELLER_OFFERS = 'Offers';
 export const TAB_CHAT = 'Chat';
 
 export const CHAT_MESSAGES_TITLE = 'Messages';
@@ -319,6 +366,8 @@ export const PROFILE_SAVED_TITLE = 'Profile Updated';
 export const PROFILE_SAVED_MESSAGE = 'Your profile has been saved successfully.';
 export const PROFILE_FULL_NAME = 'FULL NAME';
 export const PROFILE_EMAIL = 'EMAIL ADDRESS';
+export const PROFILE_EMAIL_LOGIN_HINT = 'Used for login and cannot be changed.';
+export const PROFILE_ACCOUNT_SETTINGS = 'Account Settings';
 export const PROFILE_PHONE = 'PHONE NUMBER';
 export const PROFILE_LOCATION = 'LOCATION';
 export const PROFILE_BIO = 'BIO';
@@ -499,6 +548,7 @@ export const BOOKING_ACTIONS = {
 };
 
 export const SELLER_PREFIX = 'Seller:';
+export const BUYER_PREFIX = 'Buyer:';
 export const BIDS_SUFFIX = 'bids';
 export const FEE_INCL_PREFIX = 'incl.';
 export const FEE_SUFFIX = 'fee';
@@ -527,3 +577,123 @@ export const BOOKING_REJECT_MESSAGE =
 export const BOOKING_CANCEL_TITLE = 'Cancel Booking?';
 export const BOOKING_CANCEL_MESSAGE =
   'Are you sure you want to cancel this booking? This action cannot be undone.';
+
+// Seller
+export const SELLER_STATIC_USER = {
+  name: 'User Seller',
+  initials: 'US',
+  email: 'seller@yopmail.com',
+};
+
+export const SELLER_DASHBOARD_TITLE = 'My Dashboard';
+export const SELLER_DASHBOARD_SEARCH_PLACEHOLDER = 'Search jobs, bookings...';
+export const SELLER_DASHBOARD_WELCOME_PREFIX = 'Welcome back,';
+export const SELLER_DASHBOARD_BROWSE_JOBS = 'Browse Jobs';
+export const SELLER_DASHBOARD_MY_SERVICES = 'My Services';
+export const SELLER_DASHBOARD_CONNECTS = 'My Connects';
+export const SELLER_DASHBOARD_CONNECTS_REMAINING = 'Connects remaining';
+export const SELLER_DASHBOARD_BUY_CONNECTS = 'Buy More Connects';
+export const SELLER_DASHBOARD_ACTIVE_BOOKINGS = 'Active Bookings';
+export const SELLER_DASHBOARD_QUICK_ACTIONS = 'Quick Actions';
+export const SELLER_DASHBOARD_SEE_ALL = 'View all';
+
+export const SELLER_STAT_WALLET = 'Wallet Balance';
+export const SELLER_STAT_BOOKINGS = 'Active Bookings';
+export const SELLER_STAT_EARNINGS = 'Total Earnings';
+export const SELLER_STAT_RATING = 'Avg Rating';
+
+export const SELLER_JOBS_TITLE = 'Browse Jobs';
+export const SELLER_JOBS_SEARCH_PLACEHOLDER = 'Search jobs...';
+export const SELLER_WORK_TITLE = 'My Work';
+export const SELLER_WORK_SEARCH_PLACEHOLDER = 'Search...';
+export const SELLER_PROFILE_TITLE = 'My Account';
+export const SELLER_PROFILE_QUICK_LINKS = 'Seller Tools';
+export const SELLER_PROFILE_ROLE = 'Seller';
+export const SELLER_PROFILE_CONNECTS = 'Connects';
+export const SELLER_PROFILE_MY_SERVICES = 'My Services';
+
+export const EMPTY_SELLER_JOBS_TITLE = 'No jobs found';
+export const EMPTY_SELLER_JOBS_MESSAGE = 'New jobs will appear here when buyers post them.';
+export const EMPTY_SELLER_BIDS_TITLE = 'No bids yet';
+export const EMPTY_SELLER_BIDS_MESSAGE = 'Place bids on jobs to see them here.';
+export const EMPTY_SELLER_OFFERS_TITLE = 'No offers yet';
+export const EMPTY_SELLER_OFFERS_MESSAGE = 'Your offers will appear here.';
+
+export const SELLER_WALLET_TITLE = 'Wallet';
+export const SELLER_WALLET_AVAILABLE = 'Available Balance';
+export const SELLER_WALLET_AVAILABLE_SUB = 'Ready to withdraw';
+export const SELLER_WALLET_TOTAL_EARNINGS = 'Total Earnings';
+export const SELLER_WALLET_TOTAL_WITHDRAWN = 'Total Withdrawn';
+export const SELLER_WALLET_ALL_TIME = 'All time';
+export const SELLER_WALLET_WITHDRAW_TITLE = 'Request Withdrawal';
+export const SELLER_WALLET_WITHDRAW_DESC = 'Minimum withdrawal: ₹500 · Processed within 3-5 business days';
+export const SELLER_WALLET_WITHDRAW_BTN = 'Withdraw Funds';
+export const SELLER_WALLET_WITHDRAW_TOAST = 'Withdrawal request submitted successfully.';
+export const SELLER_WALLET_HISTORY = 'Transaction History';
+
+export const SELLER_SERVICES_TITLE = 'My Services';
+export const SELLER_SERVICES_ADD = 'Add Service';
+export const SELLER_SERVICES_SEARCH = 'Search services...';
+export const EMPTY_SELLER_SERVICES_TITLE = 'No services yet';
+export const EMPTY_SELLER_SERVICES_MESSAGE = 'Add a service to start getting hired.';
+
+export const SELLER_CONNECTS_TITLE = 'Connects';
+export const SELLER_CONNECTS_AVAILABLE = 'Available Connects';
+export const SELLER_CONNECTS_AVAILABLE_SUB = 'Use to bid on jobs';
+export const SELLER_CONNECTS_PURCHASED = 'Total Purchased';
+export const SELLER_CONNECTS_USED = 'Total Used';
+export const SELLER_CONNECTS_BUY_TITLE = 'Buy Connects';
+export const SELLER_CONNECTS_HISTORY = 'Connect History';
+export const SELLER_CONNECTS_BUY_NOW = 'Buy Now';
+export const SELLER_CONNECTS_MOST_POPULAR = 'Most Popular';
+
+export const SELLER_BIDS_TITLE = 'My Bids';
+export const SELLER_BOOKINGS_TITLE = 'My Bookings';
+export const SELLER_OFFERS_TITLE = 'Offers';
+export const SELLER_BIDS_TOTAL = 'Total Bids';
+export const SELLER_BIDS_PENDING = 'Pending';
+export const SELLER_BIDS_ACCEPTED = 'Accepted';
+export const SELLER_BIDS_SUCCESS_RATE = 'Success Rate';
+export const SELLER_BIDS_FILTER_ALL = 'All';
+export const SELLER_BIDS_FILTER_REJECTED = 'Rejected';
+export const SELLER_BIDS_YOUR_BID = 'Your Bid';
+export const SELLER_BIDS_BUDGET = 'Budget';
+export const SELLER_BIDS_DELIVERY = 'Delivery';
+export const SELLER_BIDS_CONNECTS_USED = 'Connects Used';
+export const SELLER_PLACE_BID = 'Place Bid';
+
+export const SELLER_BOOKINGS_SEARCH = 'Search by buyer or service...';
+export const SELLER_BOOKINGS_MARK_COMPLETE = 'Mark Complete';
+export const SELLER_BOOKINGS_DISPUTE = 'Dispute';
+export const SELLER_OFFERS_RECEIVED = 'Received Offers';
+export const SELLER_OFFERS_SENT = 'Sent Offers';
+export const SELLER_OFFERS_DECLINE = 'Decline';
+export const SELLER_OFFERS_ACCEPT = 'Accept';
+
+export const SELLER_OFFER_ACCEPT_TITLE = 'Accept Offer?';
+export const SELLER_OFFER_ACCEPT_MESSAGE = 'Are you sure you want to accept this offer? A booking will be created.';
+export const SELLER_OFFER_DECLINE_TITLE = 'Decline Offer?';
+export const SELLER_OFFER_DECLINE_MESSAGE = 'Are you sure you want to decline this offer?';
+
+export const SELLER_BOOKING_COMPLETE_TITLE = 'Mark as Complete?';
+export const SELLER_BOOKING_COMPLETE_MESSAGE =
+  'Confirm that you have delivered the work. The buyer will review and release payment.';
+
+export const SELLER_CONNECTS_BUY_CONFIRM_TITLE = 'Purchase Connects?';
+export const SELLER_CONNECTS_BUY_CONFIRM_MESSAGE = 'Are you sure you want to purchase this connects plan?';
+
+export const SELLER_SERVICE_ACTIVATE_TITLE = 'Activate Service?';
+export const SELLER_SERVICE_ACTIVATE_MESSAGE =
+  'Your service will be visible to buyers and can accept new bookings.';
+export const SELLER_SERVICE_PAUSE_TITLE = 'Pause Service?';
+export const SELLER_SERVICE_PAUSE_MESSAGE =
+  'Your service will be hidden and will not accept new bookings.';
+
+export const SELLER_NOTIF_NEW_JOBS = 'New Job Alerts';
+export const SELLER_NOTIF_NEW_JOBS_DESC = 'When new jobs match your skills';
+export const SELLER_NOTIF_BID_RESPONSES = 'Bid Responses';
+export const SELLER_NOTIF_BID_RESPONSES_DESC = 'When buyers respond to your bids';
+export const SELLER_NOTIF_OFFER_ALERTS = 'Offer Alerts';
+export const SELLER_NOTIF_OFFER_ALERTS_DESC = 'When you receive new offers';
+
+export const SELLER_JOB_CATEGORIES = ['All', 'Design', 'Development', 'Marketing', 'Writing', 'Video'];

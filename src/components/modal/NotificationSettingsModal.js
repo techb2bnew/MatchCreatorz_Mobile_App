@@ -9,7 +9,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { BaseStyle } from '../constans/Style';
+import { BaseStyle } from '../../constans/Style';
 import {
   blackColor,
   borderLightColor,
@@ -17,13 +17,13 @@ import {
   lightPink,
   redColor,
   whiteColor,
-} from '../constans/Color';
-import { style, spacings } from '../constans/Fonts';
+} from '../../constans/Color';
+import { style, spacings } from '../../constans/Fonts';
 import {
   NOTIFICATION_PREFS_SUBTITLE,
   NOTIFICATION_PREFS_TITLE,
-} from '../constans/Constants';
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
+} from '../../constans/Constants';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 
 const { flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween, alignJustifyCenter } =
   BaseStyle;

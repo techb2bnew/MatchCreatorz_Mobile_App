@@ -14,7 +14,7 @@ import OTPTextInput from 'react-native-otp-textinput';
 import CustomButton from '../components/CustomButton';
 import CustomTextInput from '../components/CustomTextInput';
 import FormLabel from '../components/FormLabel';
-import SuccessModal from '../components/SuccessModal';
+import SuccessModal from '../components/modal/SuccessModal';
 import { BaseStyle } from '../constans/Style';
 import {
   blackColor,

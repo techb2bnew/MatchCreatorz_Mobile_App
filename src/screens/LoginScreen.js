@@ -53,7 +53,10 @@ import {
   STAT_PROJECTS_VALUE,
   STAT_SATISFACTION_LABEL,
   STAT_SATISFACTION_VALUE,
+  USER_ROLES,
   WELCOME_BACK,
+  getMockLoginRole,
+  INVALID_LOGIN_MESSAGE,
 } from '../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp, formatPhoneInput, validateEmail, validatePassword, validatePhone } from '../utils';
 import {
@@ -81,11 +84,11 @@ const STAT_ITEMS = [
 const LoginScreen = ({ navigation }) => {
   const scrollRef = useRef(null);
   const keyboardBottom = useKeyboardBottomInset(32);
-  const [activeTab, setActiveTab] = useState(LOGIN_TABS.PHONE);
+  const [activeTab, setActiveTab] = useState(LOGIN_TABS.EMAIL);
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState({ phone: '', email: '', password: '' });
+  const [errors, setErrors] = useState({ phone: '', email: '', password: '', login: '' });
 
   const handleInputFocus = event => {
     scrollInputAboveKeyboard(scrollRef, event, 140);
@@ -93,7 +96,7 @@ const LoginScreen = ({ navigation }) => {
 
   const handleTabChange = tab => {
     setActiveTab(tab);
-    setErrors({ phone: '', email: '', password: '' });
+    setErrors({ phone: '', email: '', password: '', login: '' });
   };
 
   const handlePhoneChange = text => {
@@ -116,21 +119,34 @@ const LoginScreen = ({ navigation }) => {
       phone: activeTab === LOGIN_TABS.PHONE ? validatePhone(phone) : '',
       email: activeTab === LOGIN_TABS.EMAIL ? validateEmail(email) : '',
       password: validatePassword(password),
+      login: '',
     };
     setErrors(newErrors);
     if (newErrors.phone || newErrors.email || newErrors.password) return;
+
+    let userRole = USER_ROLES.BUYER;
+
+    if (activeTab === LOGIN_TABS.EMAIL) {
+      const role = getMockLoginRole(email, password);
+      if (!role) {
+        setErrors(prev => ({ ...prev, login: INVALID_LOGIN_MESSAGE }));
+        return;
+      }
+      userRole = role;
+    }
 
     const loginPayload = {
       loginType: activeTab,
       phone: activeTab === LOGIN_TABS.PHONE ? phone : '',
       email: activeTab === LOGIN_TABS.EMAIL ? email : '',
       password,
+      userRole,
     };
     console.log('Login Submit Details:', loginPayload);
 
     navigation.getParent()?.reset({
       index: 0,
-      routes: [{ name: SCREEN_NAMES.MAIN }],
+      routes: [{ name: SCREEN_NAMES.MAIN, params: { userRole } }],
     });
   };
 
@@ -263,6 +279,7 @@ const LoginScreen = ({ navigation }) => {
             backgroundColor={redColor}
             onPress={handleSignIn}
           />
+          {errors.login ? <Text style={styles.loginError}>{errors.login}</Text> : null}
 
           <View style={[styles.footer, alignJustifyCenter]}>
             <Text style={[styles.footerText, style.fontWeightThin]}>
@@ -406,6 +423,12 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeSmall1x.fontSize,
     marginTop: spacings.xsmall,
     marginLeft: spacings.xsmall,
+  },
+  loginError: {
+    color: redColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
+    marginTop: spacings.normal,
+    textAlign: 'center',
   },
   footer: { paddingVertical: spacings.normal, marginTop: spacings.normal },
   footerText: { fontSize: style.fontSizeNormal2x.fontSize, color: grayColor, textAlign: 'center' },

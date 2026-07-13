@@ -1,17 +1,17 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { BaseStyle } from '../constans/Style';
-import { blackColor, borderLightColor, grayColor, whiteColor } from '../constans/Color';
-import { style, spacings } from '../constans/Fonts';
+import { BaseStyle } from '../../constans/Style';
+import { blackColor, borderLightColor, grayColor, whiteColor } from '../../constans/Color';
+import { style, spacings } from '../../constans/Fonts';
 import {
   BROWSE_FILES,
   CONFIRM_CANCEL,
   PHOTO_LIBRARY,
   TAKE_PHOTO,
   UPLOAD_FILES,
-} from '../constans/Constants';
-import { widthPercentageToDP as wp } from '../utils';
+} from '../../constans/Constants';
+import { widthPercentageToDP as wp } from '../../utils';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter } = BaseStyle;
 

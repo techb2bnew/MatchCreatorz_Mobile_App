@@ -17,9 +17,9 @@ import {
   TAB_JOBS,
   TAB_PROFILE,
   TAB_WALLET,
-} from '../constans/Constants';
-import { grayColor, redColor, whiteColor } from '../constans/Color';
-import { style } from '../constans/Fonts';
+} from '../../constans/Constants';
+import { grayColor, redColor, whiteColor } from '../../constans/Color';
+import { style } from '../../constans/Fonts';
 
 const Tab = createBottomTabNavigator();
 

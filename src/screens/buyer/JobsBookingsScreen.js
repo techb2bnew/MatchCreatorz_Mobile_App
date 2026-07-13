@@ -10,7 +10,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { BaseStyle } from '../constans/Style';
+import { BaseStyle } from '../../constans/Style';
 import {
   blackColor,
   borderLightColor,
@@ -24,8 +24,8 @@ import {
   whiteColor,
   goldColor,
   blueColor,
-} from '../constans/Color';
-import { style, spacings } from '../constans/Fonts';
+} from '../../constans/Color';
+import { style, spacings } from '../../constans/Fonts';
 import {
   BOOKING_ACCEPT_MESSAGE,
   BOOKING_ACCEPT_TITLE,
@@ -72,20 +72,20 @@ import {
   TAB_MY_JOBS,
   TIPS_TITLE,
   UPDATE_JOB_BTN,
-} from '../constans/Constants';
-import CustomTextInput from '../components/CustomTextInput';
-import CustomButton from '../components/CustomButton';
-import CustomDropdown from '../components/CustomDropdown';
-import SearchBar from '../components/SearchBar';
-import ScreenHeader, { screenContentStyles } from '../components/ScreenHeader';
-import ConfirmationModal from '../components/ConfirmationModal';
-import EmptyState from '../components/EmptyState';
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
+} from '../../constans/Constants';
+import CustomTextInput from '../../components/CustomTextInput';
+import CustomButton from '../../components/CustomButton';
+import CustomDropdown from '../../components/CustomDropdown';
+import SearchBar from '../../components/SearchBar';
+import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
+import ConfirmationModal from '../../components/modal/ConfirmationModal';
+import EmptyState from '../../components/EmptyState';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import {
   keyboardAvoidingBehavior,
   scrollInputAboveKeyboard,
   useKeyboardBottomInset,
-} from '../utils/keyboard';
+} from '../../utils/keyboard';
 
 const {
   flex,

@@ -1,16 +1,16 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import WalletScreen from '../screens/WalletScreen';
-import { SCREEN_NAMES } from '../constans/Constants';
+import SellerWorkScreen from '../../screens/seller/SellerWorkScreen';
+import { SCREEN_NAMES } from '../../constans/Constants';
 
 const Stack = createNativeStackNavigator();
 
-const WalletStack = () => {
+const SellerWorkStack = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-      <Stack.Screen name={SCREEN_NAMES.WALLET} component={WalletScreen} />
+      <Stack.Screen name={SCREEN_NAMES.SELLER_WORK} component={SellerWorkScreen} />
     </Stack.Navigator>
   );
 };
 
-export default WalletStack;
+export default SellerWorkStack;

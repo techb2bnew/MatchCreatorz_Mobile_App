@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { BaseStyle } from '../constans/Style';
+import { BaseStyle } from '../../constans/Style';
 import {
   blackColor,
   borderLightColor,
@@ -19,8 +19,8 @@ import {
   screenBgColor,
   whiteColor,
   goldColor,
-} from '../constans/Color';
-import { style, spacings } from '../constans/Fonts';
+} from '../../constans/Color';
+import { style, spacings } from '../../constans/Fonts';
 import {
   BUYER_STATIC_USER,
   BUYER_TABS,
@@ -39,11 +39,11 @@ import {
   JOBS_BOOKINGS_TABS,
   MY_JOBS_SUB_TABS,
   SCREEN_NAMES,
-} from '../constans/Constants';
-import SearchBar from '../components/SearchBar';
-import ScreenHeader, { screenContentStyles } from '../components/ScreenHeader';
-import EmptyState from '../components/EmptyState';
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
+} from '../../constans/Constants';
+import SearchBar from '../../components/SearchBar';
+import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
+import EmptyState from '../../components/EmptyState';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 
 const {
   flex,

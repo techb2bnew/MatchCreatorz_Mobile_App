@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { BaseStyle } from '../constans/Style';
+import { BaseStyle } from '../../constans/Style';
 import {
   blackColor,
   borderLightColor,
@@ -19,8 +19,8 @@ import {
   redColor,
   whiteColor,
   blueColor,
-} from '../constans/Color';
-import { style, spacings } from '../constans/Fonts';
+} from '../../constans/Color';
+import { style, spacings } from '../../constans/Fonts';
 import {
   BOOKING_ACCEPT_MESSAGE,
   BOOKING_ACCEPT_TITLE,
@@ -40,9 +40,9 @@ import {
   FEE_INCL_PREFIX,
   FEE_SUFFIX,
   SELLER_PREFIX,
-} from '../constans/Constants';
-import ConfirmationModal from '../components/ConfirmationModal';
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
+} from '../../constans/Constants';
+import ConfirmationModal from '../../components/modal/ConfirmationModal';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 
 const {
   flex,

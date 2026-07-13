@@ -19,7 +19,7 @@ import SocialButton from '../components/SocialButton';
 import StepIndicator from '../components/StepIndicator';
 import ProfileDetailsStep from '../components/ProfileDetailsStep';
 import PortfolioStep from '../components/PortfolioStep';
-import SuccessModal from '../components/SuccessModal';
+import SuccessModal from '../components/modal/SuccessModal';
 import { BaseStyle } from '../constans/Style';
 import {
   blackColor,
