@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import RNPhoneInput from 'react-native-phone-number-input';
 import { MATCH_CREATORZ_LOGO } from '../assests/images';
@@ -17,6 +18,8 @@ import CustomTextInput from '../components/CustomTextInput';
 import FormLabel from '../components/FormLabel';
 import SocialButton from '../components/SocialButton';
 import { BaseStyle } from '../constans/Style';
+import { setAuthSession } from '../redux/slices/authSlice';
+import { loginUserApi } from '../services/authService';
 import {
   blackColor,
   borderLightColor,
@@ -53,9 +56,7 @@ import {
   STAT_PROJECTS_VALUE,
   STAT_SATISFACTION_LABEL,
   STAT_SATISFACTION_VALUE,
-  USER_ROLES,
   WELCOME_BACK,
-  getMockLoginRole,
   INVALID_LOGIN_MESSAGE,
 } from '../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp, formatPhoneInput, validateEmail, validatePassword, validatePhone } from '../utils';
@@ -82,12 +83,14 @@ const STAT_ITEMS = [
 ];
 
 const LoginScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
   const scrollRef = useRef(null);
   const keyboardBottom = useKeyboardBottomInset(32);
   const [activeTab, setActiveTab] = useState(LOGIN_TABS.EMAIL);
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({ phone: '', email: '', password: '', login: '' });
 
   const handleInputFocus = event => {
@@ -114,7 +117,7 @@ const LoginScreen = ({ navigation }) => {
     if (errors.password) setErrors(prev => ({ ...prev, password: '' }));
   };
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     const newErrors = {
       phone: activeTab === LOGIN_TABS.PHONE ? validatePhone(phone) : '',
       email: activeTab === LOGIN_TABS.EMAIL ? validateEmail(email) : '',
@@ -124,30 +127,38 @@ const LoginScreen = ({ navigation }) => {
     setErrors(newErrors);
     if (newErrors.phone || newErrors.email || newErrors.password) return;
 
-    let userRole = USER_ROLES.BUYER;
+    setLoading(true);
+    try {
+      const response = await loginUserApi({
+        email: activeTab === LOGIN_TABS.EMAIL ? email : '',
+        phone: activeTab === LOGIN_TABS.PHONE ? phone : '',
+        password,
+      });
 
-    if (activeTab === LOGIN_TABS.EMAIL) {
-      const role = getMockLoginRole(email, password);
-      if (!role) {
-        setErrors(prev => ({ ...prev, login: INVALID_LOGIN_MESSAGE }));
+      if (!response?.success || !response?.data?.token) {
+        setErrors(prev => ({
+          ...prev,
+          login: response?.message || INVALID_LOGIN_MESSAGE,
+        }));
         return;
       }
-      userRole = role;
+
+      const { token, user, role } = response.data;
+      await dispatch(
+        setAuthSession({
+          token,
+          user,
+          role: role || user?.role,
+        }),
+      ).unwrap();
+    } catch (error) {
+      setErrors(prev => ({
+        ...prev,
+        login: error?.message || INVALID_LOGIN_MESSAGE,
+      }));
+    } finally {
+      setLoading(false);
     }
-
-    const loginPayload = {
-      loginType: activeTab,
-      phone: activeTab === LOGIN_TABS.PHONE ? phone : '',
-      email: activeTab === LOGIN_TABS.EMAIL ? email : '',
-      password,
-      userRole,
-    };
-    console.log('Login Submit Details:', loginPayload);
-
-    navigation.getParent()?.reset({
-      index: 0,
-      routes: [{ name: SCREEN_NAMES.MAIN, params: { userRole } }],
-    });
   };
 
   return (
@@ -271,6 +282,7 @@ const LoginScreen = ({ navigation }) => {
             onPress={() => navigation.navigate(SCREEN_NAMES.FORGOT_PASSWORD)}>
             <Text style={[styles.forgotText, style.fontWeightMedium]}>{FORGOT_PASSWORD}</Text>
           </TouchableOpacity>
+          {errors.login ? <Text style={styles.loginError}>{errors.login}</Text> : null}
 
           <CustomButton
             title={SIGN_IN}
@@ -278,8 +290,8 @@ const LoginScreen = ({ navigation }) => {
             iconPosition="right"
             backgroundColor={redColor}
             onPress={handleSignIn}
+            loading={loading}
           />
-          {errors.login ? <Text style={styles.loginError}>{errors.login}</Text> : null}
 
           <View style={[styles.footer, alignJustifyCenter]}>
             <Text style={[styles.footerText, style.fontWeightThin]}>

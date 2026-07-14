@@ -37,6 +37,7 @@ import {
   BUYER_CLIENT,
   BUYER_SUBTITLE,
   CHOOSE_ACCOUNT_TYPE,
+  COMPANY_NAME,
   CONFIRM_PASSWORD,
   CONNECT_CREATE,
   CONTINUE_WITH_FACEBOOK,
@@ -44,11 +45,12 @@ import {
   CREATE_ACCOUNT,
   CREATOR_SELLER,
   CREATOR_SUBTITLE,
-  EMAIL_OPTIONAL,
+  EMAIL_ADDRESS,
   FULL_NAME,
   JOIN_PLATFORM_TEXT,
+  LABEL_COMPANY_NAME,
   LABEL_CONFIRM_PASSWORD,
-  LABEL_EMAIL_OPTIONAL,
+  LABEL_EMAIL_ADDRESS,
   LABEL_FULL_NAME,
   LABEL_PASSWORD,
   LABEL_PHONE_NUMBER,
@@ -73,18 +75,33 @@ import {
   ACCOUNT_CREATED_MESSAGE,
   SELLER_ACCOUNT_SUBTITLE,
   SELLER_PASSWORD_HINT,
-  PRICE_RANGE_OPTIONS,
   GENDER_OPTIONS,
   CATEGORY_OPTIONS,
   RESPONSE_TIME_OPTIONS,
+  ERROR_REGISTER_FAILED,
 } from '../constans/Constants';
 import { getDefaultStateForCountry, DEFAULT_COUNTRY } from '../utils/locationData';
-import { widthPercentageToDP as wp, heightPercentageToDP as hp, formatPhoneInput, validateConfirmPassword, validateFullName, validatePassword, validatePhone, validateTerms } from '../utils';
+import {
+  widthPercentageToDP as wp,
+  heightPercentageToDP as hp,
+  formatPhoneInput,
+  validateCity,
+  validateConfirmPassword,
+  validateCountry,
+  validateEmail,
+  validateFullName,
+  validateHourlyRate,
+  validatePassword,
+  validatePhone,
+  validateSkills,
+  validateTerms,
+} from '../utils';
 import {
   keyboardAvoidingBehavior,
   scrollInputAboveKeyboard,
   useKeyboardBottomInset,
 } from '../utils/keyboard';
+import { registerUserApi } from '../services/authService';
 
 const {
   flex,
@@ -102,7 +119,7 @@ const ROLE_OPTIONS = [
 ];
 
 const createInitialProfileForm = () => ({
-  priceRange: PRICE_RANGE_OPTIONS[0],
+  hourlyRate: '',
   dateOfBirth: '',
   country: DEFAULT_COUNTRY,
   state: getDefaultStateForCountry(DEFAULT_COUNTRY),
@@ -122,14 +139,29 @@ const INITIAL_PORTFOLIO_FORM = {
   portfolioFiles: [],
 };
 
+const EMPTY_ERRORS = {
+  fullName: '',
+  email: '',
+  phone: '',
+  password: '',
+  confirmPassword: '',
+  terms: '',
+  city: '',
+  country: '',
+  skills: '',
+  hourlyRate: '',
+};
+
 const CreateAccountScreen = ({ navigation }) => {
   const scrollRef = useRef(null);
   const keyboardBottom = useKeyboardBottomInset(32);
   const [currentStep, setCurrentStep] = useState(SIGNUP_STEPS.ACCOUNT);
   const [selectedRole, setSelectedRole] = useState(USER_ROLES.BUYER);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -137,13 +169,8 @@ const CreateAccountScreen = ({ navigation }) => {
   const [acceptSms, setAcceptSms] = useState(false);
   const [profileForm, setProfileForm] = useState(createInitialProfileForm);
   const [portfolioForm, setPortfolioForm] = useState(INITIAL_PORTFOLIO_FORM);
-  const [errors, setErrors] = useState({
-    fullName: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
-    terms: '',
-  });
+  const [errors, setErrors] = useState(EMPTY_ERRORS);
+  const [apiError, setApiError] = useState('');
 
   const isSeller = selectedRole === USER_ROLES.CREATOR;
   const isAccountStep = currentStep === SIGNUP_STEPS.ACCOUNT;
@@ -162,13 +189,26 @@ const CreateAccountScreen = ({ navigation }) => {
 
   const validateAccountStep = () => {
     const newErrors = {
+      ...EMPTY_ERRORS,
       fullName: validateFullName(fullName),
-      phone: validatePhone(phone),
+      email: validateEmail(email),
+      phone: validatePhone(phone, { required: false }),
       password: isSeller ? '' : validatePassword(password),
       confirmPassword: isSeller ? '' : validateConfirmPassword(password, confirmPassword),
       terms: isSeller ? '' : validateTerms(acceptTerms),
     };
     setErrors(newErrors);
+    return !Object.values(newErrors).some(Boolean);
+  };
+
+  const validateProfileStep = () => {
+    const newErrors = {
+      city: validateCity(profileForm.city),
+      country: validateCountry(profileForm.country),
+      skills: validateSkills(profileForm.tags),
+      hourlyRate: validateHourlyRate(profileForm.hourlyRate),
+    };
+    setErrors(prev => ({ ...prev, ...newErrors }));
     return !Object.values(newErrors).some(Boolean);
   };
 
@@ -182,11 +222,40 @@ const CreateAccountScreen = ({ navigation }) => {
     return !Object.values(newErrors).some(Boolean);
   };
 
+  const submitRegister = async () => {
+    setApiError('');
+    setSubmitting(true);
+    try {
+      const response = await registerUserApi({
+        role: selectedRole,
+        fullName,
+        email,
+        password,
+        phone,
+        companyName: isSeller ? '' : companyName,
+        profile: profileForm,
+        portfolio: portfolioForm,
+      });
+
+      if (!response?.success) {
+        setApiError(response?.message || ERROR_REGISTER_FAILED);
+        return;
+      }
+
+      setShowSuccess(true);
+    } catch (error) {
+      setApiError(error?.message || ERROR_REGISTER_FAILED);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleToggleTag = tag => {
     setProfileForm(prev => ({
       ...prev,
       tags: prev.tags.includes(tag) ? prev.tags.filter(t => t !== tag) : [...prev.tags, tag],
     }));
+    clearError('skills');
   };
 
   const handleAddPortfolioLink = () => {
@@ -221,51 +290,28 @@ const CreateAccountScreen = ({ navigation }) => {
     scrollInputAboveKeyboard(scrollRef, event, 160);
   };
 
-  const handlePrimaryAction = () => {
+  const handlePrimaryAction = async () => {
+    if (submitting) return;
+
     if (isAccountStep) {
       if (!validateAccountStep()) return;
       if (isSeller) {
         setCurrentStep(SIGNUP_STEPS.PROFILE);
         return;
       }
-
-      const buyerPayload = {
-        role: selectedRole,
-        fullName,
-        email,
-        phone,
-        password,
-        confirmPassword,
-        acceptTerms,
-        acceptSms,
-      };
-      console.log('Create Account Submit Details (Buyer):', buyerPayload);
-      setShowSuccess(true);
+      await submitRegister();
       return;
     }
 
     if (isProfileStep) {
+      if (!validateProfileStep()) return;
       setCurrentStep(SIGNUP_STEPS.PORTFOLIO);
       return;
     }
 
     if (isPortfolioStep) {
       if (!validatePortfolioStep()) return;
-
-      const sellerPayload = {
-        role: selectedRole,
-        fullName,
-        email,
-        phone,
-        password,
-        confirmPassword,
-        acceptTerms,
-        acceptSms,
-        profile: profileForm,
-        portfolio: portfolioForm,
-      };
-      console.log('Create Account Submit Details (Seller):', sellerPayload);
-      setShowSuccess(true);
+      await submitRegister();
     }
   };
 
@@ -285,17 +331,13 @@ const CreateAccountScreen = ({ navigation }) => {
     setCurrentStep(SIGNUP_STEPS.ACCOUNT);
     setProfileForm(createInitialProfileForm());
     setPortfolioForm(INITIAL_PORTFOLIO_FORM);
+    setCompanyName('');
     setAcceptTerms(false);
     setAcceptSms(false);
     setPassword('');
     setConfirmPassword('');
-    setErrors({
-      fullName: '',
-      phone: '',
-      password: '',
-      confirmPassword: '',
-      terms: '',
-    });
+    setErrors(EMPTY_ERRORS);
+    setApiError('');
   };
 
   return (
@@ -308,7 +350,6 @@ const CreateAccountScreen = ({ navigation }) => {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           contentContainerStyle={[styles.scrollContent, { paddingBottom: spacings.xxLarge + keyboardBottom }]}>
-          {/* Promo card */}
           {isAccountStep ? (
             <View style={styles.promoCard}>
               <View style={styles.logoBox}>
@@ -321,7 +362,6 @@ const CreateAccountScreen = ({ navigation }) => {
             </View>
           ) : null}
 
-          {/* Header */}
           <Text style={[styles.title, style.fontWeightThin]}>{CREATE_ACCOUNT}</Text>
           <Text style={[styles.subtitle, style.fontWeightThin]}>
             {showStepper
@@ -335,7 +375,6 @@ const CreateAccountScreen = ({ navigation }) => {
 
           {isAccountStep ? (
             <>
-              {/* Role cards */}
               <View style={[styles.roleRow, flexDirectionRow, justifyContentSpaceBetween]}>
                 {ROLE_OPTIONS.map(role => {
                   const isSelected = selectedRole === role.id;
@@ -387,17 +426,34 @@ const CreateAccountScreen = ({ navigation }) => {
               />
               <CustomTextInput
                 value={email}
-                onChangeText={setEmail}
-                label={LABEL_EMAIL_OPTIONAL}
-                placeholder={EMAIL_OPTIONAL}
+                onChangeText={text => {
+                  setEmail(text);
+                  clearError('email');
+                }}
+                label={LABEL_EMAIL_ADDRESS}
+                required
+                placeholder={EMAIL_ADDRESS}
                 keyboardType="email-address"
                 leftIcon="mail"
+                error={errors.email}
                 onFocus={handleInputFocus}
                 style={styles.inputSpacing}
               />
 
+              {!isSeller ? (
+                <CustomTextInput
+                  value={companyName}
+                  onChangeText={setCompanyName}
+                  label={LABEL_COMPANY_NAME}
+                  placeholder={COMPANY_NAME}
+                  leftIcon="briefcase"
+                  onFocus={handleInputFocus}
+                  style={styles.inputSpacing}
+                />
+              ) : null}
+
               <View style={styles.inputSpacing}>
-                <FormLabel label={LABEL_PHONE_NUMBER} required />
+                <FormLabel label={LABEL_PHONE_NUMBER} />
                 <RNPhoneInput
                   defaultCode="IN"
                   layout="second"
@@ -490,7 +546,23 @@ const CreateAccountScreen = ({ navigation }) => {
           ) : null}
 
           {isProfileStep ? (
-            <ProfileDetailsStep form={profileForm} onChange={setProfileForm} onToggleTag={handleToggleTag} />
+            <ProfileDetailsStep
+              form={profileForm}
+              onChange={next => {
+                setProfileForm(next);
+                if (errors.city || errors.country || errors.skills || errors.hourlyRate) {
+                  setErrors(prev => ({
+                    ...prev,
+                    city: '',
+                    country: '',
+                    skills: '',
+                    hourlyRate: '',
+                  }));
+                }
+              }}
+              onToggleTag={handleToggleTag}
+              errors={errors}
+            />
           ) : null}
 
           {isPortfolioStep ? (
@@ -523,6 +595,8 @@ const CreateAccountScreen = ({ navigation }) => {
             />
           ) : null}
 
+          {apiError ? <Text style={[styles.apiErrorText, style.fontWeightThin]}>{apiError}</Text> : null}
+
           {showStepper ? (
             <View style={[styles.navRow, flexDirectionRow, justifyContentSpaceBetween]}>
               <CustomButton
@@ -534,6 +608,7 @@ const CreateAccountScreen = ({ navigation }) => {
                 borderColor={borderLightColor}
                 borderWidth={1}
                 onPress={handleBack}
+                disabled={submitting}
                 style={styles.backBtn}
               />
               <CustomButton
@@ -542,6 +617,7 @@ const CreateAccountScreen = ({ navigation }) => {
                 iconPosition="right"
                 backgroundColor={redColor}
                 onPress={handlePrimaryAction}
+                loading={submitting && isPortfolioStep}
                 style={styles.nextBtn}
               />
             </View>
@@ -552,6 +628,7 @@ const CreateAccountScreen = ({ navigation }) => {
               iconPosition="right"
               backgroundColor={redColor}
               onPress={handlePrimaryAction}
+              loading={submitting && !isSeller}
               style={styles.createBtn}
             />
           )}
@@ -577,10 +654,7 @@ const CreateAccountScreen = ({ navigation }) => {
         message={ACCOUNT_CREATED_MESSAGE}
         onPress={() => {
           setShowSuccess(false);
-          navigation.getParent()?.reset({
-            index: 0,
-            routes: [{ name: SCREEN_NAMES.MAIN }],
-          });
+          navigation.navigate(SCREEN_NAMES.LOGIN);
         }}
       />
     </SafeAreaView>
@@ -710,7 +784,6 @@ const styles = StyleSheet.create({
     paddingRight: spacings.normal,
     height: '100%',
     width: 'auto',
-    // minWidth: 108,
     gap: 6,
     borderRightWidth: 1,
     borderRightColor: borderLightColor,
@@ -759,6 +832,13 @@ const styles = StyleSheet.create({
     marginLeft: spacings.xsmall,
   },
   createBtn: { marginTop: spacings.normal, marginBottom: spacings.small },
+  apiErrorText: {
+    color: redColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
+    textAlign: 'center',
+    marginTop: spacings.large,
+    marginBottom: spacings.small,
+  },
   navRow: { marginTop: spacings.xLarge, gap: spacings.normal, marginBottom: spacings.small },
   backBtn: { flex: 0.4 },
   nextBtn: { flex: 0.6 },

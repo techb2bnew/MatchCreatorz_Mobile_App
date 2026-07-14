@@ -9,8 +9,10 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
+import { logoutUser } from '../../redux/slices/authSlice';
 import {
   blackColor,
   blueColor,
@@ -137,6 +139,7 @@ const INITIAL_PROFILE = {
 };
 
 const SellerProfileScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
   const scrollRef = useRef(null);
   const keyboardBottom = useKeyboardBottomInset(40);
   const [isEditing, setIsEditing] = useState(false);
@@ -276,24 +279,8 @@ const SellerProfileScreen = ({ navigation }) => {
     }));
   };
 
-  const resetToLogin = () => {
-    let rootNavigation = navigation;
-    while (rootNavigation.getParent()) {
-      rootNavigation = rootNavigation.getParent();
-    }
-
-    rootNavigation.reset({
-      index: 0,
-      routes: [
-        {
-          name: 'Auth',
-          state: {
-            index: 0,
-            routes: [{ name: SCREEN_NAMES.LOGIN }],
-          },
-        },
-      ],
-    });
+  const resetToLogin = async () => {
+    await dispatch(logoutUser());
   };
 
   const handleLogout = () => {

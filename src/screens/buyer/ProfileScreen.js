@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,13 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
+import { logoutUser, selectAuth } from '../../redux/slices/authSlice';
+import { getBuyerProfileApi, updateBuyerProfileApi } from '../../services/buyerService';
+import { getApiErrorMessage } from '../../services/apiClient';
 import {
   blackColor,
   blueColor,
@@ -66,7 +71,9 @@ import {
   PROFILE_STAT_WALLET,
   PROFILE_TITLE,
   PROFILE_UPLOAD_PHOTO,
-  SCREEN_NAMES,
+  ERROR_FULL_NAME_REQUIRED,
+  ERROR_PHONE_REQUIRED,
+  ERROR_PROFILE_UPDATE_FAILED,
 } from '../../constans/Constants';
 import CustomTextInput from '../../components/CustomTextInput';
 import CustomButton from '../../components/CustomButton';
@@ -92,28 +99,55 @@ const {
   alignJustifyCenter,
 } = BaseStyle;
 
-const INITIAL_PROFILE = {
-  fullName: 'Sarah Williams',
-  email: 'buyer@matchcreatorz.com',
-  phone: '5551234567',
-  location: 'New Delhi, India',
-  bio: 'Entrepreneur looking for talented creators to help grow my brand presence online.',
-  initials: 'SW',
+const EMPTY_PROFILE = {
+  fullName: '',
+  email: '',
+  phone: '',
+  location: '',
+  bio: '',
+  initials: '',
   photoUri: null,
 };
 
+const getInitials = name =>
+  String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+const mapBuyerProfileToUi = data => {
+  const fullName = data?.name || '';
+  return {
+    fullName,
+    email: data?.email || '',
+    phone: data?.phone || '',
+    location: data?.location || '',
+    bio: data?.bio || '',
+    initials: getInitials(fullName),
+    photoUri: data?.avatar || null,
+  };
+};
+
 const ProfileScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
+  const { token } = useSelector(selectAuth);
   const scrollRef = useRef(null);
   const keyboardBottom = useKeyboardBottomInset(40);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
 
-  const [savedProfile, setSavedProfile] = useState(INITIAL_PROFILE);
-  const [profileForm, setProfileForm] = useState(INITIAL_PROFILE);
+  const [savedProfile, setSavedProfile] = useState(EMPTY_PROFILE);
+  const [profileForm, setProfileForm] = useState(EMPTY_PROFILE);
 
   const [profileStats] = useState({
     wallet: '₹2,500',
@@ -145,8 +179,39 @@ const ProfileScreen = ({ navigation }) => {
     },
   ]);
 
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const fetchBuyerProfile = async () => {
+        if (!token) {
+          console.log('[BuyerProfile] Skipped — no token');
+          return;
+        }
+        try {
+          const response = await getBuyerProfileApi(token);
+          if (cancelled) return;
+          const mapped = mapBuyerProfileToUi(response?.data);
+          setSavedProfile(mapped);
+          if (!isEditing) {
+            setProfileForm(mapped);
+          }
+        } catch (error) {
+          // Logged inside getBuyerProfileApi
+        }
+      };
+
+      fetchBuyerProfile();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [token, isEditing]),
+  );
+
   const updateProfileField = (field, value) => {
     setProfileForm(prev => ({ ...prev, [field]: value }));
+    if (saveError) setSaveError('');
   };
 
   const handleToggleNotification = key => {
@@ -169,7 +234,10 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  const handleEdit = () => setIsEditing(true);
+  const handleEdit = () => {
+    setSaveError('');
+    setIsEditing(true);
+  };
 
   const handleInputFocus = event => {
     scrollInputAboveKeyboard(scrollRef, event, 160);
@@ -177,42 +245,59 @@ const ProfileScreen = ({ navigation }) => {
 
   const handleCancel = () => {
     setProfileForm(savedProfile);
+    setSaveError('');
     setIsEditing(false);
   };
 
-  const handleSave = () => {
-    const initials = profileForm.fullName
-      .split(' ')
-      .map(part => part[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase();
+  const handleSave = async () => {
+    const name = String(profileForm.fullName || '').trim();
+    const phone = String(profileForm.phone || '').trim();
+    const bio = String(profileForm.bio || '').trim();
+    const location = String(profileForm.location || '').trim();
 
-    const updatedProfile = { ...profileForm, initials };
-    setSavedProfile(updatedProfile);
-    setProfileForm(updatedProfile);
-    setIsEditing(false);
-    setShowSaveSuccess(true);
-  };
-
-  const resetToLogin = () => {
-    let rootNavigation = navigation;
-    while (rootNavigation.getParent()) {
-      rootNavigation = rootNavigation.getParent();
+    if (!name) {
+      setSaveError(ERROR_FULL_NAME_REQUIRED);
+      return;
+    }
+    if (!phone) {
+      setSaveError(ERROR_PHONE_REQUIRED);
+      return;
+    }
+    if (!token) {
+      setSaveError(ERROR_PROFILE_UPDATE_FAILED);
+      return;
     }
 
-    rootNavigation.reset({
-      index: 0,
-      routes: [
-        {
-          name: 'Auth',
-          state: {
-            index: 0,
-            routes: [{ name: SCREEN_NAMES.LOGIN }],
-          },
-        },
-      ],
-    });
+    const payload = { name, phone, bio, location };
+    setIsSaving(true);
+    setSaveError('');
+
+    try {
+      const response = await updateBuyerProfileApi(token, payload);
+      const fromApi = response?.data ? mapBuyerProfileToUi(response.data) : null;
+      const nextProfile = {
+        ...savedProfile,
+        fullName: fromApi?.fullName || name,
+        phone: fromApi?.phone || phone,
+        bio: fromApi ? fromApi.bio : bio,
+        location: fromApi ? fromApi.location : location,
+        email: fromApi?.email || savedProfile.email,
+        photoUri: fromApi?.photoUri || savedProfile.photoUri,
+        initials: getInitials(fromApi?.fullName || name),
+      };
+      setSavedProfile(nextProfile);
+      setProfileForm(nextProfile);
+      setIsEditing(false);
+      setShowSaveSuccess(true);
+    } catch (error) {
+      setSaveError(getApiErrorMessage(error?.data, error?.message || ERROR_PROFILE_UPDATE_FAILED));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const resetToLogin = async () => {
+    await dispatch(logoutUser());
   };
 
   const handleLogout = () => {
@@ -224,6 +309,9 @@ const ProfileScreen = ({ navigation }) => {
     setShowDeleteModal(false);
     resetToLogin();
   };
+
+  const hasLocation = Boolean(String(savedProfile.location || '').trim());
+  const hasBio = Boolean(String(savedProfile.bio || '').trim());
 
   const statItems = [
     { id: 'wallet', label: PROFILE_STAT_WALLET, value: profileStats.wallet, icon: 'credit-card', color: greenColor },
@@ -330,8 +418,8 @@ const ProfileScreen = ({ navigation }) => {
         {renderViewField(PROFILE_FULL_NAME, savedProfile.fullName)}
         {renderViewField(PROFILE_EMAIL, savedProfile.email)}
         {renderViewField(PROFILE_PHONE, savedProfile.phone)}
-        {renderViewField(PROFILE_LOCATION, savedProfile.location)}
-        {renderViewField(PROFILE_BIO, savedProfile.bio)}
+        {hasLocation ? renderViewField(PROFILE_LOCATION, savedProfile.location) : null}
+        {hasBio ? renderViewField(PROFILE_BIO, savedProfile.bio) : null}
       </>
     );
   };
@@ -372,13 +460,13 @@ const ProfileScreen = ({ navigation }) => {
                   </View>
                 )}
               </TouchableOpacity>
-              {isEditing ? (
+              {/* {isEditing ? (
                 <TouchableOpacity
                   style={[styles.cameraBtn, alignJustifyCenter]}
                   onPress={() => setShowPhotoOptions(true)}>
                   <Icon name="camera" size={12} color={whiteColor} />
                 </TouchableOpacity>
-              ) : null}
+              ) : null} */}
             </View>
 
             <View style={styles.profileInfo}>
@@ -429,18 +517,26 @@ const ProfileScreen = ({ navigation }) => {
 
           {renderProfileFields()}
           {isEditing ? (
-            <View style={[styles.formActions, flexDirectionRow]}>
-              <TouchableOpacity style={[styles.cancelBtnFull, flex, alignJustifyCenter]} onPress={handleCancel}>
-                <Text style={[styles.cancelBtnText, style.fontWeightMedium]}>{PROFILE_CANCEL}</Text>
-              </TouchableOpacity>
-              <CustomButton
-                title={PROFILE_SAVE}
-                iconName="save"
-                onPress={handleSave}
-                style={[styles.saveBtnFull, flex]}
-                textStyle={styles.saveBtnText}
-              />
-            </View>
+            <>
+              {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
+              <View style={[styles.formActions, flexDirectionRow]}>
+                <TouchableOpacity
+                  style={[styles.cancelBtnFull, flex, alignJustifyCenter]}
+                  onPress={handleCancel}
+                  disabled={isSaving}>
+                  <Text style={[styles.cancelBtnText, style.fontWeightMedium]}>{PROFILE_CANCEL}</Text>
+                </TouchableOpacity>
+                <CustomButton
+                  title={PROFILE_SAVE}
+                  iconName="save"
+                  onPress={handleSave}
+                  loading={isSaving}
+                  disabled={isSaving}
+                  style={[styles.saveBtnFull, flex]}
+                  textStyle={styles.saveBtnText}
+                />
+              </View>
+            </>
           ) : null}
         </View>
 
@@ -717,6 +813,11 @@ const styles = StyleSheet.create({
     color: blackColor,
     borderWidth: 1,
     borderColor: 'transparent',
+  },
+  errorText: {
+    color: redColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
+    marginBottom: spacings.normal,
   },
   readOnlyField: {
     borderRadius: 10,

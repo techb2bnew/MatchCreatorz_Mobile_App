@@ -30,6 +30,9 @@ import {
   CONFIRM_PASSWORD,
   CONTINUE,
   EMAIL_ADDRESS,
+  ERROR_FORGOT_PASSWORD_FAILED,
+  ERROR_RESET_PASSWORD_FAILED,
+  ERROR_VERIFY_OTP_FAILED,
   FORGOT_PASSWORD_EMAIL_HEADING,
   FORGOT_PASSWORD_EMAIL_NOTE,
   FORGOT_PASSWORD_EMAIL_SUBTITLE,
@@ -64,6 +67,8 @@ import {
   validateOtp,
   validatePassword,
 } from '../utils';
+import { getApiErrorMessage } from '../services/apiClient';
+import { forgotPasswordApi, resetPasswordApi, verifyForgotOtpApi } from '../services/authService';
 
 const { alignItemsCenter, alignJustifyCenter, flexDirectionRow, textAlign } = BaseStyle;
 
@@ -106,8 +111,16 @@ const ForgotPasswordScreen = ({ navigation }) => {
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [errors, setErrors] = useState({ email: '', otp: '', password: '', confirmPassword: '' });
+  const [resetToken, setResetToken] = useState('');
+  const [errors, setErrors] = useState({
+    email: '',
+    otp: '',
+    password: '',
+    confirmPassword: '',
+    form: '',
+  });
   const [resendTimer, setResendTimer] = useState(RESEND_OTP_SECONDS);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const otpRef = useRef(null);
@@ -127,6 +140,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
   }, []);
 
   const handleBack = () => {
+    if (isSubmitting) return;
+
     if (step === STEPS.EMAIL) {
       navigation.goBack();
       return;
@@ -134,58 +149,116 @@ const ForgotPasswordScreen = ({ navigation }) => {
     if (step === STEPS.OTP) {
       setStep(STEPS.EMAIL);
       setOtp('');
-      setErrors(prev => ({ ...prev, otp: '' }));
+      setResetToken('');
+      setErrors(prev => ({ ...prev, otp: '', form: '' }));
       return;
     }
     setStep(STEPS.OTP);
     setPassword('');
     setConfirmPassword('');
-    setErrors(prev => ({ ...prev, password: '', confirmPassword: '' }));
+    setErrors(prev => ({ ...prev, password: '', confirmPassword: '', form: '' }));
   };
 
   const handleEmailChange = value => {
     setEmail(value);
-    if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
+    if (errors.email || errors.form) {
+      setErrors(prev => ({ ...prev, email: '', form: '' }));
+    }
   };
 
   const handlePasswordChange = value => {
     setPassword(value);
-    if (errors.password) setErrors(prev => ({ ...prev, password: '' }));
+    if (errors.password || errors.form) {
+      setErrors(prev => ({ ...prev, password: '', form: '' }));
+    }
   };
 
   const handleConfirmPasswordChange = value => {
     setConfirmPassword(value);
-    if (errors.confirmPassword) setErrors(prev => ({ ...prev, confirmPassword: '' }));
+    if (errors.confirmPassword || errors.form) {
+      setErrors(prev => ({ ...prev, confirmPassword: '', form: '' }));
+    }
   };
 
-  const handleEmailNext = () => {
+  const sendForgotOtp = async () => {
+    await forgotPasswordApi({ email });
+  };
+
+  const handleEmailNext = async () => {
     const emailError = validateEmail(email);
     if (emailError) {
-      setErrors(prev => ({ ...prev, email: emailError }));
+      setErrors(prev => ({ ...prev, email: emailError, form: '' }));
       return;
     }
-    setStep(STEPS.OTP);
-    startResendTimer();
+
+    setIsSubmitting(true);
+    setErrors(prev => ({ ...prev, email: '', form: '' }));
+
+    try {
+      await sendForgotOtp();
+      setStep(STEPS.OTP);
+      startResendTimer();
+    } catch (error) {
+      setErrors(prev => ({
+        ...prev,
+        form: getApiErrorMessage(error?.data, error?.message || ERROR_FORGOT_PASSWORD_FAILED),
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleOtpNext = () => {
+  const handleOtpNext = async () => {
     const otpError = validateOtp(otp);
     if (otpError) {
-      setErrors(prev => ({ ...prev, otp: otpError }));
+      setErrors(prev => ({ ...prev, otp: otpError, form: '' }));
       return;
     }
-    setStep(STEPS.PASSWORD);
+
+    setIsSubmitting(true);
+    setErrors(prev => ({ ...prev, otp: '', form: '' }));
+
+    try {
+      const response = await verifyForgotOtpApi({ email, otp });
+      const token = response?.data?.reset_token;
+      if (!token) {
+        setErrors(prev => ({ ...prev, form: ERROR_VERIFY_OTP_FAILED }));
+        return;
+      }
+      setResetToken(token);
+      setStep(STEPS.PASSWORD);
+    } catch (error) {
+      setErrors(prev => ({
+        ...prev,
+        form: getApiErrorMessage(error?.data, error?.message || ERROR_VERIFY_OTP_FAILED),
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleResendOtp = () => {
-    if (resendTimer > 0) return;
-    otpRef.current?.clear();
-    setOtp('');
-    setErrors(prev => ({ ...prev, otp: '' }));
-    startResendTimer();
+  const handleResendOtp = async () => {
+    if (resendTimer > 0 || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setErrors(prev => ({ ...prev, otp: '', form: '' }));
+
+    try {
+      await sendForgotOtp();
+      otpRef.current?.clear();
+      setOtp('');
+      startResendTimer();
+    } catch (error) {
+      setErrors(prev => ({
+        ...prev,
+        form: getApiErrorMessage(error?.data, error?.message || ERROR_FORGOT_PASSWORD_FAILED),
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleResetPassword = () => {
+  const handleResetPassword = async () => {
     const passwordError = validatePassword(password);
     const confirmPasswordError = validateConfirmPassword(password, confirmPassword);
 
@@ -194,11 +267,30 @@ const ForgotPasswordScreen = ({ navigation }) => {
         ...prev,
         password: passwordError,
         confirmPassword: confirmPasswordError,
+        form: '',
       }));
       return;
     }
 
-    setShowSuccessModal(true);
+    if (!resetToken) {
+      setErrors(prev => ({ ...prev, form: ERROR_RESET_PASSWORD_FAILED }));
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrors(prev => ({ ...prev, password: '', confirmPassword: '', form: '' }));
+
+    try {
+      await resetPasswordApi({ token: resetToken, password });
+      setShowSuccessModal(true);
+    } catch (error) {
+      setErrors(prev => ({
+        ...prev,
+        form: getApiErrorMessage(error?.data, error?.message || ERROR_RESET_PASSWORD_FAILED),
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSuccessOk = () => {
@@ -208,14 +300,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
 
   const stepContent = STEP_CONTENT[step];
 
-  const renderInfoCard = note => (
-    <View style={[styles.infoCard, flexDirectionRow]}>
-      <View style={[styles.infoIconWrap, alignJustifyCenter]}>
-        <Icon name="info" size={16} color={redColor} />
-      </View>
-      <Text style={[styles.infoText, style.fontWeightThin]}>{note}</Text>
-    </View>
-  );
+  const renderFormError = () =>
+    errors.form ? <Text style={[styles.formErrorText, textAlign]}>{errors.form}</Text> : null;
 
   const renderStepContent = () => {
     if (step === STEPS.EMAIL) {
@@ -232,8 +318,15 @@ const ForgotPasswordScreen = ({ navigation }) => {
             error={errors.email}
             style={styles.inputSpacing}
           />
-          <CustomButton title={NEXT} iconName="arrow-right" iconPosition="right" onPress={handleEmailNext} />
-          {/* {renderInfoCard(stepContent.note)} */}
+          {renderFormError()}
+          <CustomButton
+            title={NEXT}
+            iconName="arrow-right"
+            iconPosition="right"
+            onPress={handleEmailNext}
+            loading={isSubmitting}
+            disabled={isSubmitting}
+          />
         </>
       );
     }
@@ -247,7 +340,9 @@ const ForgotPasswordScreen = ({ navigation }) => {
             inputCount={OTP_LENGTH}
             handleTextChange={value => {
               setOtp(value);
-              if (errors.otp) setErrors(prev => ({ ...prev, otp: '' }));
+              if (errors.otp || errors.form) {
+                setErrors(prev => ({ ...prev, otp: '', form: '' }));
+              }
             }}
             tintColor={redColor}
             offTintColor={borderLightColor}
@@ -263,14 +358,21 @@ const ForgotPasswordScreen = ({ navigation }) => {
                 {RESEND_OTP_IN} {formatTimer(resendTimer)}
               </Text>
             ) : (
-              <TouchableOpacity onPress={handleResendOtp} activeOpacity={0.7}>
+              <TouchableOpacity onPress={handleResendOtp} activeOpacity={0.7} disabled={isSubmitting}>
                 <Text style={[styles.resendText, style.fontWeightMedium]}>{RESEND_OTP}</Text>
               </TouchableOpacity>
             )}
           </View>
 
-          <CustomButton title={NEXT} iconName="arrow-right" iconPosition="right" onPress={handleOtpNext} />
-          {/* {renderInfoCard(stepContent.note)} */}
+          {renderFormError()}
+          <CustomButton
+            title={NEXT}
+            iconName="arrow-right"
+            iconPosition="right"
+            onPress={handleOtpNext}
+            loading={isSubmitting}
+            disabled={isSubmitting}
+          />
         </>
       );
     }
@@ -300,8 +402,15 @@ const ForgotPasswordScreen = ({ navigation }) => {
           style={styles.inputSpacing}
         />
         <Text style={[styles.passwordHint, style.fontWeightThin, textAlign]}>{FORGOT_PASSWORD_PASSWORD_HINT}</Text>
-        <CustomButton title={CONTINUE} iconName="arrow-right" iconPosition="right" onPress={handleResetPassword} />
-        {/* {renderInfoCard(stepContent.note)} */}
+        {renderFormError()}
+        <CustomButton
+          title={CONTINUE}
+          iconName="arrow-right"
+          iconPosition="right"
+          onPress={handleResetPassword}
+          loading={isSubmitting}
+          disabled={isSubmitting}
+        />
       </>
     );
   };
@@ -435,29 +544,6 @@ const styles = StyleSheet.create({
     marginTop: -spacings.normal,
     marginBottom: spacings.xLarge,
   },
-  infoCard: {
-    backgroundColor: inputBgColor,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: borderLightColor,
-    padding: spacings.large,
-    marginTop: spacings.xxLarge,
-    alignItems: 'flex-start',
-  },
-  infoIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: lightPink,
-    marginRight: spacings.normal,
-    marginTop: 2,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: style.fontSizeSmall1x.fontSize,
-    color: grayColor,
-    lineHeight: 20,
-  },
   inputSpacing: {
     marginBottom: spacings.xLarge,
   },
@@ -473,6 +559,11 @@ const styles = StyleSheet.create({
     color: blackColor,
   },
   errorText: {
+    color: redColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
+    marginBottom: spacings.large,
+  },
+  formErrorText: {
     color: redColor,
     fontSize: style.fontSizeSmall1x.fontSize,
     marginBottom: spacings.large,

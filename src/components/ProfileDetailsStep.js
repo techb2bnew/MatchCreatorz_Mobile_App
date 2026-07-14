@@ -26,10 +26,10 @@ import {
   DOB_PLACEHOLDER,
   GENDER,
   GENDER_OPTIONS,
+  HOURLY_RATE_PLACEHOLDER,
   LABEL_CITY,
+  LABEL_HOURLY_RATE,
   LABEL_ZIP_CODE,
-  PRICE_RANGE,
-  PRICE_RANGE_OPTIONS,
   PROFILE_DETAILS,
   RESPONSE_TIME,
   RESPONSE_TIME_OPTIONS,
@@ -45,7 +45,7 @@ import { heightPercentageToDP as hp } from '../utils';
 
 const { flexDirectionRow, flexWrap, alignItemsCenter, alignItemsFlexStart } = BaseStyle;
 
-const ProfileDetailsStep = ({ form, onChange, onToggleTag }) => {
+const ProfileDetailsStep = ({ form, onChange, onToggleTag, errors = {} }) => {
   const setField = (field, value) => onChange({ ...form, [field]: value });
   const stateOptions = useMemo(() => getStateNamesForCountry(form.country), [form.country]);
   const countryOptions = useMemo(() => getCountryNames(), []);
@@ -73,12 +73,16 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag }) => {
       </View>
 
       <View style={[styles.gridRow, flexDirectionRow]}>
-        <CustomDropdown
-          label={PRICE_RANGE}
+        <CustomTextInput
+          value={form.hourlyRate}
+          onChangeText={val => setField('hourlyRate', val.replace(/[^0-9.]/g, ''))}
+          label={LABEL_HOURLY_RATE}
           required
-          value={form.priceRange}
-          options={PRICE_RANGE_OPTIONS}
-          onSelect={val => setField('priceRange', val)}
+          placeholder={HOURLY_RATE_PLACEHOLDER}
+          leftIcon="dollar-sign"
+          keyboardType="decimal-pad"
+          error={errors.hourlyRate}
+          style={styles.halfInput}
         />
         <CustomTextInput
           value={form.dateOfBirth}
@@ -102,7 +106,6 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag }) => {
         {hasStateDropdown ? (
           <CustomDropdown
             label={STATE}
-            required
             value={form.state}
             options={stateOptions}
             searchable
@@ -113,21 +116,23 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag }) => {
             value={form.state}
             onChangeText={val => setField('state', val)}
             label={STATE}
-            required
             placeholder={STATE}
             leftIcon="map"
             style={styles.halfInput}
           />
         )}
       </View>
+      {errors.country ? <Text style={styles.errorText}>{errors.country}</Text> : null}
 
       <View style={[styles.gridRow, flexDirectionRow]}>
         <CustomTextInput
           value={form.city}
           onChangeText={val => setField('city', val)}
           label={LABEL_CITY}
+          required
           placeholder={CITY_PLACEHOLDER}
           leftIcon="map-pin"
+          error={errors.city}
           style={styles.halfInput}
         />
         <CustomTextInput
@@ -150,15 +155,14 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag }) => {
         />
         <CustomDropdown
           label={CATEGORY}
-          required
           value={form.category}
           options={CATEGORY_OPTIONS}
           onSelect={val => setField('category', val)}
         />
       </View>
 
-      <FormLabel label={TAGS_SKILLS} />
-      <View style={[styles.tagsBox, flexDirectionRow, flexWrap]}>
+      <FormLabel label={TAGS_SKILLS} required />
+      <View style={[styles.tagsBox, flexDirectionRow, flexWrap, errors.skills && styles.tagsBoxError]}>
         {SKILL_TAGS.map(tag => {
           const isSelected = form.tags.includes(tag);
           return (
@@ -174,6 +178,7 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag }) => {
           );
         })}
       </View>
+      {errors.skills ? <Text style={styles.errorText}>{errors.skills}</Text> : null}
 
       <CustomTextInput
         value={form.bio}
@@ -261,6 +266,18 @@ const styles = StyleSheet.create({
     padding: spacings.large,
     gap: spacings.normal,
     marginBottom: hp(1.5),
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  tagsBoxError: {
+    borderColor: redColor,
+    marginBottom: spacings.xsmall,
+  },
+  errorText: {
+    color: redColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
+    marginBottom: hp(1.2),
+    marginLeft: spacings.xsmall,
   },
   tag: {
     paddingHorizontal: spacings.large,

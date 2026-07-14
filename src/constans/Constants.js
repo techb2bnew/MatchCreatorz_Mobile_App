@@ -69,7 +69,7 @@ export const LOGIN_TABS = {
 };
 
 // TODO: Remove when API login is integrated
-export const MOCK_LOGIN_PASSWORD = '12345678';
+export const MOCK_LOGIN_PASSWORD = 'Password1';
 export const MOCK_LOGIN_BUYER_EMAIL = 'buyer@yopmail.com';
 export const MOCK_LOGIN_SELLER_EMAIL = 'seller@yopmail.com';
 
@@ -118,8 +118,8 @@ export const CREATOR_SUBTITLE = 'I want to sell my work';
 export const BUYER_CLIENT = 'Buyer / Client';
 export const BUYER_SUBTITLE = 'I want to hire talent';
 export const OR_SIGN_UP_WITH = 'Or sign up with';
+export const EMAIL_OPTIONAL = 'Email address';
 export const FULL_NAME = 'Full name';
-export const EMAIL_OPTIONAL = 'Email address (optional)';
 export const CONFIRM_PASSWORD = 'Confirm password';
 export const ACCEPT_TERMS = 'I accept the';
 export const TERMS_AND_CONDITIONS = 'Terms and Conditions';
@@ -197,7 +197,7 @@ export const GENDER = 'GENDER';
 // Uppercase labels shown above form fields
 export const LABEL_FULL_NAME = 'FULL NAME';
 export const LABEL_EMAIL_ADDRESS = 'EMAIL ADDRESS';
-export const LABEL_EMAIL_OPTIONAL = 'EMAIL ADDRESS (OPTIONAL)';
+export const LABEL_EMAIL_OPTIONAL = 'EMAIL ADDRESS';
 export const LABEL_PHONE_NUMBER = 'PHONE NUMBER';
 export const LABEL_PASSWORD = 'PASSWORD';
 export const LABEL_CONFIRM_PASSWORD = 'CONFIRM PASSWORD';
@@ -213,7 +213,8 @@ export const SELLER_ACCOUNT_SUBTITLE = 'Enter your basic details to get started'
 export const SELLER_PASSWORD_HINT = "You'll set your password in the final step.";
 export const DOB_PLACEHOLDER = 'mm/dd/yyyy';
 export const ACCOUNT_CREATED_TITLE = 'Account Created!';
-export const ACCOUNT_CREATED_MESSAGE = 'Your seller profile has been submitted successfully. Welcome to MatchCreatorz!';
+export const ACCOUNT_CREATED_MESSAGE =
+  'Your account has been created successfully. Please login after admin approval.';
 
 export const PRICE_RANGE_OPTIONS = [
   '₹500–₹1,000/project',
@@ -284,6 +285,9 @@ export const OTP_LENGTH = 6;
 export const RESEND_OTP_SECONDS = 60;
 export const ERROR_OTP_REQUIRED = 'OTP is required';
 export const ERROR_OTP_INVALID = 'Please enter a valid 6-digit OTP';
+export const ERROR_FORGOT_PASSWORD_FAILED = 'Failed to send OTP. Please try again.';
+export const ERROR_VERIFY_OTP_FAILED = 'OTP verification failed. Please try again.';
+export const ERROR_RESET_PASSWORD_FAILED = 'Failed to reset password. Please try again.';
 
 // Bottom tabs
 export const TAB_DASHBOARD = 'Dashboard';
@@ -697,3 +701,56 @@ export const SELLER_NOTIF_OFFER_ALERTS = 'Offer Alerts';
 export const SELLER_NOTIF_OFFER_ALERTS_DESC = 'When you receive new offers';
 
 export const SELLER_JOB_CATEGORIES = ['All', 'Design', 'Development', 'Marketing', 'Writing', 'Video'];
+
+// API
+export const API_BASE_URL = 'http://98.91.171.82:5000/api/v1';
+
+export const API_ENDPOINTS = {
+  AUTH_REGISTER: '/auth/register',
+  AUTH_LOGIN: '/auth/login',
+  AUTH_LOGOUT: '/auth/logout',
+  AUTH_FORGOT_PASSWORD: '/auth/forgot-password',
+  AUTH_VERIFY_FORGOT_OTP: '/auth/verify-forgot-otp',
+  AUTH_RESET_PASSWORD: '/auth/reset-password',
+  BUYER_PROFILE: '/buyer/profile',
+};
+
+export const API_ROLES = {
+  SELLER: 'SELLER',
+  BUYER: 'BUYER',
+};
+
+export const mapAppRoleToApiRole = role =>
+  role === USER_ROLES.CREATOR ? API_ROLES.SELLER : API_ROLES.BUYER;
+
+export const mapApiRoleToAppRole = role => {
+  const normalized = String(role || '')
+    .trim()
+    .toUpperCase();
+  if (normalized === API_ROLES.SELLER || normalized === 'CREATOR') {
+    return USER_ROLES.CREATOR;
+  }
+  return USER_ROLES.BUYER;
+};
+
+export const AUTH_TOKEN_KEY = 'matchcreators_auth_token';
+export const AUTH_USER_KEY = 'matchcreators_auth_user';
+export const AUTH_ROLE_KEY = 'matchcreators_auth_role';
+
+export const ERROR_PASSWORD_STRENGTH =
+  'Password must include at least 1 uppercase letter and 1 number';
+export const ERROR_CITY_REQUIRED = 'City is required';
+export const ERROR_COUNTRY_REQUIRED = 'Country is required';
+export const ERROR_SKILLS_REQUIRED = 'Please select at least one skill';
+export const ERROR_HOURLY_RATE_REQUIRED = 'Hourly rate is required';
+export const ERROR_HOURLY_RATE_INVALID = 'Enter a valid hourly rate';
+export const ERROR_REGISTER_FAILED = 'Registration failed. Please try again.';
+export const ERROR_LOGIN_FAILED = 'Login failed. Please try again.';
+export const ERROR_EMAIL_ALREADY_REGISTERED = 'Email already registered';
+export const ERROR_PROFILE_UPDATE_FAILED = 'Failed to update profile. Please try again.';
+
+export const COMPANY_NAME = 'Company name (optional)';
+export const LABEL_COMPANY_NAME = 'COMPANY NAME';
+export const LABEL_HOURLY_RATE = 'HOURLY RATE (₹)';
+export const HOURLY_RATE_PLACEHOLDER = 'e.g. 500';
+export const REGISTERING = 'Creating account...';

@@ -1,18 +1,18 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useRoute } from '@react-navigation/native';
+import { useSelector } from 'react-redux';
 import BuyerTabNavigator from './buyer/buyerTabNavigator';
 import SellerTabNavigator from './seller/sellerTabNavigator';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import BookingDetailsScreen from '../screens/buyer/BookingDetailsScreen';
 import { SCREEN_NAMES, USER_ROLES } from '../constans/Constants';
+import { selectAppRole } from '../redux/slices/authSlice';
 
 const Stack = createNativeStackNavigator();
 
 const MainStack = () => {
-  const route = useRoute();
-  const userRole = route.params?.userRole ?? USER_ROLES.BUYER;
-  const isSeller = userRole === USER_ROLES.CREATOR;
+  const role = useSelector(selectAppRole);
+  const isSeller = role === USER_ROLES.CREATOR;
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
