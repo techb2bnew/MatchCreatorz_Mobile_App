@@ -1,11 +1,20 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
 import {
   blackColor,
   borderLightColor,
   grayColor,
+  inputBgColor,
   lightPink,
   redColor,
   whiteColor,
@@ -28,6 +37,12 @@ const ConfirmationModal = ({
   iconName = 'alert-circle',
   iconBgColor = lightPink,
   iconColor = redColor,
+  showReasonInput = false,
+  reasonValue = '',
+  onReasonChange,
+  reasonPlaceholder = 'Enter reason...',
+  reasonError = '',
+  loading = false,
 }) => {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -40,14 +55,40 @@ const ConfirmationModal = ({
           <Text style={[styles.title, style.fontWeightBold]}>{title}</Text>
           <Text style={[styles.message, style.fontWeightThin]}>{message}</Text>
 
+          {showReasonInput ? (
+            <View style={styles.reasonWrap}>
+              <TextInput
+                style={[styles.reasonInput, style.fontWeightThin]}
+                value={reasonValue}
+                onChangeText={onReasonChange}
+                placeholder={reasonPlaceholder}
+                placeholderTextColor={grayColor}
+                multiline
+                textAlignVertical="top"
+                editable={!loading}
+              />
+              {reasonError ? (
+                <Text style={[styles.reasonError, style.fontWeightThin]}>{reasonError}</Text>
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={[styles.btnRow, flexDirectionRow]}>
-            <TouchableOpacity style={[styles.cancelBtn, alignJustifyCenter]} onPress={onCancel}>
+            <TouchableOpacity
+              style={[styles.cancelBtn, alignJustifyCenter]}
+              onPress={onCancel}
+              disabled={loading}>
               <Text style={[styles.cancelBtnText, style.fontWeightMedium]}>{cancelText}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.confirmBtn, alignJustifyCenter, { backgroundColor: confirmColor }]}
-              onPress={onConfirm}>
-              <Text style={[styles.confirmBtnText, style.fontWeightMedium]}>{confirmText}</Text>
+              onPress={onConfirm}
+              disabled={loading}>
+              {loading ? (
+                <ActivityIndicator size="small" color={whiteColor} />
+              ) : (
+                <Text style={[styles.confirmBtnText, style.fontWeightMedium]}>{confirmText}</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -89,6 +130,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: spacings.xxLarge,
+  },
+  reasonWrap: {
+    width: '100%',
+    marginTop: -spacings.large,
+    marginBottom: spacings.xLarge,
+  },
+  reasonInput: {
+    width: '100%',
+    minHeight: 88,
+    borderWidth: 1,
+    borderColor: borderLightColor,
+    borderRadius: 10,
+    backgroundColor: inputBgColor,
+    paddingHorizontal: spacings.large,
+    paddingVertical: spacings.medium,
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: blackColor,
+  },
+  reasonError: {
+    marginTop: spacings.small,
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: redColor,
   },
   btnRow: {
     width: '100%',

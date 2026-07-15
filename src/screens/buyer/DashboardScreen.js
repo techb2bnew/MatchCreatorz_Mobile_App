@@ -1,28 +1,35 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
+import { selectAuth } from '../../redux/slices/authSlice';
+import { getBuyerStatsApi, getBuyerBookingsApi } from '../../services/buyerService';
 import {
   blackColor,
   borderLightColor,
   grayColor,
+  greenColor,
   inputBgColor,
   lightPink,
   redColor,
   screenBgColor,
   whiteColor,
   goldColor,
+  blueColor,
+  purpleColor,
 } from '../../constans/Color';
 import { style, spacings } from '../../constans/Fonts';
 import {
-  BUYER_STATIC_USER,
   BUYER_TABS,
   DASHBOARD_POST_JOB,
   DASHBOARD_QUICK_ACTIONS,
@@ -53,81 +60,195 @@ const {
   alignJustifyCenter,
 } = BaseStyle;
 
+const RECENT_BOOKINGS_LIMIT = 4;
+
 const getStatusStyle = status => {
-  if (status === 'Completed') return { bg: '#E8F8EE', text: '#1B7A45' };
-  if (status === 'In Review') return { bg: '#FFF4E5', text: '#C27803' };
+  const normalized = String(status || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (normalized === 'completed') return { bg: '#E8F8EE', text: greenColor };
+  if (normalized === 'pending' || normalized === 'ongoing' || normalized === 'active') {
+    return { bg: '#E8F0F8', text: blueColor };
+  }
+  if (
+    normalized === 'amidst_completion' ||
+    normalized === 'amidst_completion_process' ||
+    normalized === 'in_review' ||
+    normalized === 'delivery_submitted' ||
+    normalized === 'awaiting_acceptance'
+  ) {
+    return { bg: '#F3E8FF', text: purpleColor };
+  }
+  if (normalized === 'in_dispute' || normalized === 'disputed') {
+    return { bg: '#FFEBEB', text: redColor };
+  }
+  if (normalized === 'cancelled' || normalized === 'canceled') {
+    return { bg: '#F3F4F6', text: grayColor };
+  }
   return { bg: lightPink, text: redColor };
 };
 
+const formatDashboardBookingStatus = status => {
+  const normalized = String(status || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (normalized === 'pending') return 'Pending';
+  if (normalized === 'ongoing' || normalized === 'active' || normalized === 'in_progress') {
+    return 'Ongoing';
+  }
+  if (normalized === 'amidst_completion' || normalized === 'amidst_completion_process') {
+    return 'In Review';
+  }
+  if (normalized === 'completed') return 'Completed';
+  if (normalized === 'cancelled' || normalized === 'canceled') return 'Cancelled';
+  if (normalized === 'in_dispute' || normalized === 'disputed') return 'In Dispute';
+  if (!normalized) return '—';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1).replace(/_/g, ' ');
+};
+
+const formatDashboardBookingDate = dateStr => {
+  if (!dateStr) return '—';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return String(dateStr);
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const mapDashboardBooking = booking => {
+  const amount = Number(booking?.amount ?? booking?.total ?? 0) || 0;
+  const sellerName = booking?.seller?.name || booking?.seller_name || 'Seller';
+  const title =
+    booking?.title || booking?.service?.title || booking?.job?.title || 'Booking';
+
+  return {
+    id: String(booking.id),
+    title,
+    creator: sellerName,
+    date: formatDashboardBookingDate(booking.createdAt || booking.created_at),
+    price: `₹${amount.toFixed(0)}`,
+    status: formatDashboardBookingStatus(booking.status),
+    createdAt: booking.createdAt || booking.created_at || '',
+  };
+};
+
+const mergeUniqueBookings = lists => {
+  const byId = new Map();
+
+  lists.flat().forEach(booking => {
+    if (!booking?.id) return;
+    const key = String(booking.id);
+    if (!byId.has(key)) {
+      byId.set(key, booking);
+    }
+  });
+
+  return Array.from(byId.values()).sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.created_at || 0).getTime();
+    const timeB = new Date(b.createdAt || b.created_at || 0).getTime();
+    return timeB - timeA;
+  });
+};
+
+const INITIAL_COUNT_CARDS = [
+  {
+    id: 'wallet',
+    title: 'Wallet Balance',
+    value: '₹2,500',
+    subtitle: 'Available to spend',
+    icon: 'credit-card',
+  },
+  {
+    id: 'bookings',
+    title: 'Active Bookings',
+    value: '0',
+    subtitle: 'Current active bookings',
+    icon: 'calendar',
+  },
+  {
+    id: 'jobs',
+    title: 'Jobs Posted',
+    value: '5',
+    subtitle: '2 receiving bids',
+    icon: 'briefcase',
+  },
+];
+
 const DashboardScreen = ({ navigation }) => {
+  const { token, user } = useSelector(selectAuth);
   const [searchQuery, setSearchQuery] = useState('');
+  const [countCards, setCountCards] = useState(INITIAL_COUNT_CARDS);
+  const [recentBookings, setRecentBookings] = useState([]);
+  const [isBookingsLoading, setIsBookingsLoading] = useState(false);
+  const welcomeName = user?.name || user?.fullName || 'there';
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const fetchDashboardData = async () => {
+        if (!token) {
+          console.log('[BuyerDashboard] Skipped — no token');
+          return;
+        }
+
+        setIsBookingsLoading(true);
+        try {
+          const [statsResponse, activeRes, completedRes, cancelledRes] = await Promise.all([
+            getBuyerStatsApi(token),
+            getBuyerBookingsApi(token, { tab: 'active', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
+            getBuyerBookingsApi(token, { tab: 'completed', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
+            getBuyerBookingsApi(token, { tab: 'cancelled', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
+          ]);
+          if (cancelled) return;
+
+          const activeBookings = statsResponse?.data?.stats?.activeBookings ?? 0;
+          setCountCards(prev =>
+            prev.map(card =>
+              card.id === 'bookings'
+                ? { ...card, value: String(activeBookings) }
+                : card,
+            ),
+          );
+
+          const merged = mergeUniqueBookings([
+            Array.isArray(activeRes?.data) ? activeRes.data : [],
+            Array.isArray(completedRes?.data) ? completedRes.data : [],
+            Array.isArray(cancelledRes?.data) ? cancelledRes.data : [],
+          ]);
+
+          setRecentBookings(
+            merged.slice(0, RECENT_BOOKINGS_LIMIT).map(mapDashboardBooking),
+          );
+        } catch (error) {
+          if (!cancelled) setRecentBookings([]);
+        } finally {
+          if (!cancelled) setIsBookingsLoading(false);
+        }
+      };
+
+      fetchDashboardData();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [token]),
+  );
+
   const [promoStats] = useState([
     { id: '1', value: '12,000+', label: 'Creators' },
     { id: '2', value: '4.8', label: 'Avg Rating' },
     { id: '3', value: '98%', label: 'Satisfied' },
-  ]);
-  const [countCards] = useState([
-    {
-      id: 'wallet',
-      title: 'Wallet Balance',
-      value: '₹2,500',
-      subtitle: 'Available to spend',
-      icon: 'credit-card',
-    },
-    {
-      id: 'bookings',
-      title: 'Active Bookings',
-      value: '3',
-      subtitle: '1 needs attention',
-      icon: 'calendar',
-    },
-    {
-      id: 'jobs',
-      title: 'Jobs Posted',
-      value: '5',
-      subtitle: '2 receiving bids',
-      icon: 'briefcase',
-    },
   ]);
   const [quickActions] = useState([
     { id: '1', title: 'Post a New Job', icon: 'plus-circle', color: '#E94545' },
     { id: '2', title: 'Browse Creators', icon: 'search', color: '#3B6981' },
     { id: '3', title: 'View Bookings', icon: 'calendar', color: '#9B51E0' },
     { id: '4', title: 'Add Wallet Money', icon: 'credit-card', color: '#FFA928' },
-  ]);
-  const [recentBookings] = useState([
-    {
-      id: '1',
-      title: 'Logo Design',
-      creator: 'Alex Johnson',
-      date: '05 Jul 2026',
-      price: '₹2,500',
-      status: 'Ongoing',
-    },
-    {
-      id: '2',
-      title: 'Website Redesign',
-      creator: 'Priya Sharma',
-      date: '02 Jul 2026',
-      price: '₹8,000',
-      status: 'In Review',
-    },
-    {
-      id: '3',
-      title: 'Social Media Kit',
-      creator: 'Rahul Mehta',
-      date: '28 Jun 2026',
-      price: '₹3,200',
-      status: 'Completed',
-    },
-    {
-      id: '4',
-      title: 'Product Shoot',
-      creator: 'Anita Verma',
-      date: '20 Jun 2026',
-      price: '₹4,500',
-      status: 'Completed',
-    },
   ]);
   const [topCreators] = useState([
     {
@@ -214,7 +335,7 @@ const DashboardScreen = ({ navigation }) => {
         {/* Welcome banner */}
         <View style={styles.welcomeCard}>
           <Text style={[styles.welcomeText, style.fontWeightMedium]}>
-            {DASHBOARD_WELCOME_PREFIX} {BUYER_STATIC_USER.name} 👋
+            {DASHBOARD_WELCOME_PREFIX} {welcomeName} 👋
           </Text>
           <TouchableOpacity
             style={[styles.postJobBtn, flexDirectionRow, alignItemsCenter]}
@@ -315,42 +436,44 @@ const DashboardScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         <View style={styles.listCard}>
-          {recentBookings.length === 0 ? (
+          {isBookingsLoading ? (
+            <View style={styles.bookingsLoader}>
+              <ActivityIndicator size="small" color={redColor} />
+            </View>
+          ) : recentBookings.length === 0 ? (
             <EmptyState
               icon="calendar"
               title={EMPTY_DASHBOARD_BOOKINGS_TITLE}
               message={EMPTY_DASHBOARD_BOOKINGS_MESSAGE}
-              actionLabel={DASHBOARD_POST_JOB}
-              onAction={goToPostJob}
               compact
             />
           ) : (
             recentBookings.map((item, index) => {
-            const statusStyle = getStatusStyle(item.status);
-            return (
-              <View
-                key={item.id}
-                style={[
-                  styles.bookingRow,
-                  flexDirectionRow,
-                  alignItemsCenter,
-                  index < recentBookings.length - 1 && styles.rowBorder,
-                ]}>
-                <View style={styles.bookingInfo}>
-                  <Text style={[styles.bookingTitle, style.fontWeightMedium]}>{item.title}</Text>
-                  <Text style={[styles.bookingMeta, style.fontWeightThin]}>
-                    {item.creator} · {item.date}
-                  </Text>
-                </View>
-                <View style={styles.bookingRight}>
-                  <Text style={[styles.bookingPrice, style.fontWeightMedium]}>{item.price}</Text>
-                  <View style={[styles.statusChip, { backgroundColor: statusStyle.bg }]}>
-                    <Text style={[styles.statusText, { color: statusStyle.text }]}>{item.status}</Text>
+              const statusStyle = getStatusStyle(item.status);
+              return (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.bookingRow,
+                    flexDirectionRow,
+                    alignItemsCenter,
+                    index < recentBookings.length - 1 && styles.rowBorder,
+                  ]}>
+                  <View style={styles.bookingInfo}>
+                    <Text style={[styles.bookingTitle, style.fontWeightMedium]}>{item.title}</Text>
+                    <Text style={[styles.bookingMeta, style.fontWeightThin]}>
+                      {item.creator} · {item.date}
+                    </Text>
+                  </View>
+                  <View style={styles.bookingRight}>
+                    <Text style={[styles.bookingPrice, style.fontWeightMedium]}>{item.price}</Text>
+                    <View style={[styles.statusChip, { backgroundColor: statusStyle.bg }]}>
+                      <Text style={[styles.statusText, { color: statusStyle.text }]}>{item.status}</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            );
-          })
+              );
+            })
           )}
         </View>
 
@@ -560,6 +683,11 @@ const styles = StyleSheet.create({
     borderColor: borderLightColor,
     marginBottom: hp(2),
     overflow: 'hidden',
+  },
+  bookingsLoader: {
+    paddingVertical: spacings.xxLarge,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bookingRow: {
     paddingHorizontal: spacings.large,

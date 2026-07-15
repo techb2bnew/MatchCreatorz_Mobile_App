@@ -18,6 +18,10 @@ const SearchBar = ({ value, onChangeText, placeholder, style: containerStyle }) 
         placeholder={placeholder}
         placeholderTextColor={grayColor}
         style={[styles.searchInput, style.fontSizeNormal2x]}
+        blurOnSubmit={false}
+        returnKeyType="search"
+        autoCorrect={false}
+        autoCapitalize="none"
       />
     </View>
   );

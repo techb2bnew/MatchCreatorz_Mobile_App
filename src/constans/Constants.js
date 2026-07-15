@@ -492,7 +492,7 @@ export const POST_JOB_PLACEHOLDERS = {
     'Describe your project requirements, deliverables, timeline expectations, and any references...',
   budgetMin: '500',
   budgetMax: '5000',
-  deadline: 'dd-mm-yyyy',
+  deadline: 'Select deadline',
   skills: 'e.g. Photoshop, Illustrator, Branding (comma separated)',
 };
 
@@ -532,6 +532,28 @@ export const JOB_ACTIONS = {
   EDIT: 'Edit',
 };
 
+export const JOB_DETAIL_MODAL = {
+  title: 'Job Details',
+  postedOn: 'Posted On',
+  bids: 'Bids Received',
+  noSkills: 'No skills listed',
+  loadError: 'Could not load latest job details.',
+};
+
+export const BOOKING_DETAIL_MODAL = {
+  title: 'Booking Details',
+  postedOn: 'Booked On',
+  service: 'Service',
+  delivery: 'Delivery Days',
+  notes: 'Notes',
+  noNotes: 'No notes',
+  cancelReason: 'Cancel Reason',
+  disputeReason: 'Dispute Reason',
+  buyer: 'Buyer',
+  amount: 'Amount',
+  loadError: 'Could not load booking details.',
+};
+
 export const BOOKINGS_FILTER_TABS = {
   ACTIVE: 'active',
   COMPLETED: 'completed',
@@ -567,6 +589,17 @@ export const BOOKING_SERVICE_FEE = 'Service Fee';
 export const BOOKING_TOTAL = 'Total';
 export const BOOKING_DESCRIPTION = 'Description';
 export const HIRE_CREATOR = 'Hire Creator';
+export const HIRE_CREATOR_CONFIRM_TITLE = 'Hire Creator?';
+export const HIRE_CREATOR_CONFIRM_MESSAGE =
+  'Are you sure you want to hire this creator for the job? This will accept their bid.';
+export const HIRE_CREATOR_CONFIRM_BTN = 'Yes, Hire';
+export const ERROR_HIRE_CREATOR_FAILED = 'Failed to hire creator. Please try again.';
+export const REJECT_BID = 'Reject';
+export const REJECT_BID_CONFIRM_TITLE = 'Reject Bid?';
+export const REJECT_BID_CONFIRM_MESSAGE =
+  'Are you sure you want to reject this bid? This action cannot be undone.';
+export const REJECT_BID_CONFIRM_BTN = 'Yes, Reject';
+export const ERROR_REJECT_BID_FAILED = 'Failed to reject bid. Please try again.';
 export const UPDATE_JOB_BTN = 'Update Job';
 
 export const CONFIRM_CANCEL = 'Cancel';
@@ -577,10 +610,16 @@ export const BOOKING_ACCEPT_MESSAGE =
   'Are you sure you want to accept this delivery? Payment will be released to the seller.';
 export const BOOKING_REJECT_TITLE = 'Reject Delivery?';
 export const BOOKING_REJECT_MESSAGE =
-  'Are you sure you want to reject this delivery? The seller will be notified to revise the work.';
+  'Please share a reason for rejecting this delivery. The booking will move to dispute.';
 export const BOOKING_CANCEL_TITLE = 'Cancel Booking?';
 export const BOOKING_CANCEL_MESSAGE =
-  'Are you sure you want to cancel this booking? This action cannot be undone.';
+  'Please share a reason for cancelling this booking. This action cannot be undone.';
+export const BOOKING_REASON_PLACEHOLDER = 'Enter reason...';
+export const BOOKING_REASON_REQUIRED = 'Reason is required.';
+export const BOOKING_ACCEPT_CONFIRM_BTN = 'Yes, Accept';
+export const BOOKING_REJECT_CONFIRM_BTN = 'Yes, Reject';
+export const BOOKING_CANCEL_CONFIRM_BTN = 'Yes, Cancel';
+export const ERROR_BOOKING_ACTION_FAILED = 'Booking action failed. Please try again.';
 
 // Seller
 export const SELLER_STATIC_USER = {
@@ -713,6 +752,9 @@ export const API_ENDPOINTS = {
   AUTH_VERIFY_FORGOT_OTP: '/auth/verify-forgot-otp',
   AUTH_RESET_PASSWORD: '/auth/reset-password',
   BUYER_PROFILE: '/buyer/profile',
+  BUYER_STATS: '/buyer/stats',
+  BUYER_JOBS: '/buyer/jobs',
+  BUYER_BOOKINGS: '/buyer/bookings',
 };
 
 export const API_ROLES = {
@@ -748,6 +790,8 @@ export const ERROR_REGISTER_FAILED = 'Registration failed. Please try again.';
 export const ERROR_LOGIN_FAILED = 'Login failed. Please try again.';
 export const ERROR_EMAIL_ALREADY_REGISTERED = 'Email already registered';
 export const ERROR_PROFILE_UPDATE_FAILED = 'Failed to update profile. Please try again.';
+export const ERROR_POST_JOB_FAILED = 'Failed to post job. Please try again.';
+export const ERROR_UPDATE_JOB_FAILED = 'Failed to update job. Please try again.';
 
 export const COMPANY_NAME = 'Company name (optional)';
 export const LABEL_COMPANY_NAME = 'COMPANY NAME';

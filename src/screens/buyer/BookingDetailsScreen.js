@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,12 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
+import { selectAuth } from '../../redux/slices/authSlice';
+import { getBuyerBookingByIdApi } from '../../services/buyerService';
 import {
   blackColor,
   borderLightColor,
@@ -61,37 +65,36 @@ const getBookingStatusStyle = status => {
 };
 
 const formatCurrency = (amount, currency = '$') =>
-  `${currency}${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+  `${currency}${Number(amount || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 
 const BookingDetailsScreen = ({ navigation, route }) => {
+  const { token } = useSelector(selectAuth);
   const initialBooking = route.params?.booking;
+  const bookingId = initialBooking?.id || route.params?.bookingId;
 
   const [booking, setBooking] = useState(
     initialBooking || {
       id: '0',
-      title: 'Logo Design',
-      sellerName: 'Bob Smith',
-      sellerInitials: 'BS',
-      date: 'Nov 10, 2024',
-      total: 275.0,
-      fee: 25.0,
-      currency: '$',
-      status: 'Ongoing',
-      filterType: 'active',
+      title: '—',
+      sellerName: '—',
+      sellerInitials: '—',
+      date: '—',
+      total: 0,
+      fee: 0,
+      currency: '₹',
+      status: '—',
     },
   );
 
   const [timeline] = useState([
-    { id: '1', label: 'Booking Placed', date: 'Nov 10, 2024', done: true },
-    { id: '2', label: 'Work Started', date: 'Nov 11, 2024', done: true },
-    { id: '3', label: 'In Progress', date: 'Nov 12, 2024', done: true },
+    { id: '1', label: 'Booking Placed', date: '—', done: true },
+    { id: '2', label: 'Work Started', date: '—', done: false },
+    { id: '3', label: 'In Progress', date: '—', done: false },
     { id: '4', label: 'Delivery / Review', date: 'Pending', done: false },
     { id: '5', label: 'Completed', date: 'Pending', done: false },
   ]);
 
-  const [description] = useState(
-    'Professional logo design package including 3 initial concepts, 2 revision rounds, and final files in PNG, SVG, and PDF formats.',
-  );
+  const [description] = useState('');
 
   const [confirmModal, setConfirmModal] = useState({
     visible: false,
@@ -101,6 +104,38 @@ const BookingDetailsScreen = ({ navigation, route }) => {
     confirmColor: redColor,
     iconName: 'alert-circle',
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const fetchBookingDetail = async () => {
+        if (!token || !bookingId) {
+          console.log('[BuyerBookingDetail] Skipped — missing token or bookingId', {
+            hasToken: Boolean(token),
+            bookingId,
+          });
+          return;
+        }
+
+        try {
+          await getBuyerBookingByIdApi(token, bookingId);
+          // Response is console-logged in the service.
+          // UI mapping will be decided after reviewing the payload (screen vs popup).
+        } catch (error) {
+          if (!cancelled) {
+            // Error already logged in getBuyerBookingByIdApi
+          }
+        }
+      };
+
+      fetchBookingDetail();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [token, bookingId]),
+  );
 
   const statusStyle = getBookingStatusStyle(booking.status);
   const subtotal = booking.total - booking.fee;

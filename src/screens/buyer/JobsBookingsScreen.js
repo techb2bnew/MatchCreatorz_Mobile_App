@@ -1,16 +1,36 @@
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
+  FlatList,
+  ActivityIndicator,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
+  Platform,
+  Modal,
+  Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSelector } from 'react-redux';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
+import { selectAuth } from '../../redux/slices/authSlice';
+import {
+  getBuyerJobsApi,
+  getBuyerJobByIdApi,
+  getBuyerBookingsApi,
+  getBuyerBookingByIdApi,
+  acceptBuyerBookingApi,
+  rejectBuyerBookingApi,
+  cancelBuyerBookingApi,
+  createBuyerJobApi,
+  updateBuyerJobApi,
+} from '../../services/buyerService';
+import { getApiErrorMessage } from '../../services/apiClient';
 import {
   blackColor,
   borderLightColor,
@@ -27,11 +47,17 @@ import {
 } from '../../constans/Color';
 import { style, spacings } from '../../constans/Fonts';
 import {
+  BOOKING_ACCEPT_CONFIRM_BTN,
   BOOKING_ACCEPT_MESSAGE,
   BOOKING_ACCEPT_TITLE,
   BOOKING_ACTIONS,
+  BOOKING_CANCEL_CONFIRM_BTN,
   BOOKING_CANCEL_MESSAGE,
   BOOKING_CANCEL_TITLE,
+  BOOKING_DETAIL_MODAL,
+  BOOKING_REASON_PLACEHOLDER,
+  BOOKING_REASON_REQUIRED,
+  BOOKING_REJECT_CONFIRM_BTN,
   BOOKING_REJECT_MESSAGE,
   BOOKING_REJECT_TITLE,
   BOOKINGS_FILTER_LABELS,
@@ -39,10 +65,13 @@ import {
   BOOKINGS_SCREEN_TITLE,
   BUYER_PROTECTION,
   BIDS_SUFFIX,
+  CONFIRM_YES,
+  ERROR_BOOKING_ACTION_FAILED,
   EXPERIENCE_LEVELS,
   FEE_INCL_PREFIX,
   FEE_SUFFIX,
   JOB_ACTIONS,
+  JOB_DETAIL_MODAL,
   JOB_CATEGORIES,
   JOB_TYPES,
   JOBS_BOOKINGS_TABS,
@@ -58,6 +87,8 @@ import {
   EMPTY_JOBS_TITLE,
   EMPTY_SEARCH_MESSAGE,
   EMPTY_SEARCH_TITLE,
+  ERROR_POST_JOB_FAILED,
+  ERROR_UPDATE_JOB_FAILED,
   PLATFORM_STATS,
   PLATFORM_STATS_TITLE,
   POST_JOB_BTN,
@@ -76,9 +107,12 @@ import {
 import CustomTextInput from '../../components/CustomTextInput';
 import CustomButton from '../../components/CustomButton';
 import CustomDropdown from '../../components/CustomDropdown';
+import FormLabel from '../../components/FormLabel';
 import SearchBar from '../../components/SearchBar';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
+import JobDetailModal from '../../components/modal/JobDetailModal';
+import BookingDetailModal from '../../components/modal/BookingDetailModal';
 import EmptyState from '../../components/EmptyState';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import {
@@ -99,19 +133,127 @@ const {
 const getJobStatusStyle = status => {
   if (status === 'Open') return { bg: '#E8F8EE', text: '#1B7A45' };
   if (status === 'In Progress') return { bg: '#E8F0F8', text: blueColor };
+  if (status === 'Closed' || status === 'Cancelled') return { bg: '#F3F4F6', text: grayColor };
   return { bg: '#F3F4F6', text: grayColor };
 };
 
 const getBookingStatusStyle = status => {
-  if (status === 'Ongoing') return { bg: '#E8F0F8', text: blueColor };
-  if (status === 'Amidst-Completion-Process') return { bg: '#F3E8FF', text: purpleColor };
-  if (status === 'In-dispute') return { bg: '#FFEBEB', text: redColor };
-  if (status === 'Completed') return { bg: '#E8F8EE', text: greenColor };
+  const normalized = String(status || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (normalized === 'pending' || normalized === 'ongoing' || normalized === 'active') {
+    return { bg: '#E8F0F8', text: blueColor };
+  }
+  if (
+    normalized === 'amidst_completion_process' ||
+    normalized === 'amidst_completion' ||
+    normalized === 'delivery_submitted' ||
+    normalized === 'awaiting_acceptance'
+  ) {
+    return { bg: '#F3E8FF', text: purpleColor };
+  }
+  if (normalized === 'in_dispute' || normalized === 'disputed') {
+    return { bg: '#FFEBEB', text: redColor };
+  }
+  if (normalized === 'completed') return { bg: '#E8F8EE', text: greenColor };
+  if (normalized === 'cancelled' || normalized === 'canceled') return { bg: '#F3F4F6', text: grayColor };
   return { bg: '#F3F4F6', text: grayColor };
 };
 
-const formatCurrency = (amount, currency = '$') =>
-  `${currency}${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+const formatCurrency = (amount, currency = '₹') => {
+  const num = Number(amount);
+  if (Number.isNaN(num)) return `${currency}—`;
+  return `${currency}${num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+};
+
+const getBookingInitials = name =>
+  String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || '—';
+
+const mapApiBookingStatusToUi = status => {
+  const normalized = String(status || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (normalized === 'pending') return 'Pending';
+  if (normalized === 'ongoing' || normalized === 'active' || normalized === 'in_progress') {
+    return 'Ongoing';
+  }
+  if (normalized === 'amidst_completion_process' || normalized === 'amidst_completion') {
+    return 'Amidst-Completion-Process';
+  }
+  if (normalized === 'delivery_submitted') return 'Delivery Submitted';
+  if (normalized === 'awaiting_acceptance') return 'Awaiting Acceptance';
+  if (normalized === 'in_dispute' || normalized === 'disputed') return 'In-dispute';
+  if (normalized === 'completed') return 'Completed';
+  if (normalized === 'cancelled' || normalized === 'canceled') return 'Cancelled';
+  if (!normalized) return '—';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1).replace(/_/g, ' ');
+};
+
+const formatBookingDate = dateStr => {
+  if (!dateStr) return '—';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return String(dateStr);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const mapApiBookingToUi = booking => {
+  const seller = booking?.seller || {};
+  const buyer = booking?.buyer || {};
+  const sellerName = seller.name || booking?.seller_name || 'Seller';
+  const buyerName = buyer.name || booking?.buyer_name || '';
+  const title =
+    booking?.title ||
+    booking?.service?.title ||
+    booking?.job?.title ||
+    'Booking';
+  const amount = Number(booking.amount ?? booking.total ?? 0) || 0;
+  const fee = Number(booking.platform_fee ?? booking.fee ?? 0) || 0;
+  const deliveryDays = booking.delivery_days ?? booking.deliveryDays ?? null;
+  const images = booking?.service?.images;
+  const serviceImage =
+    (Array.isArray(images) && images.find(Boolean)) ||
+    booking?.service_image ||
+    booking?.serviceImage ||
+    null;
+
+  return {
+    id: String(booking.id),
+    title,
+    sellerName,
+    sellerInitials: getBookingInitials(sellerName),
+    buyerName,
+    date: formatBookingDate(booking.createdAt || booking.created_at),
+    total: amount,
+    fee,
+    currency: '₹',
+    amountDisplay: `₹${amount.toFixed(2)}`,
+    feeDisplay: `₹${fee.toFixed(2)}`,
+    serviceTitle: booking?.service?.title || booking?.title || '—',
+    delivery: deliveryDays != null ? `${deliveryDays} days` : '—',
+    status: mapApiBookingStatusToUi(booking.status),
+    apiStatus: String(booking.status || '')
+      .trim()
+      .toLowerCase()
+      .replace(/-/g, '_'),
+    notes: booking.notes || '',
+    cancelReason: booking.cancel_reason || booking.cancelReason || '',
+    disputeReason: booking.dispute_reason || booking.disputeReason || '',
+    deliveryDays,
+    serviceImage,
+    raw: booking,
+  };
+};
+
+const mapBookingDetailForDisplay = booking => mapApiBookingToUi(booking);
 
 const EMPTY_POST_JOB_FORM = {
   title: '',
@@ -125,13 +267,205 @@ const EMPTY_POST_JOB_FORM = {
   skills: '',
 };
 
+const JOBS_PAGE_LIMIT = 20;
+
+const extractJobsList = response => {
+  const data = response?.data;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.jobs)) return data.jobs;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.rows)) return data.rows;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+};
+
+const extractPagination = response => response?.pagination || response?.data?.pagination || null;
+
+const mapApiStatusToUi = status => {
+  const normalized = String(status || '')
+    .trim()
+    .toUpperCase()
+    .replace(/-/g, '_');
+  if (normalized === 'OPEN') return 'Open';
+  if (normalized === 'IN_PROGRESS') return 'In Progress';
+  if (normalized === 'CLOSED') return 'Closed';
+  if (normalized === 'CANCELLED') return 'Cancelled';
+  return status || '—';
+};
+
+const formatJobDate = dateStr => {
+  if (!dateStr) return '—';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return String(dateStr);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+const formatBudgetRange = job => {
+  if (job.budget_range) return job.budget_range;
+  if (job.budgetRange) return job.budgetRange;
+
+  const min = job.budget_min ?? job.budgetMin;
+  const max = job.budget_max ?? job.budgetMax;
+  if (min != null || max != null) {
+    return `₹${min ?? 0}–₹${max ?? 0}`;
+  }
+
+  return '—';
+};
+
+const mapApiJobToUi = job => {
+  const apiStatus = String(job?.status || '')
+    .trim()
+    .toUpperCase()
+    .replace(/-/g, '_');
+
+  return {
+    id: String(job.id),
+    title: job.title
+      ? String(job.title).charAt(0).toUpperCase() + String(job.title).slice(1)
+      : '—',
+    category: job.category || job.job_category || '—',
+    date: formatJobDate(job.created_at || job.createdAt || job.date),
+    status: mapApiStatusToUi(job.status),
+    apiStatus,
+    description: job.description || '',
+    budgetRange: formatBudgetRange(job),
+    bidCount: Number(job.bid_count ?? job.bidCount ?? job.bids_count ?? 0) || 0,
+    raw: job,
+  };
+};
+
+const mapJobTypeToUi = jobType => {
+  const normalized = String(jobType || '')
+    .trim()
+    .toLowerCase();
+  return normalized === 'hourly' ? 'Hourly' : 'Fixed Price';
+};
+
+const mapExperienceLevelToUi = level => {
+  const normalized = String(level || '')
+    .trim()
+    .toLowerCase();
+  if (normalized === 'beginner' || normalized === 'entry') return 'Entry Level';
+  if (normalized === 'intermediate') return 'Intermediate';
+  if (normalized === 'expert') return 'Expert';
+  return 'Any Level';
+};
+
+const formatIsoDate = date => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseIsoDate = value => {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(trimmed);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getTodayStart = () => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const formatDeadlineForDisplay = value => {
+  const date = parseIsoDate(value);
+  if (!date) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
+const mapJobDetailForDisplay = job => {
+  const min = job?.budget_min ?? job?.budgetMin;
+  const max = job?.budget_max ?? job?.budgetMax;
+  const skills = Array.isArray(job?.skills)
+    ? job.skills.filter(Boolean).join(', ')
+    : String(job?.skills || '').trim();
+
+  return {
+    title: job?.title
+      ? String(job.title).charAt(0).toUpperCase() + String(job.title).slice(1)
+      : '—',
+    status: mapApiStatusToUi(job?.status),
+    category: job?.category || job?.job_category || '—',
+    jobType: mapJobTypeToUi(job?.job_type || job?.jobType),
+    budgetMin: min != null ? `₹${min}` : '—',
+    budgetMax: max != null ? `₹${max}` : '—',
+    deadline: formatDeadlineForDisplay(job?.deadline || job?.deadline_date || '') || '—',
+    experienceLevel: mapExperienceLevelToUi(job?.experience_level || job?.experienceLevel),
+    description: job?.description || '',
+    skills,
+    bidCount: Number(job?.bid_count ?? job?.bidCount ?? job?.bids_count ?? 0) || 0,
+    date: formatJobDate(job?.created_at || job?.createdAt || job?.date),
+  };
+};
+
+const mapJobDetailToForm = job => {
+  const skills = Array.isArray(job?.skills)
+    ? job.skills.filter(Boolean).join(', ')
+    : String(job?.skills || '').trim();
+
+  const deadlineRaw = job?.deadline || job?.deadline_date || '';
+  const deadlineDate = parseIsoDate(deadlineRaw);
+
+  return {
+    title: job?.title || '',
+    description: job?.description || '',
+    category: job?.category || JOB_CATEGORIES[0],
+    jobType: mapJobTypeToUi(job?.job_type || job?.jobType),
+    budgetMin: String(job?.budget_min ?? job?.budgetMin ?? ''),
+    budgetMax: String(job?.budget_max ?? job?.budgetMax ?? ''),
+    deadline: deadlineDate ? formatIsoDate(deadlineDate) : '',
+    experienceLevel: mapExperienceLevelToUi(job?.experience_level || job?.experienceLevel),
+    skills,
+  };
+};
+
+const resolveHasMoreJobs = (response, page, listLength) => {
+  const pagination = extractPagination(response);
+  const totalPages =
+    pagination?.pages ?? pagination?.totalPages ?? pagination?.total_pages ?? null;
+  const currentPage = pagination?.page ?? page;
+
+  if (totalPages != null) {
+    return Number(currentPage) < Number(totalPages);
+  }
+
+  return listLength >= JOBS_PAGE_LIMIT;
+};
+
 const JobsBookingsScreen = ({ navigation, route }) => {
+  const { token } = useSelector(selectAuth);
   const scrollRef = useRef(null);
+  const jobsFetchingRef = useRef(false);
+  const hasMoreJobsRef = useRef(true);
+  const jobsPageRef = useRef(1);
+  const jobsSearchRef = useRef('');
   const keyboardBottom = useKeyboardBottomInset(40);
   const [activeTab, setActiveTab] = useState(JOBS_BOOKINGS_TABS.JOBS);
   const [jobsSubTab, setJobsSubTab] = useState(MY_JOBS_SUB_TABS.POSTED);
   const [bookingFilter, setBookingFilter] = useState(BOOKINGS_FILTER_TABS.ACTIVE);
   const [searchQuery, setSearchQuery] = useState('');
+  const [jobs, setJobs] = useState([]);
+  const [jobsTotalCount, setJobsTotalCount] = useState(0);
+  const [isJobsInitialLoading, setIsJobsInitialLoading] = useState(false);
+  const [isJobsLoadingMore, setIsJobsLoadingMore] = useState(false);
+  const [isPostingJob, setIsPostingJob] = useState(false);
+  const [isLoadingJobDetail, setIsLoadingJobDetail] = useState(false);
+  const [showDeadlinePicker, setShowDeadlinePicker] = useState(false);
+  const [postJobError, setPostJobError] = useState('');
   const [editingJobId, setEditingJobId] = useState(null);
   const [confirmModal, setConfirmModal] = useState({
     visible: false,
@@ -141,131 +475,98 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     bookingId: null,
     confirmColor: redColor,
     iconName: 'alert-circle',
+    confirmText: CONFIRM_YES,
+    showReasonInput: false,
+    reason: '',
+    reasonError: '',
   });
-
-  const [jobs, setJobs] = useState([
-    {
-      id: '1',
-      title: 'Logo Design for My Bakery',
-      category: 'Design',
-      date: 'Jun 28',
-      status: 'Open',
-      description:
-        'Need a modern logo for my bakery brand with warm colors and a clean, minimal style.',
-      budgetRange: '₹1,000–₹2,500',
-      bidCount: 7,
-    },
-    {
-      id: '2',
-      title: 'WordPress Blog Setup',
-      category: 'Development',
-      date: 'Jun 20',
-      status: 'In Progress',
-      description:
-        'Looking for someone to set up a WordPress blog with custom theme and essential plugins.',
-      budgetRange: '₹3,000–₹5,000',
-      bidCount: 12,
-    },
-    {
-      id: '3',
-      title: 'Social Media Graphics Pack',
-      category: 'Design',
-      date: 'Jun 15',
-      status: 'Closed',
-      description:
-        'Need a bundle of Instagram and Facebook graphics for a product launch campaign.',
-      budgetRange: '₹2,000–₹4,000',
-      bidCount: 9,
-    },
-    {
-      id: '4',
-      title: 'Product Photography',
-      category: 'Video',
-      date: 'Jun 10',
-      status: 'Open',
-      description:
-        'Professional product photos for e-commerce listings. 15 products, white background.',
-      budgetRange: '₹5,000–₹8,000',
-      bidCount: 5,
-    },
-  ]);
-
-  const [bookings, setBookings] = useState([
-    {
-      id: '1',
-      title: 'Logo Design',
-      sellerName: 'Bob Smith',
-      sellerInitials: 'BS',
-      date: 'Nov 10, 2024',
-      total: 275.0,
-      fee: 25.0,
-      currency: '$',
-      status: 'Ongoing',
-      filterType: 'active',
-    },
-    {
-      id: '2',
-      title: 'Web Dev',
-      sellerName: 'Diana Prince',
-      sellerInitials: 'DP',
-      date: 'Nov 8, 2024',
-      total: 1320.0,
-      fee: 120.0,
-      currency: '$',
-      status: 'Amidst-Completion-Process',
-      filterType: 'active',
-    },
-    {
-      id: '3',
-      title: 'Video Editing',
-      sellerName: 'Grace Hopper',
-      sellerInitials: 'GH',
-      date: 'Nov 2, 2024',
-      total: 880.0,
-      fee: 80.0,
-      currency: '$',
-      status: 'In-dispute',
-      filterType: 'active',
-    },
-    {
-      id: '4',
-      title: 'Social Media Kit',
-      sellerName: 'Alex Johnson',
-      sellerInitials: 'AJ',
-      date: 'Oct 15, 2024',
-      total: 450.0,
-      fee: 40.0,
-      currency: '$',
-      status: 'Completed',
-      filterType: 'completed',
-    },
-    {
-      id: '5',
-      title: 'Brochure Design',
-      sellerName: 'Priya Sharma',
-      sellerInitials: 'PS',
-      date: 'Sep 20, 2024',
-      total: 320.0,
-      fee: 30.0,
-      currency: '$',
-      status: 'Completed',
-      filterType: 'completed',
-    },
-    {
-      id: '6',
-      title: 'Podcast Editing',
-      sellerName: 'Rahul Mehta',
-      sellerInitials: 'RM',
-      date: 'Aug 5, 2024',
-      total: 150.0,
-      fee: 15.0,
-      currency: '$',
-      status: 'Cancelled',
-      filterType: 'cancelled',
-    },
-  ]);
+  const [isConfirmingBooking, setIsConfirmingBooking] = useState(false);
+  const [jobDetailModal, setJobDetailModal] = useState({
+    visible: false,
+    loading: false,
+    job: null,
+    error: '',
+  });
+  const [bookingDetailModal, setBookingDetailModal] = useState({
+    visible: false,
+    loading: false,
+    booking: null,
+    error: '',
+  });
+  const [bookings, setBookings] = useState([]);
+  const [isBookingsLoading, setIsBookingsLoading] = useState(false);
 
   const [postJobForm, setPostJobForm] = useState({ ...EMPTY_POST_JOB_FORM });
+
+  const isJobsTab = activeTab === JOBS_BOOKINGS_TABS.JOBS;
+  const isPostedJobsView = isJobsTab && jobsSubTab === MY_JOBS_SUB_TABS.POSTED;
+  const isBookingsTab = activeTab === JOBS_BOOKINGS_TABS.BOOKINGS;
+
+  const fetchBuyerBookings = useCallback(async () => {
+    if (!token) return;
+
+    setIsBookingsLoading(true);
+    setBookings([]);
+
+    try {
+      const response = await getBuyerBookingsApi(token, {
+        tab: bookingFilter,
+        page: 1,
+        limit: 20,
+      });
+      const list = Array.isArray(response?.data) ? response.data : [];
+      setBookings(list.map(mapApiBookingToUi));
+    } catch (error) {
+      setBookings([]);
+    } finally {
+      setIsBookingsLoading(false);
+    }
+  }, [token, bookingFilter]);
+
+  const fetchBuyerJobs = useCallback(async (page = 1, { isLoadMore = false } = {}) => {
+    if (!token || jobsFetchingRef.current) return;
+    if (isLoadMore && !hasMoreJobsRef.current) return;
+
+    jobsFetchingRef.current = true;
+    if (isLoadMore) {
+      setIsJobsLoadingMore(true);
+    } else {
+      setIsJobsInitialLoading(true);
+    }
+
+    try {
+      const response = await getBuyerJobsApi(token, {
+        page,
+        limit: JOBS_PAGE_LIMIT,
+        search: jobsSearchRef.current || undefined,
+      });
+      const list = extractJobsList(response);
+      const pagination = extractPagination(response);
+      const mappedJobs = list.map(mapApiJobToUi);
+      const nextHasMore = resolveHasMoreJobs(response, page, list.length);
+
+      setJobs(prev => (isLoadMore ? [...prev, ...mappedJobs] : mappedJobs));
+      setJobsTotalCount(Number(pagination?.total ?? mappedJobs.length) || 0);
+
+      jobsPageRef.current = page;
+      hasMoreJobsRef.current = nextHasMore;
+    } catch (error) {
+      if (!isLoadMore) {
+        setJobs([]);
+        setJobsTotalCount(0);
+      }
+    } finally {
+      jobsFetchingRef.current = false;
+      setIsJobsInitialLoading(false);
+      setIsJobsLoadingMore(false);
+    }
+  }, [token]);
+
+  const handleLoadMoreJobs = useCallback(() => {
+    if (!isPostedJobsView) return;
+    if (isJobsInitialLoading || isJobsLoadingMore || !hasMoreJobsRef.current) return;
+    fetchBuyerJobs(jobsPageRef.current + 1, { isLoadMore: true });
+  }, [isPostedJobsView, isJobsInitialLoading, isJobsLoadingMore, fetchBuyerJobs]);
 
   useFocusEffect(
     useCallback(() => {
@@ -278,43 +579,69 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     }, [route.params, navigation]),
   );
 
-  const isJobsTab = activeTab === JOBS_BOOKINGS_TABS.JOBS;
+  useFocusEffect(
+    useCallback(() => {
+      if (!isPostedJobsView || !token) return undefined;
+
+      jobsPageRef.current = 1;
+      hasMoreJobsRef.current = true;
+      setJobs([]);
+      setJobsTotalCount(0);
+      fetchBuyerJobs(1, { isLoadMore: false });
+
+      return undefined;
+    }, [isPostedJobsView, token, fetchBuyerJobs]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isBookingsTab || !token) return undefined;
+      fetchBuyerBookings();
+      return undefined;
+    }, [isBookingsTab, token, fetchBuyerBookings]),
+  );
+
+  useEffect(() => {
+    if (!isPostedJobsView || !token) return undefined;
+
+    const timer = setTimeout(() => {
+      const nextSearch = searchQuery.trim();
+      if (nextSearch === jobsSearchRef.current) return;
+
+      jobsSearchRef.current = nextSearch;
+      jobsPageRef.current = 1;
+      hasMoreJobsRef.current = true;
+      fetchBuyerJobs(1, { isLoadMore: false });
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, isPostedJobsView, token, fetchBuyerJobs]);
 
   const jobStats = useMemo(
     () => ({
-      total: jobs.length,
-      open: jobs.filter(j => j.status === 'Open').length,
-      progress: jobs.filter(j => j.status === 'In Progress').length,
-      bids: jobs.reduce((sum, j) => sum + j.bidCount, 0),
+      total: jobsTotalCount,
+      open: jobs.filter(j => j.apiStatus === 'OPEN').length,
+      progress: jobs.filter(j => j.apiStatus === 'IN_PROGRESS').length,
+      bids: jobs.reduce((sum, j) => sum + (Number(j.bidCount) || 0), 0),
     }),
-    [jobs],
+    [jobs, jobsTotalCount],
   );
 
-  const filteredJobs = useMemo(() => {
-    if (!searchQuery.trim()) return jobs;
-    const q = searchQuery.trim().toLowerCase();
-    return jobs.filter(
-      j =>
-        j.title.toLowerCase().includes(q) ||
-        j.category.toLowerCase().includes(q) ||
-        j.description.toLowerCase().includes(q),
-    );
-  }, [jobs, searchQuery]);
-
   const filteredBookings = useMemo(() => {
-    const byFilter = bookings.filter(b => b.filterType === bookingFilter);
-    if (!searchQuery.trim()) return byFilter;
+    // API already filters by tab (active | completed | cancelled)
+    if (!searchQuery.trim()) return bookings;
     const q = searchQuery.trim().toLowerCase();
-    return byFilter.filter(
+    return bookings.filter(
       b =>
         b.title.toLowerCase().includes(q) ||
         b.sellerName.toLowerCase().includes(q) ||
         b.status.toLowerCase().includes(q),
     );
-  }, [bookings, bookingFilter, searchQuery]);
+  }, [bookings, searchQuery]);
 
   const updateForm = (key, value) => {
     setPostJobForm(prev => ({ ...prev, [key]: value }));
+    if (postJobError) setPostJobError('');
   };
 
   const handleInputFocus = event => {
@@ -324,58 +651,149 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   const resetPostJobForm = () => {
     setPostJobForm({ ...EMPTY_POST_JOB_FORM });
     setEditingJobId(null);
+    setPostJobError('');
+    setShowDeadlinePicker(false);
   };
 
-  const handleEditJob = job => {
-    const budgetParts = job.budgetRange.replace(/₹/g, '').split('–');
-    setPostJobForm({
-      title: job.title,
-      description: job.description,
-      category: job.category,
-      jobType: 'Fixed Price',
-      budgetMin: budgetParts[0]?.trim() || '',
-      budgetMax: budgetParts[1]?.trim() || '',
-      deadline: '',
-      experienceLevel: 'Any Level',
-      skills: '',
-    });
-    setEditingJobId(job.id);
-    setJobsSubTab(MY_JOBS_SUB_TABS.NEW_JOB);
-  };
-
-  const handlePostJob = () => {
-    if (!postJobForm.title.trim()) return;
-
-    const budgetMin = postJobForm.budgetMin || '0';
-    const budgetMax = postJobForm.budgetMax || '0';
-    const jobData = {
-      title: postJobForm.title.trim(),
-      category: postJobForm.category,
-      description: postJobForm.description.trim() || 'No description provided.',
-      budgetRange: `₹${budgetMin}–₹${budgetMax}`,
-    };
-
-    if (editingJobId) {
-      setJobs(prev =>
-        prev.map(j =>
-          j.id === editingJobId
-            ? { ...j, ...jobData }
-            : j,
-        ),
-      );
-    } else {
-      const newJob = {
-        id: String(Date.now()),
-        ...jobData,
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        status: 'Open',
-        bidCount: 0,
-      };
-      setJobs(prev => [newJob, ...prev]);
+  const handleDeadlineChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') {
+      setShowDeadlinePicker(false);
+      if (event?.type === 'dismissed') return;
     }
 
-    resetPostJobForm();
-    setJobsSubTab(MY_JOBS_SUB_TABS.POSTED);
+    if (!selectedDate) return;
+    const today = getTodayStart();
+    const nextDate = selectedDate < today ? today : selectedDate;
+    updateForm('deadline', formatIsoDate(nextDate));
+  };
+
+  const closeJobDetailModal = () => {
+    setJobDetailModal({ visible: false, loading: false, job: null, error: '' });
+  };
+
+  const closeBookingDetailModal = () => {
+    setBookingDetailModal({ visible: false, loading: false, booking: null, error: '' });
+  };
+
+  const handleViewBooking = async booking => {
+    if (!token || !booking?.id || bookingDetailModal.loading) return;
+
+    setBookingDetailModal({ visible: true, loading: true, booking: null, error: '' });
+
+    try {
+      const response = await getBuyerBookingByIdApi(token, booking.id);
+      const detail = response?.data || response;
+      setBookingDetailModal({
+        visible: true,
+        loading: false,
+        booking: mapBookingDetailForDisplay(detail),
+        error: '',
+      });
+    } catch (error) {
+      const fallback = booking.raw || booking;
+      setBookingDetailModal({
+        visible: true,
+        loading: false,
+        booking: mapBookingDetailForDisplay(fallback),
+        error: getApiErrorMessage(error?.data, error?.message || BOOKING_DETAIL_MODAL.loadError),
+      });
+    }
+  };
+
+  const handleViewJob = async job => {
+    if (!token || !job?.id || jobDetailModal.loading) return;
+
+    setJobDetailModal({ visible: true, loading: true, job: null, error: '' });
+
+    try {
+      const response = await getBuyerJobByIdApi(token, job.id);
+      const detail = response?.data || response;
+      setJobDetailModal({
+        visible: true,
+        loading: false,
+        job: mapJobDetailForDisplay(detail),
+        error: '',
+      });
+    } catch (error) {
+      const fallback = job.raw || job;
+      setJobDetailModal({
+        visible: true,
+        loading: false,
+        job: mapJobDetailForDisplay(fallback),
+        error: getApiErrorMessage(error?.data, error?.message || JOB_DETAIL_MODAL.loadError),
+      });
+    }
+  };
+
+  const handleEditJob = async job => {
+    if (!token || !job?.id || isLoadingJobDetail) return;
+
+    setEditingJobId(job.id);
+    setJobsSubTab(MY_JOBS_SUB_TABS.NEW_JOB);
+    setPostJobError('');
+    setIsLoadingJobDetail(true);
+
+    try {
+      const response = await getBuyerJobByIdApi(token, job.id);
+      const detail = response?.data || response;
+      setPostJobForm(mapJobDetailToForm(detail));
+    } catch (error) {
+      // Fallback: prefill from list card if detail API fails
+      const budgetParts = String(job.budgetRange || '')
+        .replace(/₹/g, '')
+        .split('–');
+      setPostJobForm({
+        title: job.title || '',
+        description: job.description || '',
+        category: job.category || JOB_CATEGORIES[0],
+        jobType: mapJobTypeToUi(job.raw?.job_type),
+        budgetMin: budgetParts[0]?.trim() || '',
+        budgetMax: budgetParts[1]?.trim() || '',
+        deadline: '',
+        experienceLevel: mapExperienceLevelToUi(job.raw?.experience_level),
+        skills: Array.isArray(job.raw?.skills) ? job.raw.skills.join(', ') : '',
+      });
+      setPostJobError(
+        getApiErrorMessage(error?.data, error?.message || 'Failed to load job details.'),
+      );
+    } finally {
+      setIsLoadingJobDetail(false);
+    }
+  };
+
+  const handlePostJob = async () => {
+    if (!postJobForm.title.trim() || isPostingJob) return;
+
+    if (!token) {
+      setPostJobError(editingJobId ? ERROR_UPDATE_JOB_FAILED : ERROR_POST_JOB_FAILED);
+      return;
+    }
+
+    setIsPostingJob(true);
+    setPostJobError('');
+
+    try {
+      if (editingJobId) {
+        await updateBuyerJobApi(token, editingJobId, postJobForm);
+      } else {
+        await createBuyerJobApi(token, postJobForm);
+      }
+
+      resetPostJobForm();
+      setJobsSubTab(MY_JOBS_SUB_TABS.POSTED);
+      jobsPageRef.current = 1;
+      hasMoreJobsRef.current = true;
+      fetchBuyerJobs(1, { isLoadMore: false });
+    } catch (error) {
+      setPostJobError(
+        getApiErrorMessage(
+          error?.data,
+          error?.message || (editingJobId ? ERROR_UPDATE_JOB_FAILED : ERROR_POST_JOB_FAILED),
+        ),
+      );
+    } finally {
+      setIsPostingJob(false);
+    }
   };
 
   const openConfirmModal = (actionType, bookingId) => {
@@ -385,18 +803,24 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         message: BOOKING_ACCEPT_MESSAGE,
         confirmColor: greenColor,
         iconName: 'check-circle',
+        confirmText: BOOKING_ACCEPT_CONFIRM_BTN,
+        showReasonInput: false,
       },
       reject: {
         title: BOOKING_REJECT_TITLE,
         message: BOOKING_REJECT_MESSAGE,
         confirmColor: redColor,
         iconName: 'x-circle',
+        confirmText: BOOKING_REJECT_CONFIRM_BTN,
+        showReasonInput: true,
       },
       cancel: {
         title: BOOKING_CANCEL_TITLE,
         message: BOOKING_CANCEL_MESSAGE,
         confirmColor: '#C27803',
         iconName: 'alert-circle',
+        confirmText: BOOKING_CANCEL_CONFIRM_BTN,
+        showReasonInput: true,
       },
     };
     const config = configs[actionType];
@@ -408,36 +832,67 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       message: config.message,
       confirmColor: config.confirmColor,
       iconName: config.iconName,
+      confirmText: config.confirmText,
+      showReasonInput: config.showReasonInput,
+      reason: '',
+      reasonError: '',
     });
   };
 
   const closeConfirmModal = () => {
-    setConfirmModal(prev => ({ ...prev, visible: false }));
+    if (isConfirmingBooking) return;
+    setConfirmModal(prev => ({
+      ...prev,
+      visible: false,
+      reason: '',
+      reasonError: '',
+    }));
   };
 
-  const handleConfirmAction = () => {
-    const { actionType, bookingId } = confirmModal;
-    if (!bookingId) {
-      closeConfirmModal();
+  const handleConfirmAction = async () => {
+    const { actionType, bookingId, reason, showReasonInput } = confirmModal;
+    if (!bookingId || isConfirmingBooking) {
+      if (!bookingId) closeConfirmModal();
       return;
     }
 
-    setBookings(prev =>
-      prev.map(b => {
-        if (b.id !== bookingId) return b;
-        if (actionType === 'accept') {
-          return { ...b, status: 'Completed', filterType: 'completed' };
-        }
-        if (actionType === 'reject') {
-          return { ...b, status: 'In-dispute', filterType: 'active' };
-        }
-        if (actionType === 'cancel') {
-          return { ...b, status: 'Cancelled', filterType: 'cancelled' };
-        }
-        return b;
-      }),
-    );
-    closeConfirmModal();
+    if (!token) {
+      Alert.alert(confirmModal.title, ERROR_BOOKING_ACTION_FAILED);
+      return;
+    }
+
+    // UI pe reason ask karte hain (cancel/reject). Swagger example mein field hai,
+    // required mark nahi tha — phir bhi empty reason block karte hain taaki meaningful reason jaye.
+    if (showReasonInput && !String(reason || '').trim()) {
+      setConfirmModal(prev => ({ ...prev, reasonError: BOOKING_REASON_REQUIRED }));
+      return;
+    }
+
+    setIsConfirmingBooking(true);
+    try {
+      if (actionType === 'accept') {
+        await acceptBuyerBookingApi(token, bookingId);
+      } else if (actionType === 'reject') {
+        await rejectBuyerBookingApi(token, bookingId, reason);
+      } else if (actionType === 'cancel') {
+        await cancelBuyerBookingApi(token, bookingId, reason);
+      }
+
+      setConfirmModal(prev => ({
+        ...prev,
+        visible: false,
+        reason: '',
+        reasonError: '',
+      }));
+      await fetchBuyerBookings();
+    } catch (error) {
+      Alert.alert(
+        confirmModal.title,
+        getApiErrorMessage(error?.data, error?.message || ERROR_BOOKING_ACTION_FAILED),
+      );
+    } finally {
+      setIsConfirmingBooking(false);
+    }
   };
 
   const renderHeader = () => (
@@ -523,7 +978,10 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           alignJustifyCenter,
           jobsSubTab === MY_JOBS_SUB_TABS.NEW_JOB && styles.subTabActive,
         ]}
-        onPress={() => setJobsSubTab(MY_JOBS_SUB_TABS.NEW_JOB)}>
+        onPress={() => {
+          resetPostJobForm();
+          setJobsSubTab(MY_JOBS_SUB_TABS.NEW_JOB);
+        }}>
         <Icon
           name="plus"
           size={14}
@@ -546,27 +1004,29 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     const isOpen = job.status === 'Open';
 
     return (
-      <View key={job.id} style={styles.jobCard}>
-        <View style={[flexDirectionRow, justifyContentSpaceBetween, alignItemsCenter]}>
-          <Text style={[styles.jobTitle, style.fontWeightMedium]} numberOfLines={2}>
-            {job.title}
-          </Text>
-          <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-            <Text style={[styles.statusText, { color: statusStyle.text }]}>{job.status}</Text>
+      <View style={styles.jobCard}>
+        <TouchableOpacity activeOpacity={0.85} onPress={() => handleViewJob(job)}>
+          <View style={[flexDirectionRow, justifyContentSpaceBetween, alignItemsCenter]}>
+            <Text style={[styles.jobTitle, style.fontWeightMedium]} numberOfLines={2}>
+              {job.title}
+            </Text>
+            <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+              <Text style={[styles.statusText, { color: statusStyle.text }]}>{job.status}</Text>
+            </View>
           </View>
-        </View>
 
-        <View style={[styles.jobMetaRow, flexDirectionRow, alignItemsCenter]}>
-          <Icon name="tag" size={12} color={grayColor} />
-          <Text style={styles.jobMetaText}>{job.category}</Text>
-          <Text style={styles.jobMetaDot}>•</Text>
-          <Icon name="calendar" size={12} color={grayColor} />
-          <Text style={styles.jobMetaText}>{job.date}</Text>
-        </View>
+          <View style={[styles.jobMetaRow, flexDirectionRow, alignItemsCenter]}>
+            <Icon name="tag" size={12} color={grayColor} />
+            <Text style={styles.jobMetaText}>{job.category}</Text>
+            <Text style={styles.jobMetaDot}>•</Text>
+            <Icon name="calendar" size={12} color={grayColor} />
+            <Text style={styles.jobMetaText}>{job.date}</Text>
+          </View>
 
-        <Text style={[styles.jobDesc, style.fontWeightThin]} numberOfLines={2}>
-          {job.description}
-        </Text>
+          <Text style={[styles.jobDesc, style.fontWeightThin]} numberOfLines={2}>
+            {job.description}
+          </Text>
+        </TouchableOpacity>
 
         <View style={[styles.jobFooter, flexDirectionRow, justifyContentSpaceBetween, alignItemsCenter]}>
           <View>
@@ -596,25 +1056,64 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     );
   };
 
-  const renderPostedJobs = () => (
+  const renderPostedJobsHeader = () => (
     <View>
       {renderJobStats()}
       {renderJobsSubTabs()}
-      {filteredJobs.length === 0 ? (
-        <EmptyState
-          icon="briefcase"
-          title={searchQuery.trim() ? EMPTY_SEARCH_TITLE : EMPTY_JOBS_TITLE}
-          message={searchQuery.trim() ? EMPTY_SEARCH_MESSAGE : EMPTY_JOBS_MESSAGE}
-          actionLabel={!searchQuery.trim() ? MY_JOBS_POST_NEW_TAB : undefined}
-          onAction={
-            !searchQuery.trim()
-              ? () => setJobsSubTab(MY_JOBS_SUB_TABS.NEW_JOB)
-              : undefined
-          }
-        />
-      ) : (
-        filteredJobs.map(renderJobCard)
-      )}
+      {isJobsInitialLoading ? (
+        <View style={styles.jobsInitialLoader}>
+          <ActivityIndicator size="small" color={redColor} />
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const renderPostedJobsFooter = () => {
+    if (!isJobsLoadingMore) return <View style={{ height: hp(3) + keyboardBottom }} />;
+    return (
+      <View style={styles.jobsMoreLoader}>
+        <ActivityIndicator size="small" color={redColor} />
+      </View>
+    );
+  };
+
+  const renderPostedJobsEmpty = () => {
+    if (isJobsInitialLoading) return null;
+    return (
+      <EmptyState
+        icon="briefcase"
+        title={searchQuery.trim() ? EMPTY_SEARCH_TITLE : EMPTY_JOBS_TITLE}
+        message={searchQuery.trim() ? EMPTY_SEARCH_MESSAGE : EMPTY_JOBS_MESSAGE}
+        actionLabel={!searchQuery.trim() ? MY_JOBS_POST_NEW_TAB : undefined}
+        onAction={
+          !searchQuery.trim() ? () => setJobsSubTab(MY_JOBS_SUB_TABS.NEW_JOB) : undefined
+        }
+      />
+    );
+  };
+
+  const renderPostedJobsList = () => (
+    <View style={flex}>
+      <View style={styles.jobsFixedHeader}>
+        {renderHeader()}
+        {renderSearch()}
+        {renderMainTabs()}
+      </View>
+      <FlatList
+        data={jobs}
+        keyExtractor={item => String(item.id)}
+        renderItem={({ item }) => renderJobCard(item)}
+        ListHeaderComponent={renderPostedJobsHeader}
+        ListFooterComponent={renderPostedJobsFooter}
+        ListEmptyComponent={renderPostedJobsEmpty}
+        onEndReached={handleLoadMoreJobs}
+        onEndReachedThreshold={0.4}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.jobsListContent}
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="none"
+        bounces={false}
+      />
     </View>
   );
 
@@ -628,20 +1127,32 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     </View>
   );
 
-  const renderPostJobForm = () => (
+  const renderPostJobForm = () => {
+    const selectedDeadline = parseIsoDate(postJobForm.deadline) || getTodayStart();
+
+    return (
     <View>
       {renderJobsSubTabs()}
 
       <View style={styles.formCard}>
         <View style={[flexDirectionRow, alignItemsCenter, styles.formHeader]}>
           <View style={[styles.formIconWrap, alignJustifyCenter]}>
-            <Icon name="plus" size={16} color={whiteColor} />
+            <Icon name={editingJobId ? 'edit-2' : 'plus'} size={16} color={whiteColor} />
           </View>
           <View style={flex}>
-            <Text style={[styles.formTitle, style.fontWeightMedium]}>{POST_JOB_TITLE}</Text>
+            <Text style={[styles.formTitle, style.fontWeightMedium]}>
+              {editingJobId ? UPDATE_JOB_BTN : POST_JOB_TITLE}
+            </Text>
             <Text style={[styles.formSubtitle, style.fontWeightThin]}>{POST_JOB_SUBTITLE}</Text>
           </View>
         </View>
+
+        {isLoadingJobDetail ? (
+          <View style={styles.jobDetailLoader}>
+            <ActivityIndicator size="small" color={redColor} />
+            <Text style={[styles.jobDetailLoaderText, style.fontWeightThin]}>Loading job details...</Text>
+          </View>
+        ) : null}
 
         <CustomTextInput
           label={POST_JOB_LABELS.title}
@@ -702,15 +1213,78 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           />
         </View>
 
-        <CustomTextInput
-          label={POST_JOB_LABELS.deadline}
-          value={postJobForm.deadline}
-          onChangeText={v => updateForm('deadline', v)}
-          placeholder={POST_JOB_PLACEHOLDERS.deadline}
-          leftIcon="calendar"
-          onFocus={handleInputFocus}
-          style={styles.formField}
-        />
+        <View style={styles.formField}>
+          <FormLabel label={POST_JOB_LABELS.deadline} />
+          <TouchableOpacity
+            style={[styles.deadlineField, flexDirectionRow, alignItemsCenter]}
+            activeOpacity={0.8}
+            onPress={() => setShowDeadlinePicker(true)}
+            disabled={isLoadingJobDetail}>
+            <Icon name="calendar" size={16} color={grayColor} />
+            <Text
+              style={[
+                styles.deadlineText,
+                style.fontWeightThin,
+                !postJobForm.deadline && styles.deadlinePlaceholder,
+              ]}>
+              {postJobForm.deadline
+                ? formatDeadlineForDisplay(postJobForm.deadline)
+                : POST_JOB_PLACEHOLDERS.deadline}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {Platform.OS === 'android' && showDeadlinePicker ? (
+          <DateTimePicker
+            value={selectedDeadline}
+            mode="date"
+            display="default"
+            minimumDate={getTodayStart()}
+            onChange={handleDeadlineChange}
+          />
+        ) : null}
+
+        {Platform.OS === 'ios' ? (
+          <Modal
+            visible={showDeadlinePicker}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowDeadlinePicker(false)}>
+            <View style={styles.deadlineModalOverlay}>
+              <View style={styles.deadlineModalCard}>
+                <View
+                  style={[
+                    styles.deadlineModalHeader,
+                    flexDirectionRow,
+                    justifyContentSpaceBetween,
+                    alignItemsCenter,
+                  ]}>
+                  <TouchableOpacity onPress={() => setShowDeadlinePicker(false)}>
+                    <Text style={[styles.deadlineModalAction, style.fontWeightMedium]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setShowDeadlinePicker(false)}>
+                    <Text
+                      style={[
+                        styles.deadlineModalAction,
+                        styles.deadlineModalDone,
+                        style.fontWeightMedium,
+                      ]}>
+                      Done
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={selectedDeadline}
+                  mode="date"
+                  display="spinner"
+                  minimumDate={getTodayStart()}
+                  onChange={handleDeadlineChange}
+                  style={styles.deadlineIosPicker}
+                />
+              </View>
+            </View>
+          </Modal>
+        ) : null}
 
         <CustomDropdown
           label={POST_JOB_LABELS.experienceLevel}
@@ -730,10 +1304,14 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           style={styles.formField}
         />
 
+        {postJobError ? <Text style={styles.postJobError}>{postJobError}</Text> : null}
+
         <CustomButton
           title={editingJobId ? UPDATE_JOB_BTN : POST_JOB_BTN}
           iconName="send"
           onPress={handlePostJob}
+          loading={isPostingJob || isLoadingJobDetail}
+          disabled={isPostingJob || isLoadingJobDetail}
           style={styles.postJobBtn}
         />
       </View>
@@ -749,7 +1327,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         </View>
       ))}
 
-      {renderInfoCard('bar-chart-2', PLATFORM_STATS_TITLE, blueColor, (
+      {renderInfoCard(PLATFORM_STATS_TITLE, 'bar-chart-2', blueColor, (
         <View style={styles.platformStats}>
           {PLATFORM_STATS.map(stat => (
             <View key={stat.id} style={[flexDirectionRow, justifyContentSpaceBetween, styles.platformStatRow]}>
@@ -770,7 +1348,8 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         <Text style={[styles.protectionText, style.fontWeightThin]}>{BUYER_PROTECTION.text}</Text>
       </View>
     </View>
-  );
+    );
+  };
 
   const renderBookingFilters = () => (
     <View style={[styles.filterRow, flexDirectionRow]}>
@@ -793,28 +1372,36 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   );
 
   const renderBookingActions = booking => {
-    if (booking.status === 'Ongoing') {
+    if (booking.apiStatus === 'pending' || booking.apiStatus === 'ongoing') {
       return (
         <TouchableOpacity
           style={[styles.cancelBtn, flexDirectionRow, alignItemsCenter]}
-          onPress={() => openConfirmModal('cancel', booking.id)}>
+          onPress={() => openConfirmModal('cancel', booking.id)}
+          disabled={isConfirmingBooking}>
           <Icon name="alert-circle" size={14} color="#C27803" />
           <Text style={[styles.cancelBtnText, style.fontWeightMedium]}>{BOOKING_ACTIONS.CANCEL}</Text>
         </TouchableOpacity>
       );
     }
-    if (booking.status === 'Amidst-Completion-Process') {
+    if (
+      booking.apiStatus === 'amidst_completion' ||
+      booking.apiStatus === 'amidst_completion_process' ||
+      booking.apiStatus === 'delivery_submitted' ||
+      booking.apiStatus === 'awaiting_acceptance'
+    ) {
       return (
         <View style={[flexDirectionRow, styles.bookingActionGroup]}>
           <TouchableOpacity
             style={[styles.acceptBtn, flexDirectionRow, alignItemsCenter]}
-            onPress={() => openConfirmModal('accept', booking.id)}>
+            onPress={() => openConfirmModal('accept', booking.id)}
+            disabled={isConfirmingBooking}>
             <Icon name="check" size={14} color={whiteColor} />
             <Text style={[styles.acceptBtnText, style.fontWeightMedium]}>{BOOKING_ACTIONS.ACCEPT}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.rejectBtn, flexDirectionRow, alignItemsCenter]}
-            onPress={() => openConfirmModal('reject', booking.id)}>
+            onPress={() => openConfirmModal('reject', booking.id)}
+            disabled={isConfirmingBooking}>
             <Icon name="x" size={14} color={whiteColor} />
             <Text style={[styles.rejectBtnText, style.fontWeightMedium]}>{BOOKING_ACTIONS.REJECT}</Text>
           </TouchableOpacity>
@@ -857,7 +1444,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           <View style={[flexDirectionRow, alignItemsCenter, styles.bookingActions]}>
             <TouchableOpacity
               style={[styles.outlineBtn, flexDirectionRow, alignItemsCenter]}
-              onPress={() => navigation.navigate(SCREEN_NAMES.BOOKING_DETAILS, { booking })}>
+              onPress={() => handleViewBooking(booking)}>
               <Icon name="eye" size={14} color={blackColor} />
               <Text style={[styles.outlineBtnText, style.fontWeightMedium]}>{BOOKING_ACTIONS.DETAILS}</Text>
             </TouchableOpacity>
@@ -871,20 +1458,15 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   const renderBookings = () => (
     <View>
       {renderBookingFilters()}
-      {filteredBookings.length === 0 ? (
+      {isBookingsLoading ? (
+        <View style={styles.bookingsLoader}>
+          <ActivityIndicator size="large" color={redColor} />
+        </View>
+      ) : filteredBookings.length === 0 ? (
         <EmptyState
           icon="calendar"
           title={searchQuery.trim() ? EMPTY_SEARCH_TITLE : EMPTY_BOOKINGS_TITLE}
           message={searchQuery.trim() ? EMPTY_SEARCH_MESSAGE : EMPTY_BOOKINGS_MESSAGE}
-          actionLabel={!searchQuery.trim() ? MY_JOBS_POST_NEW_TAB : undefined}
-          onAction={
-            !searchQuery.trim()
-              ? () => {
-                  setActiveTab(JOBS_BOOKINGS_TABS.JOBS);
-                  setJobsSubTab(MY_JOBS_SUB_TABS.NEW_JOB);
-                }
-              : undefined
-          }
         />
       ) : (
         filteredBookings.map(renderBookingCard)
@@ -895,40 +1477,65 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={[flex, screenContentStyles.safeArea]} edges={['top']}>
       <KeyboardAvoidingView style={flex} behavior={keyboardAvoidingBehavior}>
-        <ScrollView
-          ref={scrollRef}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            screenContentStyles.scrollContent,
-            jobsSubTab === MY_JOBS_SUB_TABS.NEW_JOB && styles.formScrollContent,
-            {
-              paddingBottom:
-                (jobsSubTab === MY_JOBS_SUB_TABS.NEW_JOB ? hp(12) : hp(3)) + keyboardBottom,
-            },
-          ]}
-          bounces={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag">
-          {renderHeader()}
-          {renderSearch()}
-          {renderMainTabs()}
+        {isPostedJobsView ? (
+          renderPostedJobsList()
+        ) : (
+          <ScrollView
+            ref={scrollRef}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              screenContentStyles.scrollContent,
+              jobsSubTab === MY_JOBS_SUB_TABS.NEW_JOB && styles.formScrollContent,
+              {
+                paddingBottom:
+                  (jobsSubTab === MY_JOBS_SUB_TABS.NEW_JOB ? hp(12) : hp(3)) + keyboardBottom,
+              },
+            ]}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag">
+            {renderHeader()}
+            {renderSearch()}
+            {renderMainTabs()}
 
-          {isJobsTab
-            ? jobsSubTab === MY_JOBS_SUB_TABS.POSTED
-              ? renderPostedJobs()
-              : renderPostJobForm()
-            : renderBookings()}
-        </ScrollView>
+            {isJobsTab ? renderPostJobForm() : renderBookings()}
+          </ScrollView>
+        )}
       </KeyboardAvoidingView>
 
       <ConfirmationModal
         visible={confirmModal.visible}
         title={confirmModal.title}
         message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
         confirmColor={confirmModal.confirmColor}
         iconName={confirmModal.iconName}
+        showReasonInput={confirmModal.showReasonInput}
+        reasonValue={confirmModal.reason}
+        onReasonChange={text =>
+          setConfirmModal(prev => ({ ...prev, reason: text, reasonError: '' }))
+        }
+        reasonPlaceholder={BOOKING_REASON_PLACEHOLDER}
+        reasonError={confirmModal.reasonError}
+        loading={isConfirmingBooking}
         onConfirm={handleConfirmAction}
         onCancel={closeConfirmModal}
+      />
+
+      <JobDetailModal
+        visible={jobDetailModal.visible}
+        loading={jobDetailModal.loading}
+        error={jobDetailModal.error}
+        job={jobDetailModal.job}
+        onClose={closeJobDetailModal}
+      />
+
+      <BookingDetailModal
+        visible={bookingDetailModal.visible}
+        loading={bookingDetailModal.loading}
+        error={bookingDetailModal.error}
+        booking={bookingDetailModal.booking}
+        onClose={closeBookingDetailModal}
       />
     </SafeAreaView>
   );
@@ -939,6 +1546,29 @@ export default JobsBookingsScreen;
 const styles = StyleSheet.create({
   formScrollContent: {
     paddingBottom: hp(12),
+  },
+  jobsFixedHeader: {
+    paddingHorizontal: wp(5),
+    paddingTop: hp(1),
+  },
+  jobsListContent: {
+    paddingHorizontal: wp(5),
+    paddingBottom: hp(3),
+    flexGrow: 1,
+  },
+  jobsInitialLoader: {
+    paddingVertical: spacings.large,
+    alignItems: 'center',
+  },
+  bookingsLoader: {
+    paddingVertical: hp(6),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  jobsMoreLoader: {
+    paddingVertical: spacings.xLarge,
+    alignItems: 'center',
+    marginBottom: hp(3),
   },
   tabRow: {
     backgroundColor: tabBgColor,
@@ -1118,6 +1748,65 @@ const styles = StyleSheet.create({
   },
   budgetField: { flex: 1 },
   postJobBtn: { marginTop: spacings.xLarge },
+  postJobError: {
+    color: redColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
+    marginTop: spacings.normal,
+  },
+  jobDetailLoader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacings.normal,
+    marginBottom: spacings.large,
+  },
+  jobDetailLoaderText: {
+    color: grayColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
+  },
+  deadlineField: {
+    minHeight: hp(6),
+    borderRadius: 10,
+    backgroundColor: inputBgColor,
+    paddingHorizontal: spacings.large,
+    gap: spacings.normal,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  deadlineText: {
+    flex: 1,
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: blackColor,
+  },
+  deadlinePlaceholder: {
+    color: grayColor,
+  },
+  deadlineModalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  deadlineModalCard: {
+    backgroundColor: whiteColor,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: hp(2),
+  },
+  deadlineModalHeader: {
+    paddingHorizontal: spacings.xLarge,
+    paddingVertical: spacings.large,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: borderLightColor,
+  },
+  deadlineModalAction: {
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: grayColor,
+  },
+  deadlineModalDone: {
+    color: redColor,
+  },
+  deadlineIosPicker: {
+    alignSelf: 'center',
+  },
   infoCard: {
     backgroundColor: whiteColor,
     borderWidth: 1,

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../constans/Style';
 import {
@@ -15,10 +16,21 @@ import {
   SCREEN_NAMES,
   UNREAD_NOTIFICATIONS_COUNT,
 } from '../constans/Constants';
+import { selectAuth } from '../redux/slices/authSlice';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
 
 const { flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween, alignJustifyCenter } =
   BaseStyle;
+
+const getInitials = name =>
+  String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
 const ScreenHeader = ({
   title,
@@ -27,8 +39,17 @@ const ScreenHeader = ({
   showAvatar = true,
   leftAccessory = null,
   onBack,
-  user = BUYER_STATIC_USER,
+  user,
 }) => {
+  const { user: authUser } = useSelector(selectAuth);
+
+  const headerUser = useMemo(() => {
+    const source = user || authUser || BUYER_STATIC_USER;
+    const name = source?.name || source?.fullName || BUYER_STATIC_USER.name;
+    const initials = source?.initials || getInitials(name) || BUYER_STATIC_USER.initials;
+    return { name, initials };
+  }, [user, authUser]);
+
   const openNotifications = () => {
     navigation.getParent()?.getParent()?.navigate(SCREEN_NAMES.NOTIFICATIONS);
   };
@@ -64,7 +85,7 @@ const ScreenHeader = ({
           {showAvatar ? (
             <View style={[styles.avatar, alignJustifyCenter]}>
               <Text style={[styles.avatarText, style.fontWeightMedium]}>
-                {user.initials}
+                {headerUser.initials}
               </Text>
             </View>
           ) : null}
