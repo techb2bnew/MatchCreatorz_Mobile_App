@@ -454,6 +454,73 @@ export const getBuyerBookingsApi = async (token, params = {}) => {
 };
 
 /**
+ * GET /api/v1/buyer/services
+ * Search / browse active services
+ * Query: search, category, price_min, price_max, rating, delivery_days, sort, page, limit
+ */
+export const getBuyerServicesApi = async (token, params = {}) => {
+  const {
+    search,
+    category,
+    price_min,
+    price_max,
+    rating,
+    delivery_days,
+    sort,
+    page = 1,
+    limit = 12,
+  } = params;
+  const query = new URLSearchParams();
+  query.set('page', String(page));
+  query.set('limit', String(limit));
+  if (search) query.set('search', String(search));
+  if (category) query.set('category', String(category));
+  if (price_min != null && price_min !== '') query.set('price_min', String(price_min));
+  if (price_max != null && price_max !== '') query.set('price_max', String(price_max));
+  if (rating != null && rating !== '') query.set('rating', String(rating));
+  if (delivery_days != null && delivery_days !== '') {
+    query.set('delivery_days', String(delivery_days));
+  }
+  if (sort) query.set('sort', String(sort));
+
+  const endpoint = `${API_ENDPOINTS.BUYER_SERVICES}?${query.toString()}`;
+  console.log('[BuyerServices] Payload >>>', {
+    endpoint,
+    method: 'GET',
+    page,
+    limit,
+    search: search || null,
+    category: category || null,
+    sort: sort || null,
+    hasToken: Boolean(token),
+  });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[BuyerServices] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log(
+      '[BuyerServices] Error response <<<',
+      JSON.stringify(
+        {
+          status: error?.status,
+          message: error?.message,
+          data: error?.data,
+        },
+        null,
+        2,
+      ),
+    );
+    throw error;
+  }
+};
+
+/**
  * GET /api/v1/buyer/bookings/:id
  * Get booking detail
  * Auth header: Bearer token

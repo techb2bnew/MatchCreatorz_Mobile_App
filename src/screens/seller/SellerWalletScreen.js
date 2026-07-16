@@ -24,7 +24,6 @@ import { style, spacings } from '../../constans/Fonts';
 import {
   EMPTY_WALLET_TRANSACTIONS_MESSAGE,
   EMPTY_WALLET_TRANSACTIONS_TITLE,
-  SELLER_STATIC_USER,
   SELLER_WALLET_ALL_TIME,
   SELLER_WALLET_AVAILABLE,
   SELLER_WALLET_AVAILABLE_SUB,
@@ -110,7 +109,6 @@ const SellerWalletScreen = ({ navigation }) => {
         <ScreenHeader
           title={SELLER_WALLET_TITLE}
           navigation={navigation}
-          user={SELLER_STATIC_USER}
           onBack={() => navigation.goBack()}
         />
 

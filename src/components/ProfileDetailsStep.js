@@ -1,5 +1,13 @@
-import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  Modal,
+} from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/Feather';
 import CustomTextInput from './CustomTextInput';
 import FormLabel from './FormLabel';
@@ -12,6 +20,7 @@ import {
   inputBgColor,
   lightPink,
   redColor,
+  whiteColor,
 } from '../constans/Color';
 import { style, spacings } from '../constans/Fonts';
 import { getCountryNames, getDefaultStateForCountry, getStateNamesForCountry } from '../utils/locationData';
@@ -41,15 +50,70 @@ import {
   ZIP_PLACEHOLDER,
 } from '../constans/Constants';
 import { formatFileSize, showResumePicker } from '../utils/filePicker';
-import { heightPercentageToDP as hp } from '../utils';
+import { heightPercentageToDP as hp, widthPercentageToDP as wp } from '../utils';
 
-const { flexDirectionRow, flexWrap, alignItemsCenter, alignItemsFlexStart } = BaseStyle;
+const {
+  flexDirectionRow,
+  flexWrap,
+  alignItemsCenter,
+  alignItemsFlexStart,
+  justifyContentSpaceBetween,
+} = BaseStyle;
+
+const getTodayStart = () => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const getMinDobDate = () => {
+  const date = getTodayStart();
+  date.setFullYear(date.getFullYear() - 100);
+  return date;
+};
+
+const getDefaultDobDate = () => {
+  const date = getTodayStart();
+  date.setFullYear(date.getFullYear() - 18);
+  return date;
+};
+
+const formatDobDisplay = date => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${month}/${day}/${year}`;
+};
+
+const parseDobDisplay = value => {
+  if (!value) return null;
+  const match = String(value)
+    .trim()
+    .match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  const month = Number(match[1]) - 1;
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month, day);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+};
 
 const ProfileDetailsStep = ({ form, onChange, onToggleTag, errors = {} }) => {
   const setField = (field, value) => onChange({ ...form, [field]: value });
   const stateOptions = useMemo(() => getStateNamesForCountry(form.country), [form.country]);
   const countryOptions = useMemo(() => getCountryNames(), []);
   const hasStateDropdown = stateOptions.length > 0;
+  const [showDobPicker, setShowDobPicker] = useState(false);
+  const selectedDob = parseDobDisplay(form.dateOfBirth) || getDefaultDobDate();
 
   const handleCountryChange = country => {
     onChange({
@@ -63,6 +127,21 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag, errors = {} }) => {
     showResumePicker(file => {
       if (file) setField('resumeFile', file);
     });
+  };
+
+  const handleDobChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') {
+      setShowDobPicker(false);
+      if (event?.type === 'dismissed') return;
+    }
+
+    if (!selectedDate) return;
+    const today = getTodayStart();
+    const minDate = getMinDobDate();
+    let nextDate = selectedDate;
+    if (nextDate > today) nextDate = today;
+    if (nextDate < minDate) nextDate = minDate;
+    setField('dateOfBirth', formatDobDisplay(nextDate));
   };
 
   return (
@@ -84,15 +163,74 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag, errors = {} }) => {
           error={errors.hourlyRate}
           style={styles.halfInput}
         />
-        <CustomTextInput
-          value={form.dateOfBirth}
-          onChangeText={val => setField('dateOfBirth', val)}
-          label={DATE_OF_BIRTH}
-          placeholder={DOB_PLACEHOLDER}
-          leftIcon="calendar"
-          style={styles.halfInput}
-        />
+        <View style={styles.halfInput}>
+          <FormLabel label={DATE_OF_BIRTH} />
+          <TouchableOpacity
+            style={[styles.dobField, flexDirectionRow, alignItemsCenter]}
+            activeOpacity={0.8}
+            onPress={() => setShowDobPicker(true)}>
+            <Icon name="calendar" size={16} color={grayColor} />
+            <Text
+              style={[
+                styles.dobText,
+                style.fontWeightThin,
+                !form.dateOfBirth && styles.dobPlaceholder,
+              ]}>
+              {form.dateOfBirth || DOB_PLACEHOLDER}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {Platform.OS === 'android' && showDobPicker ? (
+        <DateTimePicker
+          value={selectedDob}
+          mode="date"
+          display="default"
+          maximumDate={getTodayStart()}
+          minimumDate={getMinDobDate()}
+          onChange={handleDobChange}
+        />
+      ) : null}
+
+      {Platform.OS === 'ios' ? (
+        <Modal
+          visible={showDobPicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowDobPicker(false)}>
+          <View style={styles.dobModalOverlay}>
+            <View style={styles.dobModalCard}>
+              <View
+                style={[
+                  styles.dobModalHeader,
+                  flexDirectionRow,
+                  justifyContentSpaceBetween,
+                  alignItemsCenter,
+                ]}>
+                <TouchableOpacity onPress={() => setShowDobPicker(false)}>
+                  <Text style={[styles.dobModalAction, style.fontWeightMedium]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowDobPicker(false)}>
+                  <Text
+                    style={[styles.dobModalAction, styles.dobModalDone, style.fontWeightMedium]}>
+                    Done
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={selectedDob}
+                mode="date"
+                display="spinner"
+                maximumDate={getTodayStart()}
+                minimumDate={getMinDobDate()}
+                onChange={handleDobChange}
+                style={styles.dobIosPicker}
+              />
+            </View>
+          </View>
+        </Modal>
+      ) : null}
 
       <View style={[styles.gridRow, flexDirectionRow]}>
         <CustomDropdown
@@ -259,6 +397,46 @@ const styles = StyleSheet.create({
   halfInput: {
     flex: 1,
     minWidth: '45%',
+  },
+  dobField: {
+    backgroundColor: inputBgColor,
+    borderRadius: 10,
+    minHeight: hp(6),
+    paddingHorizontal: spacings.large,
+    gap: spacings.normal,
+  },
+  dobText: {
+    flex: 1,
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: blackColor,
+  },
+  dobPlaceholder: {
+    color: grayColor,
+  },
+  dobModalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  dobModalCard: {
+    backgroundColor: whiteColor,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: spacings.large,
+  },
+  dobModalHeader: {
+    paddingHorizontal: spacings.xLarge,
+    paddingVertical: spacings.large,
+  },
+  dobModalAction: {
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: grayColor,
+  },
+  dobModalDone: {
+    color: redColor,
+  },
+  dobIosPicker: {
+    width: wp(100),
   },
   tagsBox: {
     backgroundColor: inputBgColor,

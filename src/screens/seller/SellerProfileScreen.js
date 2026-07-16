@@ -1,18 +1,22 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
   Image,
+  TextInput,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useDispatch } from 'react-redux';
+import { useFocusEffect } from '@react-navigation/native';
+import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
-import { logoutUser } from '../../redux/slices/authSlice';
+import { logoutUser, selectAuth, setAuthSession } from '../../redux/slices/authSlice';
+import { getSellerProfileApi, updateSellerProfileApi } from '../../services/sellerService';
+import { getApiErrorMessage } from '../../services/apiClient';
 import {
   blackColor,
   blueColor,
@@ -36,19 +40,20 @@ import {
   NOTIF_PAYMENT_ALERTS_DESC,
   NOTIF_SMS,
   NOTIF_SMS_DESC,
-  BIO,
-  CATEGORY,
-  PORTFOLIO,
-  PORTFOLIO_LINK_PLACEHOLDER,
-  PORTFOLIO_LINKS,
-  PRICE_RANGE,
-  PRICE_RANGE_OPTIONS,
+  // BIO,
+  // CATEGORY,
+  // PORTFOLIO,
+  // PORTFOLIO_LINK_PLACEHOLDER,
+  // PORTFOLIO_LINKS,
+  // PRICE_RANGE,
+  // PRICE_RANGE_OPTIONS,
+  PROFILE_BIO,
   PROFILE_CANCEL,
   PROFILE_DELETE_ACCOUNT,
   PROFILE_DELETE_CONFIRM,
   PROFILE_DELETE_MESSAGE,
   PROFILE_DELETE_TITLE,
-  PROFILE_DETAILS,
+  // PROFILE_DETAILS,
   PROFILE_EDIT,
   PROFILE_EMAIL,
   PROFILE_EMAIL_LOGIN_HINT,
@@ -69,9 +74,9 @@ import {
   PROFILE_STAT_BOOKINGS,
   PROFILE_STAT_WALLET,
   PROFILE_UPLOAD_PHOTO,
-  RESUME_CV,
-  RESPONSE_TIME,
-  RESPONSE_TIME_OPTIONS,
+  // RESUME_CV,
+  // RESPONSE_TIME,
+  // RESPONSE_TIME_OPTIONS,
   SCREEN_NAMES,
   SELLER_NOTIF_BID_RESPONSES,
   SELLER_NOTIF_BID_RESPONSES_DESC,
@@ -85,20 +90,22 @@ import {
   SELLER_PROFILE_ROLE,
   SELLER_PROFILE_TITLE,
   SELLER_STAT_EARNINGS,
-  SELLER_STATIC_USER,
-  TAGS_SKILLS,
+  // TAGS_SKILLS,
+  ERROR_FULL_NAME_REQUIRED,
+  ERROR_PHONE_REQUIRED,
+  ERROR_PROFILE_UPDATE_FAILED,
 } from '../../constans/Constants';
 import CustomTextInput from '../../components/CustomTextInput';
 import CustomButton from '../../components/CustomButton';
 import FormLabel from '../../components/FormLabel';
-import ProfileDetailsStep from '../../components/ProfileDetailsStep';
+// import ProfileDetailsStep from '../../components/ProfileDetailsStep';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import SuccessModal from '../../components/modal/SuccessModal';
 import NotificationSettingsModal from '../../components/modal/NotificationSettingsModal';
 import UploadOptionsModal from '../../components/modal/UploadOptionsModal';
 import { pickImageFromCamera, pickImagesFromGallery, isImageFile } from '../../utils/filePicker';
-import { DEFAULT_COUNTRY } from '../../utils/locationData';
+// import { DEFAULT_COUNTRY } from '../../utils/locationData';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import {
   keyboardAvoidingBehavior,
@@ -112,15 +119,22 @@ const {
   alignItemsCenter,
   justifyContentSpaceBetween,
   alignJustifyCenter,
-  flexWrap,
+  // flexWrap,
 } = BaseStyle;
 
-const INITIAL_PROFILE = {
-  fullName: SELLER_STATIC_USER.name,
-  email: SELLER_STATIC_USER.email,
-  phone: '9876543210',
-  initials: SELLER_STATIC_USER.initials,
+const EMPTY_PROFILE = {
+  fullName: '',
+  email: '',
+  phone: '',
+  location: '',
+  bio: '',
+  initials: '',
   photoUri: null,
+};
+
+/** Extra/static seller fields kept for later (commented UI sections). */
+/*
+const INITIAL_EXTRA_PROFILE = {
   priceRange: PRICE_RANGE_OPTIONS[2],
   dateOfBirth: '15/03/1990',
   country: DEFAULT_COUNTRY,
@@ -130,27 +144,53 @@ const INITIAL_PROFILE = {
   gender: 'Male',
   category: 'Design',
   tags: ['Logo', 'Branding', 'UI/UX'],
-  bio: 'Creative professional offering design, branding, and digital services to help businesses grow.',
   responseTime: RESPONSE_TIME_OPTIONS[2],
   resumeFile: { name: 'Seller_Resume.pdf', size: 184320 },
   portfolioLinks: ['https://behance.net/userseller'],
   portfolioLink: '',
   portfolioFiles: [],
 };
+*/
+
+const getInitials = name =>
+  String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || '—';
+
+const mapSellerProfileToUi = data => {
+  const fullName = data?.name || '';
+  return {
+    fullName,
+    email: data?.email || '',
+    phone: data?.phone || '',
+    location: data?.location || '',
+    bio: data?.bio || '',
+    initials: getInitials(fullName),
+    photoUri: data?.avatar || null,
+  };
+};
 
 const SellerProfileScreen = ({ navigation }) => {
   const dispatch = useDispatch();
+  const { token, user, role } = useSelector(selectAuth);
   const scrollRef = useRef(null);
   const keyboardBottom = useKeyboardBottomInset(40);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
 
-  const [savedProfile, setSavedProfile] = useState(INITIAL_PROFILE);
-  const [profileForm, setProfileForm] = useState(INITIAL_PROFILE);
+  const [savedProfile, setSavedProfile] = useState(EMPTY_PROFILE);
+  const [profileForm, setProfileForm] = useState(EMPTY_PROFILE);
 
   const [notificationSettings, setNotificationSettings] = useState([
     { key: 'email', title: NOTIF_EMAIL, description: NOTIF_EMAIL_DESC, enabled: true },
@@ -188,6 +228,37 @@ const SellerProfileScreen = ({ navigation }) => {
     },
   ]);
 
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const fetchSellerProfile = async () => {
+        if (!token) {
+          console.log('[SellerProfile] Skipped — no token');
+          return;
+        }
+
+        try {
+          const response = await getSellerProfileApi(token);
+          if (cancelled) return;
+          const mapped = mapSellerProfileToUi(response?.data);
+          setSavedProfile(mapped);
+          if (!isEditing) {
+            setProfileForm(mapped);
+          }
+        } catch (error) {
+          // Logged inside getSellerProfileApi
+        }
+      };
+
+      fetchSellerProfile();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [token, isEditing]),
+  );
+
   const [profileStats] = useState({
     wallet: '₹2,36,000',
     bookings: '7',
@@ -203,6 +274,7 @@ const SellerProfileScreen = ({ navigation }) => {
 
   const updateProfileField = (field, value) => {
     setProfileForm(prev => ({ ...prev, [field]: value }));
+    if (saveError) setSaveError('');
   };
 
   const handleToggleNotification = key => {
@@ -225,7 +297,10 @@ const SellerProfileScreen = ({ navigation }) => {
     }
   };
 
-  const handleEdit = () => setIsEditing(true);
+  const handleEdit = () => {
+    setProfileForm(savedProfile);
+    setIsEditing(true);
+  };
 
   const handleInputFocus = event => {
     scrollInputAboveKeyboard(scrollRef, event, 160);
@@ -233,24 +308,75 @@ const SellerProfileScreen = ({ navigation }) => {
 
   const handleCancel = () => {
     setProfileForm(savedProfile);
+    setSaveError('');
     setIsEditing(false);
   };
 
-  const handleSave = () => {
-    const initials = profileForm.fullName
-      .split(' ')
-      .map(part => part[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase();
+  const handleSave = async () => {
+    const name = String(profileForm.fullName || '').trim();
+    const phone = String(profileForm.phone || '').trim();
+    const bio = String(profileForm.bio || '').trim();
+    const location = String(profileForm.location || '').trim();
 
-    const updatedProfile = { ...profileForm, initials };
-    setSavedProfile(updatedProfile);
-    setProfileForm(updatedProfile);
-    setIsEditing(false);
-    setShowSaveSuccess(true);
+    if (!name) {
+      setSaveError(ERROR_FULL_NAME_REQUIRED);
+      return;
+    }
+    if (!phone) {
+      setSaveError(ERROR_PHONE_REQUIRED);
+      return;
+    }
+    if (!token) {
+      setSaveError(ERROR_PROFILE_UPDATE_FAILED);
+      return;
+    }
+
+    const payload = { name, phone, bio, location };
+    setIsSaving(true);
+    setSaveError('');
+
+    try {
+      const response = await updateSellerProfileApi(token, payload);
+      const fromApi = response?.data ? mapSellerProfileToUi(response.data) : null;
+      const nextProfile = {
+        ...savedProfile,
+        fullName: fromApi?.fullName || name,
+        phone: fromApi?.phone || phone,
+        bio: fromApi ? fromApi.bio : bio,
+        location: fromApi ? fromApi.location : location,
+        email: fromApi?.email || savedProfile.email,
+        photoUri: fromApi?.photoUri || savedProfile.photoUri,
+        initials: getInitials(fromApi?.fullName || name),
+      };
+      setSavedProfile(nextProfile);
+      setProfileForm(nextProfile);
+      if (token && user) {
+        dispatch(
+          setAuthSession({
+            token,
+            role,
+            user: {
+              ...user,
+              name: nextProfile.fullName,
+              phone: nextProfile.phone,
+              bio: nextProfile.bio,
+              location: nextProfile.location,
+              avatar: nextProfile.photoUri,
+            },
+          }),
+        );
+      }
+      setIsEditing(false);
+      setShowSaveSuccess(true);
+    } catch (error) {
+      setSaveError(getApiErrorMessage(error?.data, error?.message || ERROR_PROFILE_UPDATE_FAILED));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
+  // Extra edit handlers kept for later (Profile Details / Portfolio sections).
+  /*
   const handleProfessionalChange = updated => {
     setProfileForm(prev => ({ ...prev, ...updated }));
   };
@@ -278,6 +404,7 @@ const SellerProfileScreen = ({ navigation }) => {
       portfolioLinks: prev.portfolioLinks.filter((_, itemIndex) => itemIndex !== index),
     }));
   };
+  */
 
   const resetToLogin = async () => {
     await dispatch(logoutUser());
@@ -400,6 +527,9 @@ const SellerProfileScreen = ({ navigation }) => {
     </View>
   );
 
+  const hasLocation = Boolean(String(savedProfile.location || '').trim());
+  const hasBio = Boolean(String(savedProfile.bio || '').trim());
+
   const renderPersonalFields = () => {
     if (isEditing) {
       return (
@@ -420,70 +550,54 @@ const SellerProfileScreen = ({ navigation }) => {
             onFocus={handleInputFocus}
             style={styles.fieldGap}
           />
+          <CustomTextInput
+            label={PROFILE_LOCATION}
+            value={profileForm.location}
+            onChangeText={value => updateProfileField('location', value)}
+            onFocus={handleInputFocus}
+            style={styles.fieldGap}
+          />
+          <View style={styles.fieldGap}>
+            <FormLabel label={PROFILE_BIO} />
+            <TextInput
+              value={profileForm.bio}
+              onChangeText={value => updateProfileField('bio', value)}
+              multiline
+              textAlignVertical="top"
+              placeholderTextColor={grayColor}
+              onFocus={handleInputFocus}
+              style={[styles.bioInput, style.fontSizeNormal2x]}
+            />
+          </View>
         </>
       );
     }
 
     return (
       <>
-        {renderDetailRow([
-          { label: PROFILE_FULL_NAME, value: savedProfile.fullName },
-          { label: PROFILE_PHONE, value: savedProfile.phone },
-        ])}
+        {renderViewField(PROFILE_FULL_NAME, savedProfile.fullName)}
         {renderSectionDivider()}
         {renderViewField(PROFILE_EMAIL, savedProfile.email)}
-      </>
-    );
-  };
-
-  const renderProfessionalView = () => {
-    const location = [savedProfile.city, savedProfile.state].filter(Boolean).join(', ');
-
-    return (
-      <>
-        {renderDetailRow([
-          { label: PRICE_RANGE, value: savedProfile.priceRange },
-          { label: CATEGORY, value: savedProfile.category },
-        ])}
         {renderSectionDivider()}
-        {renderDetailRow([
-          { label: PROFILE_LOCATION, value: location },
-          { label: RESPONSE_TIME, value: savedProfile.responseTime },
-        ])}
-        {renderSectionDivider()}
-        <View style={styles.detailBlock}>
-          <FormLabel label={TAGS_SKILLS} style={styles.compactLabel} />
-          <View style={[styles.tagsView, flexDirectionRow, flexWrap]}>
-            {savedProfile.tags.map(tag => (
-              <View key={tag} style={styles.tagChip}>
-                <Text style={[styles.tagChipText, style.fontWeightMedium]}>{tag}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-        {renderSectionDivider()}
-        {renderViewField(BIO, savedProfile.bio)}
-        {savedProfile.resumeFile ? (
+        {renderViewField(PROFILE_PHONE, savedProfile.phone)}
+        {hasLocation ? (
           <>
             {renderSectionDivider()}
-            <View style={styles.detailBlock}>
-              <FormLabel label={RESUME_CV} style={styles.compactLabel} />
-              <View style={[styles.resumeRow, flexDirectionRow, alignItemsCenter]}>
-                <View style={[styles.resumeIcon, alignJustifyCenter]}>
-                  <Icon name="file-text" size={16} color={redColor} />
-                </View>
-                <Text style={[styles.detailValue, style.fontWeightMedium, flex]} numberOfLines={1}>
-                  {savedProfile.resumeFile.name}
-                </Text>
-                <Icon name="download" size={16} color={grayColor} />
-              </View>
-            </View>
+            {renderViewField(PROFILE_LOCATION, savedProfile.location)}
+          </>
+        ) : null}
+        {hasBio ? (
+          <>
+            {renderSectionDivider()}
+            {renderViewField(PROFILE_BIO, savedProfile.bio)}
           </>
         ) : null}
       </>
     );
   };
 
+  /* Profile Details + Portfolio UI kept for later enable.
+  const renderProfessionalView = () => { ... };
   const renderPortfolioView = () => {
     if (!savedProfile.portfolioLinks?.length) {
       return <Text style={[styles.emptyHint, style.fontWeightThin]}>No portfolio links added</Text>;
@@ -540,19 +654,27 @@ const SellerProfileScreen = ({ navigation }) => {
       ))}
     </>
   );
+  */
 
   const renderFormActions = () => (
-    <View style={[styles.formActions, flexDirectionRow]}>
-      <TouchableOpacity style={[styles.cancelBtnFull, flex, alignJustifyCenter]} onPress={handleCancel}>
-        <Text style={[styles.cancelBtnText, style.fontWeightMedium]}>{PROFILE_CANCEL}</Text>
-      </TouchableOpacity>
-      <CustomButton
-        title={PROFILE_SAVE}
-        iconName="save"
-        onPress={handleSave}
-        style={[styles.saveBtnFull, flex]}
-        textStyle={styles.saveBtnText}
-      />
+    <View>
+      {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
+      <View style={[styles.formActions, flexDirectionRow]}>
+        <TouchableOpacity
+          style={[styles.cancelBtnFull, flex, alignJustifyCenter]}
+          onPress={handleCancel}
+          disabled={isSaving}>
+          <Text style={[styles.cancelBtnText, style.fontWeightMedium]}>{PROFILE_CANCEL}</Text>
+        </TouchableOpacity>
+        <CustomButton
+          title={isSaving ? 'Saving...' : PROFILE_SAVE}
+          iconName="save"
+          onPress={handleSave}
+          disabled={isSaving}
+          style={[styles.saveBtnFull, flex]}
+          textStyle={styles.saveBtnText}
+        />
+      </View>
     </View>
   );
 
@@ -616,13 +738,13 @@ const SellerProfileScreen = ({ navigation }) => {
                     </View>
                   )}
                 </TouchableOpacity>
-                {isEditing ? (
+                {/* {isEditing ? (
                   <TouchableOpacity
                     style={[styles.cameraBtn, alignJustifyCenter]}
                     onPress={() => setShowPhotoOptions(true)}>
                     <Icon name="camera" size={12} color={whiteColor} />
                   </TouchableOpacity>
-                ) : null}
+                ) : null} */}
               </View>
 
               <View style={styles.profileInfo}>
@@ -673,6 +795,7 @@ const SellerProfileScreen = ({ navigation }) => {
             {renderPersonalFields()}
           </View>
 
+          {/* Extra seller sections kept for later
           <View style={styles.contentCard}>
             <View style={[styles.cardHeader, flexDirectionRow, alignItemsCenter]}>
               <View style={[flexDirectionRow, alignItemsCenter, styles.cardHeaderLeft]}>
@@ -706,6 +829,7 @@ const SellerProfileScreen = ({ navigation }) => {
             <View style={styles.cardHeaderDivider} />
             {isEditing ? renderPortfolioEdit() : renderPortfolioView()}
           </View>
+          */}
 
           {isEditing ? renderFormActions() : null}
 
@@ -1067,6 +1191,11 @@ const styles = StyleSheet.create({
     color: blackColor,
     borderWidth: 1,
     borderColor: 'transparent',
+  },
+  errorText: {
+    color: redColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
+    marginBottom: spacings.normal,
   },
   readOnlyField: {
     borderRadius: 10,

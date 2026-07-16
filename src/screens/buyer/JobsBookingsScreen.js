@@ -24,12 +24,14 @@ import {
   getBuyerJobByIdApi,
   getBuyerBookingsApi,
   getBuyerBookingByIdApi,
+  getBuyerServicesApi,
   acceptBuyerBookingApi,
   rejectBuyerBookingApi,
   cancelBuyerBookingApi,
   createBuyerJobApi,
   updateBuyerJobApi,
 } from '../../services/buyerService';
+import { getCategoriesApi } from '../../services/sellerService';
 import { getApiErrorMessage } from '../../services/apiClient';
 import {
   blackColor,
@@ -87,6 +89,8 @@ import {
   EMPTY_JOBS_TITLE,
   EMPTY_SEARCH_MESSAGE,
   EMPTY_SEARCH_TITLE,
+  EMPTY_SERVICES_MESSAGE,
+  EMPTY_SERVICES_TITLE,
   ERROR_POST_JOB_FAILED,
   ERROR_UPDATE_JOB_FAILED,
   PLATFORM_STATS,
@@ -99,8 +103,11 @@ import {
   POST_JOB_TITLE,
   SCREEN_NAMES,
   SELLER_PREFIX,
+  SERVICES_SCREEN_TITLE,
+  SERVICES_SEARCH_PLACEHOLDER,
   TAB_BOOKINGS,
   TAB_MY_JOBS,
+  TAB_SERVICES,
   TIPS_TITLE,
   UPDATE_JOB_BTN,
 } from '../../constans/Constants';
@@ -113,6 +120,7 @@ import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import JobDetailModal from '../../components/modal/JobDetailModal';
 import BookingDetailModal from '../../components/modal/BookingDetailModal';
+import BuyerServiceDetailModal from '../../components/modal/BuyerServiceDetailModal';
 import EmptyState from '../../components/EmptyState';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import {
@@ -446,6 +454,111 @@ const resolveHasMoreJobs = (response, page, listLength) => {
   return listLength >= JOBS_PAGE_LIMIT;
 };
 
+const SERVICES_PAGE_LIMIT = 12;
+
+const extractServicesList = response => {
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.data?.services)) return response.data.services;
+  if (Array.isArray(response?.data?.items)) return response.data.items;
+  if (Array.isArray(response?.data?.rows)) return response.data.rows;
+  if (Array.isArray(response?.data?.data)) return response.data.data;
+  if (Array.isArray(response?.services)) return response.services;
+  return [];
+};
+
+const resolveHasMoreServices = (response, page, listLength) => {
+  const pagination = response?.pagination || response?.data?.pagination || null;
+  const totalPages =
+    pagination?.pages ?? pagination?.totalPages ?? pagination?.total_pages ?? null;
+  const currentPage = pagination?.page ?? page;
+
+  if (totalPages != null) {
+    return Number(currentPage) < Number(totalPages);
+  }
+
+  return listLength >= SERVICES_PAGE_LIMIT;
+};
+
+const toServiceText = value => {
+  if (value == null || value === '') return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map(toServiceText).filter(Boolean).join(', ');
+  }
+  if (typeof value === 'object') {
+    return toServiceText(value.name ?? value.title ?? value.label ?? value.value ?? '');
+  }
+  return '';
+};
+
+const formatServicePrice = value => {
+  const num = Number(value);
+  if (Number.isNaN(num)) return '—';
+  return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+};
+
+const extractServiceImageUrls = service => {
+  const raw = service?.images || service?.image_urls || [];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(item => {
+      if (typeof item === 'string') return item.trim();
+      return String(item?.url || item?.image_url || item?.uri || '').trim();
+    })
+    .filter(Boolean);
+};
+
+const mapApiServiceToUi = service => {
+  const seller = service?.seller || service?.creator || service?.user || {};
+  const sellerName =
+    toServiceText(seller?.name || seller?.full_name || service?.seller_name) || 'Seller';
+  const ratingNum = Number(service?.rating ?? service?.avg_rating ?? service?.average_rating);
+  const categoryName =
+    toServiceText(service?.category) ||
+    toServiceText(service?.categories) ||
+    toServiceText(service?.category_name) ||
+    '—';
+  const delivery = service?.delivery_days ?? service?.deliveryDays;
+  const images = extractServiceImageUrls(service);
+  const tags = Array.isArray(service?.tags)
+    ? service.tags.map(tag => toServiceText(tag)).filter(Boolean)
+    : [];
+
+  const titleRaw = toServiceText(service?.title);
+  const title = titleRaw
+    ? titleRaw.charAt(0).toUpperCase() + titleRaw.slice(1)
+    : '—';
+
+  return {
+    id: String(service?.id ?? ''),
+    title,
+    description: toServiceText(service?.description),
+    category: categoryName,
+    price: formatServicePrice(service?.price),
+    priceRaw: service?.price,
+    deliveryDays: delivery == null || delivery === '' ? '—' : String(delivery),
+    revisions: service?.revisions == null ? '—' : String(service.revisions),
+    rating: Number.isFinite(ratingNum) ? ratingNum.toFixed(1) : '0.0',
+    reviewsCount: Number(service?.reviews_count ?? 0) || 0,
+    ordersCount: Number(service?.orders_count ?? 0) || 0,
+    image: images[0] || '',
+    images,
+    tags,
+    sellerName,
+    initials:
+      sellerName
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(part => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase() || '—',
+    raw: service,
+  };
+};
+
 const JobsBookingsScreen = ({ navigation, route }) => {
   const { token } = useSelector(selectAuth);
   const scrollRef = useRef(null);
@@ -453,15 +566,24 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   const hasMoreJobsRef = useRef(true);
   const jobsPageRef = useRef(1);
   const jobsSearchRef = useRef('');
+  const servicesFetchingRef = useRef(false);
+  const hasMoreServicesRef = useRef(true);
+  const servicesPageRef = useRef(1);
+  const servicesSearchRef = useRef('');
   const keyboardBottom = useKeyboardBottomInset(40);
   const [activeTab, setActiveTab] = useState(JOBS_BOOKINGS_TABS.JOBS);
   const [jobsSubTab, setJobsSubTab] = useState(MY_JOBS_SUB_TABS.POSTED);
   const [bookingFilter, setBookingFilter] = useState(BOOKINGS_FILTER_TABS.ACTIVE);
+  const [serviceCategory, setServiceCategory] = useState('All');
+  const [serviceCategoryFilters, setServiceCategoryFilters] = useState(['All']);
   const [searchQuery, setSearchQuery] = useState('');
   const [jobs, setJobs] = useState([]);
   const [jobsTotalCount, setJobsTotalCount] = useState(0);
   const [isJobsInitialLoading, setIsJobsInitialLoading] = useState(false);
   const [isJobsLoadingMore, setIsJobsLoadingMore] = useState(false);
+  const [services, setServices] = useState([]);
+  const [isServicesInitialLoading, setIsServicesInitialLoading] = useState(false);
+  const [isServicesLoadingMore, setIsServicesLoadingMore] = useState(false);
   const [isPostingJob, setIsPostingJob] = useState(false);
   const [isLoadingJobDetail, setIsLoadingJobDetail] = useState(false);
   const [showDeadlinePicker, setShowDeadlinePicker] = useState(false);
@@ -493,12 +615,17 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     booking: null,
     error: '',
   });
+  const [serviceDetailModal, setServiceDetailModal] = useState({
+    visible: false,
+    service: null,
+  });
   const [bookings, setBookings] = useState([]);
   const [isBookingsLoading, setIsBookingsLoading] = useState(false);
 
   const [postJobForm, setPostJobForm] = useState({ ...EMPTY_POST_JOB_FORM });
 
   const isJobsTab = activeTab === JOBS_BOOKINGS_TABS.JOBS;
+  const isServicesTab = activeTab === JOBS_BOOKINGS_TABS.SERVICES;
   const isPostedJobsView = isJobsTab && jobsSubTab === MY_JOBS_SUB_TABS.POSTED;
   const isBookingsTab = activeTab === JOBS_BOOKINGS_TABS.BOOKINGS;
 
@@ -522,6 +649,82 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       setIsBookingsLoading(false);
     }
   }, [token, bookingFilter]);
+
+  const fetchBuyerServices = useCallback(
+    async (page = 1, { isLoadMore = false } = {}) => {
+      if (!token || servicesFetchingRef.current) return;
+      if (isLoadMore && !hasMoreServicesRef.current) return;
+
+      servicesFetchingRef.current = true;
+      if (isLoadMore) {
+        setIsServicesLoadingMore(true);
+      } else {
+        setIsServicesInitialLoading(true);
+      }
+
+      try {
+        const response = await getBuyerServicesApi(token, {
+          search: servicesSearchRef.current || undefined,
+          category: serviceCategory !== 'All' ? serviceCategory : undefined,
+          page,
+          limit: SERVICES_PAGE_LIMIT,
+          sort: 'relevance',
+        });
+        const list = extractServicesList(response);
+        const mapped = list.map(mapApiServiceToUi);
+        const nextHasMore = resolveHasMoreServices(response, page, list.length);
+
+        console.log('[BuyerServices] Mapped count <<<', mapped.length);
+
+        setServices(prev => (isLoadMore ? [...prev, ...mapped] : mapped));
+        servicesPageRef.current = page;
+        hasMoreServicesRef.current = nextHasMore;
+      } catch (error) {
+        if (!isLoadMore) setServices([]);
+      } finally {
+        servicesFetchingRef.current = false;
+        setIsServicesInitialLoading(false);
+        setIsServicesLoadingMore(false);
+      }
+    },
+    [token, serviceCategory],
+  );
+
+  const fetchServiceCategories = useCallback(async () => {
+    try {
+      const response = await getCategoriesApi();
+      const list = Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response?.data?.data)
+          ? response.data.data
+          : [];
+      const names = list.map(item => toServiceText(item?.name || item)).filter(Boolean);
+      setServiceCategoryFilters(['All', ...names]);
+    } catch (error) {
+      setServiceCategoryFilters(['All']);
+    }
+  }, []);
+
+  const handleLoadMoreServices = useCallback(() => {
+    if (!isServicesTab) return;
+    if (isServicesInitialLoading || isServicesLoadingMore || !hasMoreServicesRef.current) return;
+    fetchBuyerServices(servicesPageRef.current + 1, { isLoadMore: true });
+  }, [isServicesTab, isServicesInitialLoading, isServicesLoadingMore, fetchBuyerServices]);
+
+  const openServiceDetail = useCallback(service => {
+    if (!service) return;
+    // Delay so the same touch doesn't hit the modal backdrop and instantly close it
+    setTimeout(() => {
+      setServiceDetailModal({
+        visible: true,
+        service,
+      });
+    }, 80);
+  }, []);
+
+  const closeServiceDetail = useCallback(() => {
+    setServiceDetailModal({ visible: false, service: null });
+  }, []);
 
   const fetchBuyerJobs = useCallback(async (page = 1, { isLoadMore = false } = {}) => {
     if (!token || jobsFetchingRef.current) return;
@@ -601,6 +804,20 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     }, [isBookingsTab, token, fetchBuyerBookings]),
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!isServicesTab || !token) return undefined;
+
+      hasMoreServicesRef.current = true;
+      servicesPageRef.current = 1;
+      setServices([]);
+      fetchServiceCategories();
+      fetchBuyerServices(1, { isLoadMore: false });
+
+      return undefined;
+    }, [isServicesTab, token, fetchBuyerServices, fetchServiceCategories]),
+  );
+
   useEffect(() => {
     if (!isPostedJobsView || !token) return undefined;
 
@@ -616,6 +833,22 @@ const JobsBookingsScreen = ({ navigation, route }) => {
 
     return () => clearTimeout(timer);
   }, [searchQuery, isPostedJobsView, token, fetchBuyerJobs]);
+
+  useEffect(() => {
+    if (!isServicesTab || !token) return undefined;
+
+    const timer = setTimeout(() => {
+      const nextSearch = searchQuery.trim();
+      if (nextSearch === servicesSearchRef.current) return;
+
+      servicesSearchRef.current = nextSearch;
+      servicesPageRef.current = 1;
+      hasMoreServicesRef.current = true;
+      fetchBuyerServices(1, { isLoadMore: false });
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, isServicesTab, token, fetchBuyerServices]);
 
   const jobStats = useMemo(
     () => ({
@@ -897,7 +1130,13 @@ const JobsBookingsScreen = ({ navigation, route }) => {
 
   const renderHeader = () => (
     <ScreenHeader
-      title={isJobsTab ? JOBS_SCREEN_TITLE : BOOKINGS_SCREEN_TITLE}
+      title={
+        isServicesTab
+          ? SERVICES_SCREEN_TITLE
+          : isJobsTab
+            ? JOBS_SCREEN_TITLE
+            : BOOKINGS_SCREEN_TITLE
+      }
       navigation={navigation}
     />
   );
@@ -906,7 +1145,13 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     <SearchBar
       value={searchQuery}
       onChangeText={setSearchQuery}
-      placeholder={JOBS_SEARCH_PLACEHOLDER}
+      placeholder={
+        isServicesTab
+          ? SERVICES_SEARCH_PLACEHOLDER
+          : isBookingsTab
+            ? 'Search bookings...'
+            : JOBS_SEARCH_PLACEHOLDER
+      }
     />
   );
 
@@ -920,9 +1165,18 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.tab, alignJustifyCenter, !isJobsTab && styles.tabActive]}
+        style={[styles.tab, alignJustifyCenter, isServicesTab && styles.tabActive]}
+        onPress={() => setActiveTab(JOBS_BOOKINGS_TABS.SERVICES)}>
+        <Text
+          style={[styles.tabText, style.fontWeightMedium, isServicesTab && styles.tabTextActive]}>
+          {TAB_SERVICES}
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, alignJustifyCenter, isBookingsTab && styles.tabActive]}
         onPress={() => setActiveTab(JOBS_BOOKINGS_TABS.BOOKINGS)}>
-        <Text style={[styles.tabText, style.fontWeightMedium, !isJobsTab && styles.tabTextActive]}>
+        <Text
+          style={[styles.tabText, style.fontWeightMedium, isBookingsTab && styles.tabTextActive]}>
           {TAB_BOOKINGS}
         </Text>
       </TouchableOpacity>
@@ -1107,6 +1361,145 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         ListFooterComponent={renderPostedJobsFooter}
         ListEmptyComponent={renderPostedJobsEmpty}
         onEndReached={handleLoadMoreJobs}
+        onEndReachedThreshold={0.4}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.jobsListContent}
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="none"
+        bounces={false}
+      />
+    </View>
+  );
+
+  const renderServiceCard = ({ item: service }) => (
+    <TouchableOpacity
+      style={styles.serviceCard}
+      activeOpacity={0.85}
+      onPress={() => openServiceDetail(service)}>
+      <View style={styles.serviceCardBody}>
+        <View
+          style={[
+            styles.serviceCardTop,
+            flexDirectionRow,
+            justifyContentSpaceBetween,
+            alignItemsCenter,
+          ]}>
+          <Text style={[styles.servicePrice, style.fontWeightMedium]}>{service.price}</Text>
+          <View style={[flexDirectionRow, alignItemsCenter, styles.serviceRatingRow]}>
+            <Icon name="star" size={12} color={goldColor} />
+            <Text style={[styles.serviceRatingText, style.fontWeightMedium]}>
+              {service.rating}
+            </Text>
+            <Text style={[styles.serviceReviewsText, style.fontWeightThin]}>
+              ({service.reviewsCount})
+            </Text>
+          </View>
+        </View>
+
+        <Text style={[styles.serviceTitle, style.fontWeightMedium]} numberOfLines={2}>
+          {service.title}
+        </Text>
+        <Text style={[styles.serviceCategory, style.fontWeightThin]} numberOfLines={1}>
+          {service.category}
+        </Text>
+        {service.description ? (
+          <Text style={[styles.serviceDescription, style.fontWeightThin]} numberOfLines={2}>
+            {service.description}
+          </Text>
+        ) : null}
+
+        <View style={[styles.serviceMetaRow, flexDirectionRow, alignItemsCenter]}>
+          <View style={[styles.serviceSellerAvatar, alignJustifyCenter]}>
+            <Text style={[styles.serviceSellerInitials, style.fontWeightMedium]}>
+              {service.initials}
+            </Text>
+          </View>
+          <Text style={[styles.serviceSellerName, style.fontWeightThin, flex]} numberOfLines={1}>
+            {service.sellerName}
+          </Text>
+          <Text style={[styles.deliveryText, style.fontWeightThin]}>
+            {service.deliveryDays === '—'
+              ? '—'
+              : `Delivery ${service.deliveryDays} days`}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderServicesHeader = () => (
+    <View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.serviceCategoryRow}>
+        {serviceCategoryFilters.map(cat => {
+          const isActive = serviceCategory === cat;
+          return (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.serviceCategoryChip, isActive && styles.serviceCategoryChipActive]}
+              onPress={() => {
+                if (serviceCategory === cat) return;
+                setServiceCategory(cat);
+                hasMoreServicesRef.current = true;
+                servicesPageRef.current = 1;
+              }}>
+              <Text
+                style={[
+                  styles.serviceCategoryText,
+                  style.fontWeightMedium,
+                  isActive && styles.serviceCategoryTextActive,
+                ]}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+      {isServicesInitialLoading ? (
+        <View style={styles.jobsInitialLoader}>
+          <ActivityIndicator size="small" color={redColor} />
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const renderServicesFooter = () => {
+    if (!isServicesLoadingMore) return <View style={{ height: hp(3) }} />;
+    return (
+      <View style={styles.jobsMoreLoader}>
+        <ActivityIndicator size="small" color={redColor} />
+      </View>
+    );
+  };
+
+  const renderServicesEmpty = () => {
+    if (isServicesInitialLoading) return null;
+    return (
+      <EmptyState
+        icon="layers"
+        title={searchQuery.trim() ? EMPTY_SEARCH_TITLE : EMPTY_SERVICES_TITLE}
+        message={searchQuery.trim() ? EMPTY_SEARCH_MESSAGE : EMPTY_SERVICES_MESSAGE}
+      />
+    );
+  };
+
+  const renderServicesList = () => (
+    <View style={flex}>
+      <View style={styles.jobsFixedHeader}>
+        {renderHeader()}
+        {renderSearch()}
+        {renderMainTabs()}
+      </View>
+      <FlatList
+        data={services}
+        keyExtractor={item => String(item.id)}
+        renderItem={renderServiceCard}
+        ListHeaderComponent={renderServicesHeader}
+        ListFooterComponent={renderServicesFooter}
+        ListEmptyComponent={renderServicesEmpty}
+        onEndReached={handleLoadMoreServices}
         onEndReachedThreshold={0.4}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.jobsListContent}
@@ -1479,6 +1872,8 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       <KeyboardAvoidingView style={flex} behavior={keyboardAvoidingBehavior}>
         {isPostedJobsView ? (
           renderPostedJobsList()
+        ) : isServicesTab ? (
+          renderServicesList()
         ) : (
           <ScrollView
             ref={scrollRef}
@@ -1537,6 +1932,12 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         booking={bookingDetailModal.booking}
         onClose={closeBookingDetailModal}
       />
+
+      <BuyerServiceDetailModal
+        visible={serviceDetailModal.visible}
+        service={serviceDetailModal.service}
+        onClose={closeServiceDetail}
+      />
     </SafeAreaView>
   );
 };
@@ -1583,6 +1984,114 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   tabActive: { backgroundColor: redColor },
+  serviceCard: {
+    backgroundColor: whiteColor,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: borderLightColor,
+    marginBottom: spacings.normal,
+    overflow: 'hidden',
+  },
+  serviceCardPressed: {
+    opacity: 0.92,
+  },
+  serviceCardBody: {
+    padding: spacings.large,
+  },
+  serviceCardTop: {
+    marginBottom: spacings.small,
+  },
+  servicePrice: {
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: redColor,
+  },
+  serviceRatingRow: {
+    gap: 4,
+  },
+  serviceRatingText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: blackColor,
+  },
+  serviceReviewsText: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: grayColor,
+  },
+  serviceTitle: {
+    fontSize: style.fontSizeMedium1x.fontSize,
+    color: blackColor,
+    marginBottom: 4,
+  },
+  serviceCategory: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: grayColor,
+    marginBottom: spacings.small,
+  },
+  serviceDescription: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: grayColor,
+    lineHeight: 18,
+    marginBottom: spacings.medium,
+  },
+  serviceTagsRow: {
+    flexWrap: 'wrap',
+    gap: spacings.small,
+    marginBottom: spacings.medium,
+  },
+  serviceTagChip: {
+    backgroundColor: inputBgColor,
+    borderRadius: 6,
+    paddingHorizontal: spacings.normal,
+    paddingVertical: 2,
+    maxWidth: wp(40),
+  },
+  serviceTagText: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: grayColor,
+  },
+  serviceMetaRow: {
+    gap: spacings.small,
+  },
+  serviceSellerAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: inputBgColor,
+  },
+  serviceSellerInitials: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: blackColor,
+  },
+  serviceSellerName: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: grayColor,
+  },
+  deliveryText: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: grayColor,
+  },
+  serviceCategoryRow: {
+    gap: spacings.small,
+    paddingBottom: spacings.large,
+  },
+  serviceCategoryChip: {
+    borderWidth: 1,
+    borderColor: borderLightColor,
+    backgroundColor: whiteColor,
+    borderRadius: 8,
+    paddingHorizontal: spacings.large,
+    paddingVertical: spacings.small,
+  },
+  serviceCategoryChipActive: {
+    backgroundColor: redColor,
+    borderColor: redColor,
+  },
+  serviceCategoryText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: grayColor,
+  },
+  serviceCategoryTextActive: {
+    color: whiteColor,
+  },
   tabText: { fontSize: style.fontSizeNormal2x.fontSize, color: grayColor },
   tabTextActive: { color: whiteColor },
   statsGrid: {

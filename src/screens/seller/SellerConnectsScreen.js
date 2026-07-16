@@ -33,7 +33,6 @@ import {
   SELLER_CONNECTS_PURCHASED,
   SELLER_CONNECTS_TITLE,
   SELLER_CONNECTS_USED,
-  SELLER_STATIC_USER,
 } from '../../constans/Constants';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
@@ -83,7 +82,6 @@ const SellerConnectsScreen = ({ navigation }) => {
         <ScreenHeader
           title={SELLER_CONNECTS_TITLE}
           navigation={navigation}
-          user={SELLER_STATIC_USER}
           onBack={() => navigation.goBack()}
         />
 

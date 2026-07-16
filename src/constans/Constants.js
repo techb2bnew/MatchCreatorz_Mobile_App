@@ -53,6 +53,7 @@ export const SELLER_WORK_TABS = {
 
 export const JOBS_BOOKINGS_TABS = {
   JOBS: 'jobs',
+  SERVICES: 'services',
   BOOKINGS: 'bookings',
 };
 
@@ -415,6 +416,7 @@ export const NOTIF_PAYMENT_ALERTS_DESC = 'Alerts for wallet transactions';
 export const NOTIF_CHAT_MESSAGES = 'Chat Messages';
 export const NOTIF_CHAT_MESSAGES_DESC = 'New messages from sellers';
 export const TAB_MY_JOBS = 'My Jobs';
+export const TAB_SERVICES = 'Services';
 export const TAB_BOOKINGS = 'Bookings';
 
 // Dashboard
@@ -460,6 +462,23 @@ export const NOTIFICATION_FILTER_LABELS = {
 // Jobs & Bookings screen
 export const JOBS_SCREEN_TITLE = 'My Jobs';
 export const BOOKINGS_SCREEN_TITLE = 'My Bookings';
+export const SERVICES_SCREEN_TITLE = 'Browse Services';
+export const SERVICES_SEARCH_PLACEHOLDER = 'Search services...';
+export const EMPTY_SERVICES_TITLE = 'No services found';
+export const EMPTY_SERVICES_MESSAGE = 'Active seller services will appear here.';
+
+export const BUYER_SERVICE_DETAIL_MODAL = {
+  title: 'Service Details',
+  seller: 'Seller',
+  category: 'Category',
+  delivery: 'Delivery Time',
+  revisions: 'Revisions',
+  orders: 'Orders',
+  description: 'Description',
+  images: 'Images',
+  daysSuffix: 'days',
+};
+
 export const JOBS_SEARCH_PLACEHOLDER = 'Search...';
 
 export const MY_JOBS_SUB_TABS = {
@@ -680,6 +699,62 @@ export const SELLER_SERVICES_SEARCH = 'Search services...';
 export const EMPTY_SELLER_SERVICES_TITLE = 'No services yet';
 export const EMPTY_SELLER_SERVICES_MESSAGE = 'Add a service to start getting hired.';
 
+export const SELLER_ADD_SERVICE_MODAL = {
+  title: 'Add New Service',
+  titleLabel: 'Service Title',
+  titlePlaceholder: 'e.g. Professional Logo Design',
+  descriptionLabel: 'Description',
+  descriptionPlaceholder: 'Describe what you offer...',
+  imagesLabel: 'Service Images (max 5 — JPG, PNG, WEBP)',
+  addPhoto: 'Add photo',
+  categoryLabel: 'Category (multiple)',
+  categoryPlaceholder: 'Select categories...',
+  priceLabel: 'Price (Rs.)',
+  pricePlaceholder: '999',
+  deliveryLabel: 'Delivery (days)',
+  deliveryPlaceholder: '3',
+  revisionsLabel: 'Revisions',
+  revisionsPlaceholder: '1',
+  tagsLabel: 'Tags (comma separated)',
+  tagsPlaceholder: 'logo, branding, design',
+  cancel: 'Cancel',
+  submit: 'Add Service',
+  titleRequired: 'Enter a service title',
+  descriptionRequired: 'Enter a description',
+  categoryRequired: 'Select at least one category',
+  priceRequired: 'Enter a valid price',
+  deliveryRequired: 'Enter delivery days',
+  revisionsRequired: 'Enter revisions count',
+  maxImages: 'You can upload up to 5 images',
+  imageTooLarge: 'Each image must be under 5 MB',
+  submitError: 'Failed to create service. Please try again.',
+  successTitle: 'Service Created!',
+  successMessage: 'Your service has been added successfully.',
+  loadCategoriesError: 'Could not load categories.',
+  editTitle: 'Edit Service',
+  editSubmit: 'Save Changes',
+  editSubmitError: 'Failed to update service. Please try again.',
+  editSuccessTitle: 'Service Updated!',
+  editSuccessMessage: 'Your service has been updated successfully.',
+};
+
+export const SELLER_SERVICE_DETAIL_MODAL = {
+  title: 'Service Details',
+  status: 'Status',
+  price: 'Price',
+  delivery: 'Delivery',
+  revisions: 'Revisions',
+  category: 'Category',
+  tags: 'Tags',
+  description: 'Description',
+  rating: 'Rating',
+  bookings: 'Bookings',
+  images: 'Images',
+  edit: 'Edit',
+  loadError: 'Could not load service details.',
+  daysSuffix: 'days',
+};
+
 export const SELLER_CONNECTS_TITLE = 'Connects';
 export const SELLER_CONNECTS_AVAILABLE = 'Available Connects';
 export const SELLER_CONNECTS_AVAILABLE_SUB = 'Use to bid on jobs';
@@ -704,10 +779,75 @@ export const SELLER_BIDS_BUDGET = 'Budget';
 export const SELLER_BIDS_DELIVERY = 'Delivery';
 export const SELLER_BIDS_CONNECTS_USED = 'Connects Used';
 export const SELLER_PLACE_BID = 'Place Bid';
+export const SELLER_VIEW_JOB = 'View';
+export const SELLER_BID_PENDING = 'Pending';
+export const SELLER_BID_ACCEPTED = 'Accepted';
+export const SELLER_BID_REJECTED = 'Rejected';
+export const SELLER_YOUR_BID_PREFIX = 'Your bid';
+
+export const SELLER_PLACE_BID_MODAL = {
+  title: 'Place a Bid',
+  jobLabel: 'JOB',
+  budgetSuffix: 'budget',
+  amountLabel: 'Bid Amount (₹)',
+  amountPlaceholder: 'e.g. 250',
+  deliveryLabel: 'Delivery Days',
+  deliveryPlaceholder: 'e.g. 5',
+  proposalLabel: 'Proposal',
+  proposalPlaceholder: 'Describe why you are the best fit for this job...',
+  connectsInfo: 'This will use 2 connects from your balance.',
+  cancel: 'Cancel',
+  submit: 'Submit Bid',
+  amountRequired: 'Enter a valid bid amount',
+  deliveryRequired: 'Enter delivery days',
+  proposalRequired: 'Enter your proposal',
+  submitError: 'Failed to place bid. Please try again.',
+  successTitle: 'Bid Placed!',
+  successMessage: 'Your bid has been submitted successfully.',
+};
+
+export const SELLER_JOB_DETAIL_MODAL = {
+  title: 'Job Details',
+  buyer: 'Buyer',
+  postedOn: 'Posted On',
+  yourBid: 'Your Bid',
+  bidAmount: 'Bid Amount',
+  deliveryDays: 'Delivery Days',
+  bidStatus: 'Bid Status',
+  proposal: 'Proposal',
+  noBid: 'You have not placed a bid yet',
+  noSkills: 'No skills listed',
+  loadError: 'Could not load job details.',
+};
 
 export const SELLER_BOOKINGS_SEARCH = 'Search by buyer or service...';
+export const SELLER_BOOKINGS_VIEW = 'View';
+export const SELLER_BOOKINGS_ACCEPT = 'Accept';
+export const SELLER_BOOKINGS_CANCEL = 'Cancel';
+export const SELLER_BOOKINGS_SUBMIT = 'Submit Work';
 export const SELLER_BOOKINGS_MARK_COMPLETE = 'Mark Complete';
 export const SELLER_BOOKINGS_DISPUTE = 'Dispute';
+
+export const SELLER_BOOKING_ACCEPT_TITLE = 'Accept Booking?';
+export const SELLER_BOOKING_ACCEPT_MESSAGE =
+  'Are you sure you want to accept this booking? Status will change to Ongoing.';
+export const SELLER_BOOKING_ACCEPT_CONFIRM = 'Yes, Accept';
+
+export const SELLER_BOOKING_SUBMIT_TITLE = 'Submit Work?';
+export const SELLER_BOOKING_SUBMIT_MESSAGE =
+  'Confirm that you have delivered the work. The buyer will review and release payment.';
+export const SELLER_BOOKING_SUBMIT_CONFIRM = 'Yes, Submit';
+
+export const SELLER_BOOKING_CANCEL_TITLE = 'Cancel Booking?';
+export const SELLER_BOOKING_CANCEL_MESSAGE =
+  'Are you sure you want to cancel this pending booking? Please provide a reason.';
+export const SELLER_BOOKING_CANCEL_CONFIRM = 'Yes, Cancel';
+
+export const SELLER_BOOKING_DETAIL_MODAL = {
+  title: 'Booking Details',
+  loadError: 'Could not load booking details.',
+};
+
 export const SELLER_OFFERS_RECEIVED = 'Received Offers';
 export const SELLER_OFFERS_SENT = 'Sent Offers';
 export const SELLER_OFFERS_DECLINE = 'Decline';
@@ -755,6 +895,14 @@ export const API_ENDPOINTS = {
   BUYER_STATS: '/buyer/stats',
   BUYER_JOBS: '/buyer/jobs',
   BUYER_BOOKINGS: '/buyer/bookings',
+  BUYER_SERVICES: '/buyer/services',
+  SELLER_PROFILE: '/seller/profile',
+  SELLER_JOBS: '/seller/jobs',
+  SELLER_BIDS: '/seller/bids',
+  SELLER_BOOKINGS: '/seller/bookings',
+  SELLER_SERVICES: '/seller/services',
+  SELLER_UPLOAD: '/seller/upload',
+  CATEGORIES: '/categories',
 };
 
 export const API_ROLES = {

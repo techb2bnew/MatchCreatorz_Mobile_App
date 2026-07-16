@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
+import { selectAuth } from '../../redux/slices/authSlice';
 import {
   blackColor,
   borderLightColor,
@@ -22,6 +26,8 @@ import {
 } from '../../constans/Color';
 import { style, spacings } from '../../constans/Fonts';
 import {
+  EMPTY_DASHBOARD_BOOKINGS_MESSAGE,
+  EMPTY_DASHBOARD_BOOKINGS_TITLE,
   SCREEN_NAMES,
   SELLER_DASHBOARD_ACTIVE_BOOKINGS,
   SELLER_DASHBOARD_BROWSE_JOBS,
@@ -38,12 +44,13 @@ import {
   SELLER_STAT_EARNINGS,
   SELLER_STAT_RATING,
   SELLER_STAT_WALLET,
-  SELLER_STATIC_USER,
   SELLER_TABS,
   SELLER_WORK_TABS,
 } from '../../constans/Constants';
 import SearchBar from '../../components/SearchBar';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
+import EmptyState from '../../components/EmptyState';
+import { getSellerBookingsApi } from '../../services/sellerService';
 import { heightPercentageToDP as hp } from '../../utils';
 
 const {
@@ -54,6 +61,8 @@ const {
   alignJustifyCenter,
 } = BaseStyle;
 
+const ACTIVE_BOOKINGS_LIMIT = 4;
+
 const getStatusStyle = status => {
   if (status === 'Completed') return { bg: '#E8F8EE', text: '#1B7A45' };
   if (status === 'Pending') return { bg: '#FFF4E5', text: '#C27803' };
@@ -61,68 +70,96 @@ const getStatusStyle = status => {
   return { bg: '#E8F0F8', text: '#3B6981' };
 };
 
+const formatDashboardStatus = status => {
+  const normalized = String(status || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (normalized === 'pending') return 'Pending';
+  if (normalized === 'ongoing' || normalized === 'active' || normalized === 'in_progress') {
+    return 'Ongoing';
+  }
+  if (normalized === 'amidst_completion' || normalized === 'amidst_completion_process') {
+    return 'Amidst-Completion';
+  }
+  if (normalized === 'completed') return 'Completed';
+  if (normalized === 'cancelled' || normalized === 'canceled') return 'Cancelled';
+  if (!normalized) return '—';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1).replace(/_/g, ' ');
+};
+
+const formatDashboardDate = dateStr => {
+  if (!dateStr) return '—';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return String(dateStr);
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const capitalizeTitle = value => {
+  const text = String(value || '').trim();
+  if (!text) return '—';
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+const mapActiveBooking = booking => {
+  const amount = Number(booking?.amount ?? booking?.total ?? 0) || 0;
+  const buyerName = booking?.buyer?.name || booking?.buyer_name || 'Buyer';
+  const title =
+    booking?.title || booking?.service?.title || booking?.job?.title || 'Booking';
+
+  return {
+    id: String(booking.id),
+    title: capitalizeTitle(title),
+    client: buyerName,
+    status: formatDashboardStatus(booking.status),
+    price: `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+    meta: formatDashboardDate(booking.createdAt || booking.created_at),
+  };
+};
+
+const INITIAL_STAT_CARDS = [
+  {
+    id: 'wallet',
+    title: SELLER_STAT_WALLET,
+    value: '₹2,36,000',
+    subtitle: 'Available to withdraw',
+    icon: 'credit-card',
+  },
+  {
+    id: 'bookings',
+    title: SELLER_STAT_BOOKINGS,
+    value: '0',
+    subtitle: 'Current active bookings',
+    icon: 'calendar',
+  },
+  {
+    id: 'earnings',
+    title: SELLER_STAT_EARNINGS,
+    value: '₹15,10,000',
+    subtitle: 'All time',
+    icon: 'trending-up',
+  },
+  {
+    id: 'rating',
+    title: SELLER_STAT_RATING,
+    value: '4.8',
+    subtitle: '124 reviews',
+    icon: 'star',
+  },
+];
+
 const SellerDashboardScreen = ({ navigation }) => {
+  const { user, token } = useSelector(selectAuth);
+  const welcomeName = user?.name || user?.fullName || 'there';
   const [searchQuery, setSearchQuery] = useState('');
   const [connects] = useState({ remaining: 48, total: 100 });
-  const [statCards] = useState([
-    {
-      id: 'wallet',
-      title: SELLER_STAT_WALLET,
-      value: '₹2,36,000',
-      subtitle: 'Available to withdraw',
-      icon: 'credit-card',
-    },
-    {
-      id: 'bookings',
-      title: SELLER_STAT_BOOKINGS,
-      value: '7',
-      subtitle: '2 need attention',
-      icon: 'calendar',
-    },
-    {
-      id: 'earnings',
-      title: SELLER_STAT_EARNINGS,
-      value: '₹15,10,000',
-      subtitle: 'All time',
-      icon: 'trending-up',
-    },
-    {
-      id: 'rating',
-      title: SELLER_STAT_RATING,
-      value: '4.8',
-      subtitle: '124 reviews',
-      icon: 'star',
-    },
-  ]);
-  const [activeBookings] = useState([
-    {
-      id: '1',
-      title: 'Logo Design',
-      client: 'Alice J.',
-      status: 'Ongoing',
-      price: '₹20,750',
-      meta: '3d left',
-      action: null,
-    },
-    {
-      id: '2',
-      title: 'Website Redesign',
-      client: 'Bob S.',
-      status: 'Amidst-Completion',
-      price: '₹66,000',
-      meta: '5d left',
-      action: null,
-    },
-    {
-      id: '3',
-      title: 'Social Media Kit',
-      client: 'Carol M.',
-      status: 'Pending',
-      price: '₹18,200',
-      meta: null,
-      action: 'Accept',
-    },
-  ]);
+  const [statCards, setStatCards] = useState(INITIAL_STAT_CARDS);
+  const [activeBookings, setActiveBookings] = useState([]);
+  const [isBookingsLoading, setIsBookingsLoading] = useState(false);
   const [quickActions] = useState([
     { id: '1', title: SELLER_DASHBOARD_BROWSE_JOBS, icon: 'search', color: redColor },
     { id: '2', title: SELLER_DASHBOARD_MY_SERVICES, icon: 'layers', color: '#3B6981' },
@@ -130,6 +167,54 @@ const SellerDashboardScreen = ({ navigation }) => {
 
   const tabNavigation = navigation.getParent();
   const connectsProgress = connects.remaining / connects.total;
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const fetchActiveBookings = async () => {
+        if (!token) {
+          console.log('[SellerDashboard] Skipped — no token');
+          return;
+        }
+
+        setIsBookingsLoading(true);
+        try {
+          const response = await getSellerBookingsApi(token, {
+            tab: 'active',
+            page: 1,
+            limit: ACTIVE_BOOKINGS_LIMIT,
+          });
+          if (cancelled) return;
+
+          const list = Array.isArray(response?.data) ? response.data : [];
+          const total = Number(response?.pagination?.total ?? list.length) || 0;
+
+          setActiveBookings(list.map(mapActiveBooking));
+          setStatCards(prev =>
+            prev.map(card =>
+              card.id === 'bookings' ? { ...card, value: String(total) } : card,
+            ),
+          );
+        } catch (error) {
+          if (!cancelled) {
+            setActiveBookings([]);
+            setStatCards(prev =>
+              prev.map(card => (card.id === 'bookings' ? { ...card, value: '0' } : card)),
+            );
+          }
+        } finally {
+          if (!cancelled) setIsBookingsLoading(false);
+        }
+      };
+
+      fetchActiveBookings();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [token]),
+  );
 
   const goToJobs = () => {
     tabNavigation?.navigate(SELLER_TABS.JOBS_STACK, { screen: SCREEN_NAMES.SELLER_JOBS });
@@ -168,7 +253,6 @@ const SellerDashboardScreen = ({ navigation }) => {
         <ScreenHeader
           title={SELLER_DASHBOARD_TITLE}
           navigation={navigation}
-          user={SELLER_STATIC_USER}
         />
 
         <SearchBar
@@ -179,7 +263,7 @@ const SellerDashboardScreen = ({ navigation }) => {
 
         <View style={styles.welcomeCard}>
           <Text style={[styles.welcomeText, style.fontWeightMedium]}>
-            {SELLER_DASHBOARD_WELCOME_PREFIX} {SELLER_STATIC_USER.name} 👋
+            {SELLER_DASHBOARD_WELCOME_PREFIX} {welcomeName} 👋
           </Text>
           <TouchableOpacity
             style={[styles.browseBtn, flexDirectionRow, alignItemsCenter]}
@@ -261,37 +345,46 @@ const SellerDashboardScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.listCard}>
-          {activeBookings.map((item, index) => {
-            const statusStyle = getStatusStyle(item.status);
-            return (
-              <View
-                key={item.id}
-                style={[
-                  styles.bookingRow,
-                  flexDirectionRow,
-                  alignItemsCenter,
-                  index < activeBookings.length - 1 && styles.rowBorder,
-                ]}>
-                <View style={styles.bookingInfo}>
-                  <Text style={[styles.bookingTitle, style.fontWeightMedium]}>{item.title}</Text>
-                  <Text style={[styles.bookingMeta, style.fontWeightThin]}>Client: {item.client}</Text>
-                  <View style={[styles.statusChip, { backgroundColor: statusStyle.bg, alignSelf: 'flex-start' }]}>
-                    <Text style={[styles.statusText, { color: statusStyle.text }]}>{item.status}</Text>
+          {isBookingsLoading ? (
+            <View style={styles.bookingsLoader}>
+              <ActivityIndicator size="small" color={redColor} />
+            </View>
+          ) : activeBookings.length === 0 ? (
+            <EmptyState
+              icon="calendar"
+              title={EMPTY_DASHBOARD_BOOKINGS_TITLE}
+              message={EMPTY_DASHBOARD_BOOKINGS_MESSAGE}
+              compact
+            />
+          ) : (
+            activeBookings.map((item, index) => {
+              const statusStyle = getStatusStyle(item.status);
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  activeOpacity={0.85}
+                  onPress={goToWorkBookings}
+                  style={[
+                    styles.bookingRow,
+                    flexDirectionRow,
+                    alignItemsCenter,
+                    index < activeBookings.length - 1 && styles.rowBorder,
+                  ]}>
+                  <View style={styles.bookingInfo}>
+                    <Text style={[styles.bookingTitle, style.fontWeightMedium]}>{item.title}</Text>
+                    <Text style={[styles.bookingMeta, style.fontWeightThin]}>Client: {item.client}</Text>
+                    <View style={[styles.statusChip, { backgroundColor: statusStyle.bg, alignSelf: 'flex-start' }]}>
+                      <Text style={[styles.statusText, { color: statusStyle.text }]}>{item.status}</Text>
+                    </View>
                   </View>
-                </View>
-                <View style={styles.bookingRight}>
-                  <Text style={[styles.bookingPrice, style.fontWeightMedium]}>{item.price}</Text>
-                  {item.action ? (
-                    <TouchableOpacity style={styles.acceptBtn}>
-                      <Text style={[styles.acceptBtnText, style.fontWeightMedium]}>{item.action}</Text>
-                    </TouchableOpacity>
-                  ) : (
+                  <View style={styles.bookingRight}>
+                    <Text style={[styles.bookingPrice, style.fontWeightMedium]}>{item.price}</Text>
                     <Text style={[styles.bookingMeta, style.fontWeightThin]}>{item.meta}</Text>
-                  )}
-                </View>
-              </View>
-            );
-          })}
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -440,6 +533,10 @@ const styles = StyleSheet.create({
     borderColor: borderLightColor,
     marginBottom: hp(2),
     overflow: 'hidden',
+  },
+  bookingsLoader: {
+    paddingVertical: hp(3),
+    alignItems: 'center',
   },
   bookingRow: {
     paddingHorizontal: spacings.large,
