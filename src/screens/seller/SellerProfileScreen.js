@@ -3,11 +3,11 @@ import {
   View,
   Text,
   Image,
-  TextInput,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,7 +15,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
 import { logoutUser, selectAuth, setAuthSession } from '../../redux/slices/authSlice';
-import { getSellerProfileApi, updateSellerProfileApi } from '../../services/sellerService';
+import { getSellerProfileApi, getSellerStatsApi, updateSellerProfileApi } from '../../services/sellerService';
+import { formatAppCurrency } from '../../utils/currency';
 import { getApiErrorMessage } from '../../services/apiClient';
 import {
   blackColor,
@@ -40,20 +41,21 @@ import {
   NOTIF_PAYMENT_ALERTS_DESC,
   NOTIF_SMS,
   NOTIF_SMS_DESC,
-  // BIO,
-  // CATEGORY,
-  // PORTFOLIO,
-  // PORTFOLIO_LINK_PLACEHOLDER,
-  // PORTFOLIO_LINKS,
-  // PRICE_RANGE,
-  // PRICE_RANGE_OPTIONS,
-  PROFILE_BIO,
+  BIO,
+  CATEGORY_OPTIONS,
+  COUNTRY,
+  GENDER_OPTIONS,
+  LABEL_CITY,
+  LABEL_HOURLY_RATE,
+  PORTFOLIO,
+  PORTFOLIO_LINK_PLACEHOLDER,
+  PORTFOLIO_LINKS,
   PROFILE_CANCEL,
   PROFILE_DELETE_ACCOUNT,
   PROFILE_DELETE_CONFIRM,
   PROFILE_DELETE_MESSAGE,
   PROFILE_DELETE_TITLE,
-  // PROFILE_DETAILS,
+  PROFILE_DETAILS,
   PROFILE_EDIT,
   PROFILE_EMAIL,
   PROFILE_EMAIL_LOGIN_HINT,
@@ -67,16 +69,13 @@ import {
   PROFILE_NOTIFICATION_SETTINGS_DESC,
   PROFILE_PERSONAL_INFO,
   PROFILE_PHONE,
-  PROFILE_LOCATION,
   PROFILE_SAVE,
   PROFILE_SAVED_MESSAGE,
   PROFILE_SAVED_TITLE,
-  PROFILE_STAT_BOOKINGS,
   PROFILE_STAT_WALLET,
   PROFILE_UPLOAD_PHOTO,
-  // RESUME_CV,
-  // RESPONSE_TIME,
-  // RESPONSE_TIME_OPTIONS,
+  RESUME_CV,
+  RESPONSE_TIME_OPTIONS,
   SCREEN_NAMES,
   SELLER_NOTIF_BID_RESPONSES,
   SELLER_NOTIF_BID_RESPONSES_DESC,
@@ -89,8 +88,12 @@ import {
   SELLER_PROFILE_QUICK_LINKS,
   SELLER_PROFILE_ROLE,
   SELLER_PROFILE_TITLE,
+  SELLER_STAT_BOOKINGS,
+  SELLER_STAT_COMPLETED_BOOKINGS,
   SELLER_STAT_EARNINGS,
-  // TAGS_SKILLS,
+  SELLER_STAT_PENDING_BIDS,
+  SELLER_STAT_TOTAL_SERVICES,
+  TAGS_SKILLS,
   ERROR_FULL_NAME_REQUIRED,
   ERROR_PHONE_REQUIRED,
   ERROR_PROFILE_UPDATE_FAILED,
@@ -98,14 +101,14 @@ import {
 import CustomTextInput from '../../components/CustomTextInput';
 import CustomButton from '../../components/CustomButton';
 import FormLabel from '../../components/FormLabel';
-// import ProfileDetailsStep from '../../components/ProfileDetailsStep';
+import ProfileDetailsStep from '../../components/ProfileDetailsStep';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import SuccessModal from '../../components/modal/SuccessModal';
 import NotificationSettingsModal from '../../components/modal/NotificationSettingsModal';
 import UploadOptionsModal from '../../components/modal/UploadOptionsModal';
 import { pickImageFromCamera, pickImagesFromGallery, isImageFile } from '../../utils/filePicker';
-// import { DEFAULT_COUNTRY } from '../../utils/locationData';
+import { DEFAULT_COUNTRY } from '../../utils/locationData';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import {
   keyboardAvoidingBehavior,
@@ -119,10 +122,10 @@ const {
   alignItemsCenter,
   justifyContentSpaceBetween,
   alignJustifyCenter,
-  // flexWrap,
+  flexWrap,
 } = BaseStyle;
 
-const EMPTY_PROFILE = {
+const createEmptySellerProfile = () => ({
   fullName: '',
   email: '',
   phone: '',
@@ -130,27 +133,24 @@ const EMPTY_PROFILE = {
   bio: '',
   initials: '',
   photoUri: null,
-};
-
-/** Extra/static seller fields kept for later (commented UI sections). */
-/*
-const INITIAL_EXTRA_PROFILE = {
-  priceRange: PRICE_RANGE_OPTIONS[2],
-  dateOfBirth: '15/03/1990',
+  hourlyRate: '',
+  dateOfBirth: '',
   country: DEFAULT_COUNTRY,
-  state: 'Maharashtra',
-  city: 'Mumbai',
-  zipCode: '400001',
-  gender: 'Male',
-  category: 'Design',
-  tags: ['Logo', 'Branding', 'UI/UX'],
+  state: '',
+  city: '',
+  zipCode: '',
+  gender: GENDER_OPTIONS[0],
+  category: CATEGORY_OPTIONS[0],
+  tags: [],
   responseTime: RESPONSE_TIME_OPTIONS[2],
-  resumeFile: { name: 'Seller_Resume.pdf', size: 184320 },
-  portfolioLinks: ['https://behance.net/userseller'],
+  resumeUrl: null,
+  resumeFile: null,
+  resumeRemoved: false,
+  portfolioLinks: [],
   portfolioLink: '',
   portfolioFiles: [],
-};
-*/
+  connectsBalance: 0,
+});
 
 const getInitials = name =>
   String(name || '')
@@ -162,18 +162,90 @@ const getInitials = name =>
     .slice(0, 2)
     .toUpperCase() || '—';
 
+const parseSkills = skills => {
+  if (!Array.isArray(skills)) return [];
+  return skills.flatMap(item =>
+    String(item || '')
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(Boolean),
+  );
+};
+
+const formatLocation = (city, country, location) => {
+  if (String(location || '').trim()) return String(location).trim();
+  return [city, country]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .join(', ');
+};
+
+const getFileNameFromUrl = url => {
+  if (!url) return 'File';
+  const pathname = String(url).split('?')[0];
+  return pathname.split('/').pop() || 'File';
+};
+
+const isImageUrl = url => /\.(jpe?g|png|gif|webp)(\?|$)/i.test(String(url || ''));
+
 const mapSellerProfileToUi = data => {
+  const sellerProfile = data?.seller_profile || {};
   const fullName = data?.name || '';
+  const city = sellerProfile.city || '';
+  const country = sellerProfile.country || DEFAULT_COUNTRY;
+  const resumeUrl = sellerProfile.resume || null;
+
   return {
     fullName,
     email: data?.email || '',
     phone: data?.phone || '',
-    location: data?.location || '',
-    bio: data?.bio || '',
+    location: formatLocation(city, country, data?.location),
+    bio: sellerProfile.bio || data?.bio || '',
     initials: getInitials(fullName),
-    photoUri: data?.avatar || null,
+    photoUri: sellerProfile.profile_image || data?.avatar || null,
+    hourlyRate: sellerProfile.hourly_rate ? String(Number(sellerProfile.hourly_rate)) : '',
+    dateOfBirth: '',
+    country,
+    state: '',
+    city,
+    zipCode: '',
+    gender: GENDER_OPTIONS[0],
+    category: CATEGORY_OPTIONS[0],
+    tags: parseSkills(sellerProfile.skills),
+    responseTime: RESPONSE_TIME_OPTIONS[2],
+    resumeUrl,
+    resumeFile: resumeUrl
+      ? { name: getFileNameFromUrl(resumeUrl), uri: resumeUrl, size: null, isRemote: true }
+      : null,
+    resumeRemoved: false,
+    portfolioLinks: Array.isArray(sellerProfile.portfolio_links)
+      ? sellerProfile.portfolio_links.filter(Boolean)
+      : [],
+    portfolioLink: '',
+    portfolioFiles: Array.isArray(sellerProfile.portfolio_files)
+      ? sellerProfile.portfolio_files.filter(Boolean)
+      : [],
+    connectsBalance: Number(sellerProfile.connects_balance ?? 0) || 0,
   };
 };
+
+const EMPTY_PROFILE_STATS = {
+  activeBookings: '0',
+  completedBookings: '0',
+  totalEarnings: formatAppCurrency(0, { whole: true }),
+  totalServices: '0',
+  pendingBids: '0',
+  connects: '0',
+};
+
+const mapSellerStatsToProfile = (stats, connectsBalance = 0) => ({
+  activeBookings: String(stats?.activeBookings ?? 0),
+  completedBookings: String(stats?.completedBookings ?? 0),
+  totalEarnings: formatAppCurrency(stats?.totalEarnings ?? 0, { whole: true }),
+  totalServices: String(stats?.totalServices ?? 0),
+  pendingBids: String(stats?.pendingBids ?? 0),
+  connects: String(connectsBalance ?? 0),
+});
 
 const SellerProfileScreen = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -189,8 +261,9 @@ const SellerProfileScreen = ({ navigation }) => {
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
 
-  const [savedProfile, setSavedProfile] = useState(EMPTY_PROFILE);
-  const [profileForm, setProfileForm] = useState(EMPTY_PROFILE);
+  const [savedProfile, setSavedProfile] = useState(createEmptySellerProfile);
+  const [profileForm, setProfileForm] = useState(createEmptySellerProfile);
+  const [profileStats, setProfileStats] = useState(EMPTY_PROFILE_STATS);
 
   const [notificationSettings, setNotificationSettings] = useState([
     { key: 'email', title: NOTIF_EMAIL, description: NOTIF_EMAIL_DESC, enabled: true },
@@ -239,15 +312,26 @@ const SellerProfileScreen = ({ navigation }) => {
         }
 
         try {
-          const response = await getSellerProfileApi(token);
+          const [profileResponse, statsResponse] = await Promise.all([
+            getSellerProfileApi(token),
+            getSellerStatsApi(token),
+          ]);
           if (cancelled) return;
-          const mapped = mapSellerProfileToUi(response?.data);
+
+          const mapped = mapSellerProfileToUi(profileResponse?.data);
+          const stats = statsResponse?.data?.stats || {};
+
           setSavedProfile(mapped);
+          setProfileStats(
+            mapSellerStatsToProfile(stats, mapped.connectsBalance),
+          );
           if (!isEditing) {
             setProfileForm(mapped);
           }
         } catch (error) {
-          // Logged inside getSellerProfileApi
+          if (!cancelled) {
+            setProfileStats(EMPTY_PROFILE_STATS);
+          }
         }
       };
 
@@ -258,13 +342,6 @@ const SellerProfileScreen = ({ navigation }) => {
       };
     }, [token, isEditing]),
   );
-
-  const [profileStats] = useState({
-    wallet: '₹2,36,000',
-    bookings: '7',
-    earnings: '₹15,10,000',
-    connects: '48',
-  });
 
   const headerUser = {
     name: savedProfile.fullName,
@@ -316,7 +393,15 @@ const SellerProfileScreen = ({ navigation }) => {
     const name = String(profileForm.fullName || '').trim();
     const phone = String(profileForm.phone || '').trim();
     const bio = String(profileForm.bio || '').trim();
-    const location = String(profileForm.location || '').trim();
+    const city = String(profileForm.city || '').trim();
+    const country = String(profileForm.country || '').trim();
+    const location =
+      formatLocation(city, country, profileForm.location) ||
+      [city, country].filter(Boolean).join(', ');
+    const hourlyRate = String(profileForm.hourlyRate || '').trim();
+    const skills = Array.isArray(profileForm.tags) ? profileForm.tags : [];
+    const hasNewResume = profileForm.resumeFile?.uri && !profileForm.resumeFile.isRemote;
+    const removeResume = Boolean(profileForm.resumeRemoved);
 
     if (!name) {
       setSaveError(ERROR_FULL_NAME_REQUIRED);
@@ -331,7 +416,23 @@ const SellerProfileScreen = ({ navigation }) => {
       return;
     }
 
-    const payload = { name, phone, bio, location };
+    const payload = {
+      name,
+      phone,
+      bio,
+      location,
+      city,
+      country,
+      skills: skills.join(','),
+      hourly_rate: hourlyRate ? String(Number(hourlyRate)) : undefined,
+      portfolio_links: profileForm.portfolioLinks || [],
+      ...(hasNewResume || removeResume
+        ? {
+            resumeFile: profileForm.resumeFile,
+            removeResume,
+          }
+        : {}),
+    };
     setIsSaving(true);
     setSaveError('');
 
@@ -339,13 +440,24 @@ const SellerProfileScreen = ({ navigation }) => {
       const response = await updateSellerProfileApi(token, payload);
       const fromApi = response?.data ? mapSellerProfileToUi(response.data) : null;
       const nextProfile = {
+        ...profileForm,
         ...savedProfile,
         fullName: fromApi?.fullName || name,
         phone: fromApi?.phone || phone,
         bio: fromApi ? fromApi.bio : bio,
         location: fromApi ? fromApi.location : location,
+        city: fromApi?.city || city,
+        country: fromApi?.country || country,
+        hourlyRate: fromApi?.hourlyRate || hourlyRate,
+        tags: fromApi?.tags || skills,
         email: fromApi?.email || savedProfile.email,
         photoUri: fromApi?.photoUri || savedProfile.photoUri,
+        resumeUrl: fromApi?.resumeUrl ?? (removeResume && !hasNewResume ? null : savedProfile.resumeUrl),
+        resumeFile: fromApi?.resumeFile ?? (removeResume && !hasNewResume ? null : profileForm.resumeFile),
+        resumeRemoved: false,
+        portfolioLinks: fromApi?.portfolioLinks ?? savedProfile.portfolioLinks,
+        portfolioFiles: fromApi?.portfolioFiles ?? savedProfile.portfolioFiles,
+        connectsBalance: fromApi?.connectsBalance ?? savedProfile.connectsBalance,
         initials: getInitials(fromApi?.fullName || name),
       };
       setSavedProfile(nextProfile);
@@ -375,10 +487,9 @@ const SellerProfileScreen = ({ navigation }) => {
     }
   };
 
-  // Extra edit handlers kept for later (Profile Details / Portfolio sections).
-  /*
   const handleProfessionalChange = updated => {
     setProfileForm(prev => ({ ...prev, ...updated }));
+    if (saveError) setSaveError('');
   };
 
   const handleToggleTag = tag => {
@@ -386,6 +497,7 @@ const SellerProfileScreen = ({ navigation }) => {
       ...prev,
       tags: prev.tags.includes(tag) ? prev.tags.filter(item => item !== tag) : [...prev.tags, tag],
     }));
+    if (saveError) setSaveError('');
   };
 
   const handleAddPortfolioLink = () => {
@@ -404,7 +516,6 @@ const SellerProfileScreen = ({ navigation }) => {
       portfolioLinks: prev.portfolioLinks.filter((_, itemIndex) => itemIndex !== index),
     }));
   };
-  */
 
   const resetToLogin = async () => {
     await dispatch(logoutUser());
@@ -421,16 +532,36 @@ const SellerProfileScreen = ({ navigation }) => {
   };
 
   const statItems = [
-    { id: 'wallet', label: PROFILE_STAT_WALLET, value: profileStats.wallet, icon: 'credit-card', color: greenColor },
-    { id: 'bookings', label: PROFILE_STAT_BOOKINGS, value: profileStats.bookings, icon: 'calendar', color: blueColor },
-    { id: 'earnings', label: SELLER_STAT_EARNINGS, value: profileStats.earnings, icon: 'trending-up', color: redColor },
+    { id: 'activeBookings', label: SELLER_STAT_BOOKINGS, value: profileStats.activeBookings },
+    { id: 'completedBookings', label: SELLER_STAT_COMPLETED_BOOKINGS, value: profileStats.completedBookings },
+    { id: 'totalEarnings', label: SELLER_STAT_EARNINGS, value: profileStats.totalEarnings },
+    { id: 'totalServices', label: SELLER_STAT_TOTAL_SERVICES, value: profileStats.totalServices },
+    { id: 'pendingBids', label: SELLER_STAT_PENDING_BIDS, value: profileStats.pendingBids },
   ];
+
+  const renderStatsRow = items => (
+    <View style={[styles.statsRow, flexDirectionRow, alignItemsCenter]}>
+      {items.map((item, index) => (
+        <React.Fragment key={item.id}>
+          <View style={[styles.statItem, alignItemsCenter]}>
+            <Text style={[styles.statValue, style.fontWeightMedium]} numberOfLines={1}>
+              {item.value}
+            </Text>
+            <Text style={[styles.statLabel, style.fontWeightThin]} numberOfLines={2}>
+              {item.label}
+            </Text>
+          </View>
+          {index < items.length - 1 ? <View style={styles.statDivider} /> : null}
+        </React.Fragment>
+      ))}
+    </View>
+  );
 
   const quickLinkItems = [
     {
       id: 'wallet',
       title: PROFILE_STAT_WALLET,
-      desc: profileStats.wallet,
+      desc: 'Manage wallet balance',
       icon: 'credit-card',
       iconBg: '#E8F8EE',
       iconColor: greenColor,
@@ -527,9 +658,6 @@ const SellerProfileScreen = ({ navigation }) => {
     </View>
   );
 
-  const hasLocation = Boolean(String(savedProfile.location || '').trim());
-  const hasBio = Boolean(String(savedProfile.bio || '').trim());
-
   const renderPersonalFields = () => {
     if (isEditing) {
       return (
@@ -550,25 +678,6 @@ const SellerProfileScreen = ({ navigation }) => {
             onFocus={handleInputFocus}
             style={styles.fieldGap}
           />
-          <CustomTextInput
-            label={PROFILE_LOCATION}
-            value={profileForm.location}
-            onChangeText={value => updateProfileField('location', value)}
-            onFocus={handleInputFocus}
-            style={styles.fieldGap}
-          />
-          <View style={styles.fieldGap}>
-            <FormLabel label={PROFILE_BIO} />
-            <TextInput
-              value={profileForm.bio}
-              onChangeText={value => updateProfileField('bio', value)}
-              multiline
-              textAlignVertical="top"
-              placeholderTextColor={grayColor}
-              onFocus={handleInputFocus}
-              style={[styles.bioInput, style.fontSizeNormal2x]}
-            />
-          </View>
         </>
       );
     }
@@ -580,35 +689,122 @@ const SellerProfileScreen = ({ navigation }) => {
         {renderViewField(PROFILE_EMAIL, savedProfile.email)}
         {renderSectionDivider()}
         {renderViewField(PROFILE_PHONE, savedProfile.phone)}
-        {hasLocation ? (
+      </>
+    );
+  };
+
+  const renderProfessionalView = () => {
+    const profile = savedProfile;
+    const hasHourlyRate = Boolean(String(profile.hourlyRate || '').trim());
+    const hasCountry = Boolean(String(profile.country || '').trim());
+    const hasCity = Boolean(String(profile.city || '').trim());
+    const hasTags = profile.tags?.length > 0;
+    const hasResume = Boolean(profile.resumeUrl);
+    const hasBio = Boolean(String(profile.bio || '').trim());
+
+    if (!hasHourlyRate && !hasCountry && !hasCity && !hasTags && !hasResume && !hasBio) {
+      return <Text style={[styles.emptyHint, style.fontWeightThin]}>No profile details added</Text>;
+    }
+
+    return (
+      <>
+        {hasHourlyRate ? (
           <>
-            {renderSectionDivider()}
-            {renderViewField(PROFILE_LOCATION, savedProfile.location)}
+            {renderViewField(LABEL_HOURLY_RATE, `$${profile.hourlyRate}`)}
+            {hasCountry || hasCity || hasTags || hasResume || hasBio ? renderSectionDivider() : null}
+          </>
+        ) : null}
+        {hasCountry || hasCity ? (
+          <>
+            <View style={[styles.detailRow, flexDirectionRow]}>
+              {hasCountry ? (
+                <View style={styles.detailCol}>{renderDetailItem(COUNTRY, profile.country)}</View>
+              ) : null}
+              {hasCity ? (
+                <View style={styles.detailCol}>{renderDetailItem(LABEL_CITY, profile.city)}</View>
+              ) : null}
+            </View>
+            {hasTags || hasResume || hasBio ? renderSectionDivider() : null}
+          </>
+        ) : null}
+        {hasTags ? (
+          <>
+            <FormLabel label={TAGS_SKILLS} style={styles.compactLabel} />
+            <View style={[styles.tagsView, flexDirectionRow, flexWrap]}>
+              {profile.tags.map(tag => (
+                <View key={tag} style={styles.tagChip}>
+                  <Text style={[styles.tagChipText, style.fontWeightThin]}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+            {hasResume || hasBio ? renderSectionDivider() : null}
           </>
         ) : null}
         {hasBio ? (
           <>
-            {renderSectionDivider()}
-            {renderViewField(PROFILE_BIO, savedProfile.bio)}
+            {renderViewField(BIO, profile.bio)}
+            {hasResume ? renderSectionDivider() : null}
+          </>
+        ) : null}
+        {hasResume ? (
+          <>
+            <FormLabel label={RESUME_CV} style={styles.compactLabel} />
+            <TouchableOpacity
+              style={[styles.resumeRow, flexDirectionRow, alignItemsCenter]}
+              activeOpacity={0.7}
+              onPress={() => Linking.openURL(profile.resumeUrl)}>
+              <View style={[styles.resumeIcon, alignJustifyCenter]}>
+                <Icon name="file-text" size={16} color={redColor} />
+              </View>
+              <Text style={[styles.linkText, style.fontWeightThin, flex]} numberOfLines={1}>
+                {getFileNameFromUrl(profile.resumeUrl)}
+              </Text>
+              <Icon name="external-link" size={14} color={grayColor} />
+            </TouchableOpacity>
           </>
         ) : null}
       </>
     );
   };
 
-  /* Profile Details + Portfolio UI kept for later enable.
-  const renderProfessionalView = () => { ... };
   const renderPortfolioView = () => {
-    if (!savedProfile.portfolioLinks?.length) {
-      return <Text style={[styles.emptyHint, style.fontWeightThin]}>No portfolio links added</Text>;
+    const links = savedProfile.portfolioLinks || [];
+    const files = savedProfile.portfolioFiles || [];
+
+    if (!links.length && !files.length) {
+      return <Text style={[styles.emptyHint, style.fontWeightThin]}>No portfolio added</Text>;
     }
 
     return (
       <>
-        {savedProfile.portfolioLinks.map((link, index) => (
-          <View key={`${link}-${index}`}>
+        {files.map((url, index) => (
+          <View key={`${url}-${index}`}>
             {index > 0 ? <View style={styles.sectionDivider} /> : null}
-            <TouchableOpacity style={[styles.portfolioLink, flexDirectionRow, alignItemsCenter]} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={[styles.portfolioLink, flexDirectionRow, alignItemsCenter]}
+              activeOpacity={0.7}
+              onPress={() => Linking.openURL(url)}>
+              {isImageUrl(url) ? (
+                <Image source={{ uri: url }} style={styles.portfolioThumb} />
+              ) : (
+                <View style={[styles.portfolioIcon, alignJustifyCenter]}>
+                  <Icon name="image" size={14} color={redColor} />
+                </View>
+              )}
+              <Text style={[styles.portfolioLinkText, style.fontWeightThin, flex]} numberOfLines={1}>
+                {getFileNameFromUrl(url)}
+              </Text>
+              <Icon name="external-link" size={14} color={grayColor} />
+            </TouchableOpacity>
+          </View>
+        ))}
+        {links.map((link, index) => (
+          <View key={`${link}-${index}`}>
+            {index > 0 || files.length ? <View style={styles.sectionDivider} /> : null}
+            <TouchableOpacity
+              style={[styles.portfolioLink, flexDirectionRow, alignItemsCenter]}
+              activeOpacity={0.7}
+              onPress={() => Linking.openURL(link)}>
               <View style={[styles.portfolioIcon, alignJustifyCenter]}>
                 <Icon name="link" size={14} color={redColor} />
               </View>
@@ -625,6 +821,28 @@ const SellerProfileScreen = ({ navigation }) => {
 
   const renderPortfolioEdit = () => (
     <>
+      {(profileForm.portfolioFiles || []).length ? (
+        <View style={styles.fieldGap}>
+          <FormLabel label={PORTFOLIO} />
+          {(profileForm.portfolioFiles || []).map((url, index) => (
+            <TouchableOpacity
+              key={`${url}-${index}`}
+              style={[styles.linkItem, flexDirectionRow, alignItemsCenter]}
+              activeOpacity={0.7}
+              onPress={() => Linking.openURL(url)}>
+              {isImageUrl(url) ? (
+                <Image source={{ uri: url }} style={styles.portfolioThumbSmall} />
+              ) : (
+                <Icon name="image" size={16} color={grayColor} />
+              )}
+              <Text style={[styles.linkText, style.fontWeightThin, flex]} numberOfLines={1}>
+                {getFileNameFromUrl(url)}
+              </Text>
+              <Icon name="external-link" size={14} color={grayColor} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
       <CustomTextInput
         label={PORTFOLIO_LINKS}
         value={profileForm.portfolioLink}
@@ -654,7 +872,6 @@ const SellerProfileScreen = ({ navigation }) => {
       ))}
     </>
   );
-  */
 
   const renderFormActions = () => (
     <View>
@@ -756,22 +973,12 @@ const SellerProfileScreen = ({ navigation }) => {
                 </View>
               </View>
             </View>
+          </View>
 
-            <View style={[styles.statsGrid, flexDirectionRow]}>
-              {statItems.map(item => (
-                <View key={item.id} style={styles.statItem}>
-                  <View style={[flexDirectionRow, alignItemsCenter, styles.statTop]}>
-                    <Icon name={item.icon} size={12} color={item.color} />
-                    <Text style={[styles.statLabel, style.fontWeightThin]} numberOfLines={1}>
-                      {item.label}
-                    </Text>
-                  </View>
-                  <Text style={[styles.statValue, style.fontWeightMedium]} numberOfLines={1}>
-                    {item.value}
-                  </Text>
-                </View>
-              ))}
-            </View>
+          <View style={styles.statsSummaryCard}>
+            {renderStatsRow(statItems.slice(0, 3))}
+            <View style={styles.statsRowSeparator} />
+            <View style={styles.statsRowBottom}>{renderStatsRow(statItems.slice(3))}</View>
           </View>
 
           <View style={styles.contentCard}>
@@ -795,7 +1002,6 @@ const SellerProfileScreen = ({ navigation }) => {
             {renderPersonalFields()}
           </View>
 
-          {/* Extra seller sections kept for later
           <View style={styles.contentCard}>
             <View style={[styles.cardHeader, flexDirectionRow, alignItemsCenter]}>
               <View style={[flexDirectionRow, alignItemsCenter, styles.cardHeaderLeft]}>
@@ -808,6 +1014,7 @@ const SellerProfileScreen = ({ navigation }) => {
             <View style={styles.cardHeaderDivider} />
             {isEditing ? (
               <ProfileDetailsStep
+                variant="sellerProfile"
                 form={profileForm}
                 onChange={handleProfessionalChange}
                 onToggleTag={handleToggleTag}
@@ -829,7 +1036,6 @@ const SellerProfileScreen = ({ navigation }) => {
             <View style={styles.cardHeaderDivider} />
             {isEditing ? renderPortfolioEdit() : renderPortfolioView()}
           </View>
-          */}
 
           {isEditing ? renderFormActions() : null}
 
@@ -910,11 +1116,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: borderLightColor,
     padding: spacings.large,
-    marginBottom: hp(1.5),
+    marginBottom: spacings.normal,
   },
   profileTop: {
     gap: spacings.large,
-    marginBottom: spacings.large,
   },
   avatarWrap: {
     position: 'relative',
@@ -973,28 +1178,48 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeExtraSmall.fontSize,
     color: redColor,
   },
-  statsGrid: {
-    gap: spacings.normal,
+  statsSummaryCard: {
+    backgroundColor: whiteColor,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: borderLightColor,
+    paddingVertical: spacings.xLarge,
+    paddingHorizontal: spacings.small,
+    marginBottom: hp(1.5),
+  },
+  statsRow: {
+    width: '100%',
+  },
+  statsRowSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: borderLightColor,
+    marginVertical: spacings.large,
+    marginHorizontal: spacings.normal,
+  },
+  statsRowBottom: {
+    paddingHorizontal: wp(10),
   },
   statItem: {
     flex: 1,
-    backgroundColor: inputBgColor,
-    borderRadius: 10,
-    paddingVertical: spacings.normal,
-    paddingHorizontal: spacings.normal,
+    paddingHorizontal: spacings.xsmall,
+    gap: 4,
   },
-  statTop: {
-    gap: 3,
-    marginBottom: 4,
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: borderLightColor,
+    marginVertical: spacings.small,
   },
   statLabel: {
     fontSize: style.fontSizeExtraSmall.fontSize,
     color: grayColor,
-    flexShrink: 1,
+    textAlign: 'center',
+    lineHeight: 14,
   },
   statValue: {
-    fontSize: style.fontSizeNormal2x.fontSize,
+    fontSize: style.fontSizeLarge.fontSize,
     color: blackColor,
+    textAlign: 'center',
   },
   contentCard: {
     backgroundColor: whiteColor,
@@ -1182,15 +1407,17 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeNormal2x.fontSize,
     color: blackColor,
   },
-  bioInput: {
-    minHeight: hp(12),
-    borderRadius: 10,
+  portfolioThumb: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
     backgroundColor: inputBgColor,
-    paddingHorizontal: spacings.large,
-    paddingVertical: spacings.medium,
-    color: blackColor,
-    borderWidth: 1,
-    borderColor: 'transparent',
+  },
+  portfolioThumbSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: inputBgColor,
   },
   errorText: {
     color: redColor,

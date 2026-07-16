@@ -13,7 +13,11 @@ import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
 import { selectAuth } from '../../redux/slices/authSlice';
-import { getBuyerStatsApi, getBuyerBookingsApi } from '../../services/buyerService';
+import {
+  getBuyerStatsApi,
+  getBuyerBookingsApi,
+} from '../../services/buyerService';
+import { formatAppCurrency } from '../../utils/currency';
 import {
   blackColor,
   borderLightColor,
@@ -31,6 +35,9 @@ import {
 import { style, spacings } from '../../constans/Fonts';
 import {
   BUYER_TABS,
+  BUYER_STAT_ACTIVE_BOOKINGS,
+  BUYER_STAT_TOTAL_JOBS,
+  BUYER_STAT_TOTAL_SPENT,
   DASHBOARD_POST_JOB,
   DASHBOARD_QUICK_ACTIONS,
   DASHBOARD_RECENT_BOOKINGS,
@@ -50,7 +57,7 @@ import {
 import SearchBar from '../../components/SearchBar';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import { heightPercentageToDP as hp } from '../../utils';
 
 const {
   flex,
@@ -130,7 +137,7 @@ const mapDashboardBooking = booking => {
     title,
     creator: sellerName,
     date: formatDashboardBookingDate(booking.createdAt || booking.created_at),
-    price: `₹${amount.toFixed(0)}`,
+    price: `$${amount.toFixed(0)}`,
     status: formatDashboardBookingStatus(booking.status),
     createdAt: booking.createdAt || booking.created_at || '',
   };
@@ -156,27 +163,44 @@ const mergeUniqueBookings = lists => {
 
 const INITIAL_COUNT_CARDS = [
   {
-    id: 'wallet',
-    title: 'Wallet Balance',
-    value: '₹2,500',
-    subtitle: 'Available to spend',
-    icon: 'credit-card',
-  },
-  {
-    id: 'bookings',
-    title: 'Active Bookings',
+    id: 'activeBookings',
+    title: BUYER_STAT_ACTIVE_BOOKINGS,
     value: '0',
-    subtitle: 'Current active bookings',
     icon: 'calendar',
+    iconColor: redColor,
+    iconBg: lightPink,
   },
   {
-    id: 'jobs',
-    title: 'Jobs Posted',
-    value: '5',
-    subtitle: '2 receiving bids',
+    id: 'totalSpent',
+    title: BUYER_STAT_TOTAL_SPENT,
+    value: formatAppCurrency(0, { whole: true }),
+    icon: 'dollar-sign',
+    iconColor: blueColor,
+    iconBg: '#E8F0F8',
+  },
+  {
+    id: 'totalJobs',
+    title: BUYER_STAT_TOTAL_JOBS,
+    value: '0',
     icon: 'briefcase',
+    iconColor: purpleColor,
+    iconBg: '#F3E8FF',
   },
 ];
+
+const mapBuyerStatsToCards = stats =>
+  INITIAL_COUNT_CARDS.map(card => {
+    switch (card.id) {
+      case 'activeBookings':
+        return { ...card, value: String(stats?.activeBookings ?? 0) };
+      case 'totalSpent':
+        return { ...card, value: formatAppCurrency(stats?.totalSpent ?? 0, { whole: true }) };
+      case 'totalJobs':
+        return { ...card, value: String(stats?.totalJobs ?? 0) };
+      default:
+        return card;
+    }
+  });
 
 const DashboardScreen = ({ navigation }) => {
   const { token, user } = useSelector(selectAuth);
@@ -199,21 +223,15 @@ const DashboardScreen = ({ navigation }) => {
         setIsBookingsLoading(true);
         try {
           const [statsResponse, activeRes, completedRes, cancelledRes] = await Promise.all([
-            getBuyerStatsApi(token),
-            getBuyerBookingsApi(token, { tab: 'active', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
-            getBuyerBookingsApi(token, { tab: 'completed', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
-            getBuyerBookingsApi(token, { tab: 'cancelled', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
-          ]);
+              getBuyerStatsApi(token),
+              getBuyerBookingsApi(token, { tab: 'active', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
+              getBuyerBookingsApi(token, { tab: 'completed', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
+              getBuyerBookingsApi(token, { tab: 'cancelled', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
+            ]);
           if (cancelled) return;
 
-          const activeBookings = statsResponse?.data?.stats?.activeBookings ?? 0;
-          setCountCards(prev =>
-            prev.map(card =>
-              card.id === 'bookings'
-                ? { ...card, value: String(activeBookings) }
-                : card,
-            ),
-          );
+          const stats = statsResponse?.data?.stats || {};
+          setCountCards(mapBuyerStatsToCards(stats));
 
           const merged = mergeUniqueBookings([
             Array.isArray(activeRes?.data) ? activeRes.data : [],
@@ -255,7 +273,7 @@ const DashboardScreen = ({ navigation }) => {
       id: '1',
       name: 'Alex Johnson',
       specialty: 'UI/UX Design',
-      price: '₹1,500',
+      price: '$1,500',
       rating: '4.9',
       initials: 'AJ',
     },
@@ -263,7 +281,7 @@ const DashboardScreen = ({ navigation }) => {
       id: '2',
       name: 'Priya Sharma',
       specialty: 'Brand Design',
-      price: '₹2,000',
+      price: '$2,000',
       rating: '4.8',
       initials: 'PS',
     },
@@ -271,7 +289,7 @@ const DashboardScreen = ({ navigation }) => {
       id: '3',
       name: 'Rahul Mehta',
       specialty: 'Video Editing',
-      price: '₹1,800',
+      price: '$1,800',
       rating: '4.7',
       initials: 'RM',
     },
@@ -279,7 +297,7 @@ const DashboardScreen = ({ navigation }) => {
       id: '4',
       name: 'Anita Verma',
       specialty: 'Photography',
-      price: '₹2,200',
+      price: '$2,200',
       rating: '4.9',
       initials: 'AV',
     },
@@ -354,54 +372,29 @@ const DashboardScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Count cards — 2 on top, Jobs Posted full width */}
-        <View style={styles.countGrid}>
-          <View style={[styles.countTopRow, flexDirectionRow]}>
-            {countCards.slice(0, 2).map(card => (
-              <View key={card.id} style={styles.countCard}>
-                <View style={[styles.countIconWrap, alignJustifyCenter]}>
-                  <Icon name={card.icon} size={16} color={redColor} />
+        {/* Count cards */}
+        <View style={[styles.countSummaryCard, flexDirectionRow, alignItemsCenter]}>
+          {countCards.map((card, index) => (
+            <React.Fragment key={card.id}>
+              <View style={[styles.countStat, alignItemsCenter]}>
+                <View
+                  style={[
+                    styles.countIconWrap,
+                    alignJustifyCenter,
+                    { backgroundColor: card.iconBg },
+                  ]}>
+                  <Icon name={card.icon} size={15} color={card.iconColor} />
                 </View>
-                <Text style={[styles.countTitle, style.fontWeightThin]} numberOfLines={1}>
-                  {card.title}
-                </Text>
                 <Text style={[styles.countValue, style.fontWeightMedium]} numberOfLines={1}>
                   {card.value}
                 </Text>
-                <Text style={[styles.countSubtitle, style.fontWeightThin]} numberOfLines={2}>
-                  {card.subtitle}
+                <Text style={[styles.countTitle, style.fontWeightThin]} numberOfLines={2}>
+                  {card.title}
                 </Text>
               </View>
-            ))}
-          </View>
-
-          {countCards[2] ? (
-            <View
-              style={[
-                styles.countCard,
-                styles.countCardFull,
-                flexDirectionRow,
-                alignItemsCenter,
-                justifyContentSpaceBetween,
-              ]}>
-              <View style={[flexDirectionRow, alignItemsCenter, styles.countFullLeft]}>
-                <View style={[styles.countIconWrap, styles.countIconWrapFull, alignJustifyCenter]}>
-                  <Icon name={countCards[2].icon} size={16} color={redColor} />
-                </View>
-                <View style={styles.countTextWrap}>
-                  <Text style={[styles.countTitle, styles.countTitleFull, style.fontWeightThin]} numberOfLines={1}>
-                    {countCards[2].title}
-                  </Text>
-                  <Text style={[styles.countSubtitle, style.fontWeightThin]} numberOfLines={1}>
-                    {countCards[2].subtitle}
-                  </Text>
-                </View>
-              </View>
-              <Text style={[styles.countValue, styles.countValueFull, style.fontWeightMedium]}>
-                {countCards[2].value}
-              </Text>
-            </View>
-          ) : null}
+              {index < countCards.length - 1 ? <View style={styles.countDivider} /> : null}
+            </React.Fragment>
+          ))}
         </View>
 
         {/* Quick Actions */}
@@ -573,66 +566,42 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeExtraSmall.fontSize,
     marginTop: 2,
   },
-  countGrid: {
-    gap: spacings.normal,
-    marginBottom: hp(2),
-  },
-  countTopRow: {
-    gap: spacings.normal,
-  },
-  countCard: {
-    flex: 1,
+  countSummaryCard: {
     backgroundColor: whiteColor,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: borderLightColor,
-    padding: spacings.large,
+    paddingVertical: spacings.xLarge,
+    paddingHorizontal: spacings.small,
+    marginBottom: hp(1.8),
   },
-  countCardFull: {
-    flex: 0,
-    width: '100%',
-  },
-  countFullLeft: {
+  countStat: {
     flex: 1,
-    gap: spacings.normal,
-    minWidth: 0,
-    paddingRight: spacings.normal,
+    paddingHorizontal: spacings.xsmall,
+    gap: 4,
+  },
+  countDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: borderLightColor,
+    marginVertical: spacings.small,
   },
   countIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: lightPink,
-    marginBottom: spacings.normal,
-  },
-  countIconWrapFull: {
-    marginBottom: 0,
-    flexShrink: 0,
-  },
-  countTextWrap: {
-    flex: 1,
-    minWidth: 0,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    marginBottom: spacings.xsmall,
   },
   countTitle: {
     fontSize: style.fontSizeExtraSmall.fontSize,
     color: grayColor,
-    marginBottom: 4,
-  },
-  countTitleFull: {
-    marginBottom: 2,
+    textAlign: 'center',
+    lineHeight: 14,
   },
   countValue: {
     fontSize: style.fontSizeLarge.fontSize,
     color: blackColor,
-    marginBottom: 2,
-  },
-  countValueFull: {
-    marginBottom: 0,
-    flexShrink: 0,
-  },
-  countSubtitle: {
-    fontSize: style.fontSizeExtraSmall.fontSize,
-    color: grayColor,
+    textAlign: 'center',
   },
   sectionHeader: {
     marginBottom: spacings.normal,

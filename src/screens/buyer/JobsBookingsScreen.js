@@ -28,6 +28,9 @@ import {
   acceptBuyerBookingApi,
   rejectBuyerBookingApi,
   cancelBuyerBookingApi,
+  createBuyerBookingApi,
+  createBuyerReviewApi,
+  getBuyerReviewsApi,
   createBuyerJobApi,
   updateBuyerJobApi,
 } from '../../services/buyerService';
@@ -67,6 +70,11 @@ import {
   BOOKINGS_SCREEN_TITLE,
   BUYER_PROTECTION,
   BIDS_SUFFIX,
+  CONTACT_SELLER_BTN,
+  CONTACT_SELLER_AGAIN_BTN,
+  CONTACTED_SELLER_HINT,
+  CONFIRM_BOOKING_MODAL,
+  CONFIRM_CANCEL,
   CONFIRM_YES,
   ERROR_BOOKING_ACTION_FAILED,
   EXPERIENCE_LEVELS,
@@ -105,6 +113,7 @@ import {
   SELLER_PREFIX,
   SERVICES_SCREEN_TITLE,
   SERVICES_SEARCH_PLACEHOLDER,
+  SUBMIT_REVIEW_MODAL,
   TAB_BOOKINGS,
   TAB_MY_JOBS,
   TAB_SERVICES,
@@ -121,8 +130,11 @@ import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import JobDetailModal from '../../components/modal/JobDetailModal';
 import BookingDetailModal from '../../components/modal/BookingDetailModal';
 import BuyerServiceDetailModal from '../../components/modal/BuyerServiceDetailModal';
+import ConfirmBookingModal from '../../components/modal/ConfirmBookingModal';
+import SubmitReviewModal from '../../components/modal/SubmitReviewModal';
 import EmptyState from '../../components/EmptyState';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
 import {
   keyboardAvoidingBehavior,
   scrollInputAboveKeyboard,
@@ -169,11 +181,7 @@ const getBookingStatusStyle = status => {
   return { bg: '#F3F4F6', text: grayColor };
 };
 
-const formatCurrency = (amount, currency = '₹') => {
-  const num = Number(amount);
-  if (Number.isNaN(num)) return `${currency}—`;
-  return `${currency}${num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
-};
+const formatCurrency = (amount, currency = '$') => formatAppCurrency(amount, { decimals: 2 }).replace(/^\$/, currency);
 
 const getBookingInitials = name =>
   String(name || '')
@@ -242,9 +250,9 @@ const mapApiBookingToUi = booking => {
     date: formatBookingDate(booking.createdAt || booking.created_at),
     total: amount,
     fee,
-    currency: '₹',
-    amountDisplay: `₹${amount.toFixed(2)}`,
-    feeDisplay: `₹${fee.toFixed(2)}`,
+    currency: '$',
+    amountDisplay: formatAppCurrency(amount, { decimals: 2 }),
+    feeDisplay: formatAppCurrency(fee, { decimals: 2 }),
     serviceTitle: booking?.service?.title || booking?.title || '—',
     delivery: deliveryDays != null ? `${deliveryDays} days` : '—',
     status: mapApiBookingStatusToUi(booking.status),
@@ -257,6 +265,18 @@ const mapApiBookingToUi = booking => {
     disputeReason: booking.dispute_reason || booking.disputeReason || '',
     deliveryDays,
     serviceImage,
+    serviceId: String(
+      booking?.service_id ?? booking?.serviceId ?? booking?.service?.id ?? '',
+    ),
+    hasReview: Boolean(
+      booking?.has_review ??
+        booking?.hasReview ??
+        booking?.is_reviewed ??
+        booking?.isReviewed ??
+        booking?.review?.id ??
+        booking?.review_id,
+    ),
+    reviewRating: Number(booking?.review?.rating ?? booking?.rating ?? 0) || 0,
     raw: booking,
   };
 };
@@ -315,7 +335,7 @@ const formatBudgetRange = job => {
   const min = job.budget_min ?? job.budgetMin;
   const max = job.budget_max ?? job.budgetMax;
   if (min != null || max != null) {
-    return `₹${min ?? 0}–₹${max ?? 0}`;
+    return `$${min ?? 0}–$${max ?? 0}`;
   }
 
   return '—';
@@ -409,8 +429,8 @@ const mapJobDetailForDisplay = job => {
     status: mapApiStatusToUi(job?.status),
     category: job?.category || job?.job_category || '—',
     jobType: mapJobTypeToUi(job?.job_type || job?.jobType),
-    budgetMin: min != null ? `₹${min}` : '—',
-    budgetMax: max != null ? `₹${max}` : '—',
+    budgetMin: min != null ? `$${min}` : '—',
+    budgetMax: max != null ? `$${max}` : '—',
     deadline: formatDeadlineForDisplay(job?.deadline || job?.deadline_date || '') || '—',
     experienceLevel: mapExperienceLevelToUi(job?.experience_level || job?.experienceLevel),
     description: job?.description || '',
@@ -493,11 +513,7 @@ const toServiceText = value => {
   return '';
 };
 
-const formatServicePrice = value => {
-  const num = Number(value);
-  if (Number.isNaN(num)) return '—';
-  return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-};
+const formatServicePrice = value => formatAppPrice(value);
 
 const extractServiceImageUrls = service => {
   const raw = service?.images || service?.image_urls || [];
@@ -510,11 +526,50 @@ const extractServiceImageUrls = service => {
     .filter(Boolean);
 };
 
+const formatServiceReviewDate = dateStr => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return String(dateStr);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const mapServiceReviewToUi = review => {
+  const buyer = review?.buyer || review?.user || review?.client || {};
+  const buyerName =
+    toServiceText(buyer?.name || buyer?.full_name || review?.buyer_name || review?.user_name) ||
+    'Buyer';
+  return {
+    id: String(review?.id ?? `${buyerName}-${review?.rating ?? ''}-${review?.created_at ?? ''}`),
+    rating: Number(review?.rating) || 0,
+    comment: toServiceText(
+      review?.comment || review?.review || review?.message || review?.feedback,
+    ),
+    buyerName,
+    date: formatServiceReviewDate(review?.created_at || review?.createdAt || review?.date),
+  };
+};
+
+const extractServiceReviews = service => {
+  const raw =
+    service?.reviews ||
+    service?.recent_reviews ||
+    service?.service_reviews ||
+    service?.buyer_reviews ||
+    [];
+  if (!Array.isArray(raw)) return [];
+  return raw.map(mapServiceReviewToUi);
+};
+
 const mapApiServiceToUi = service => {
   const seller = service?.seller || service?.creator || service?.user || {};
   const sellerName =
     toServiceText(seller?.name || seller?.full_name || service?.seller_name) || 'Seller';
-  const ratingNum = Number(service?.rating ?? service?.avg_rating ?? service?.average_rating);
+  const ratingRaw = service?.rating ?? service?.avg_rating ?? service?.average_rating;
+  const ratingNum = Number(
+    typeof ratingRaw === 'object' && ratingRaw != null
+      ? ratingRaw.average ?? ratingRaw.value ?? ratingRaw.rating
+      : ratingRaw,
+  );
   const categoryName =
     toServiceText(service?.category) ||
     toServiceText(service?.categories) ||
@@ -525,11 +580,26 @@ const mapApiServiceToUi = service => {
   const tags = Array.isArray(service?.tags)
     ? service.tags.map(tag => toServiceText(tag)).filter(Boolean)
     : [];
+  const reviews = extractServiceReviews(service);
+  const reviewsCountRaw =
+    service?.reviews_count ??
+    service?.review_count ??
+    service?.total_reviews ??
+    service?.ratings_count ??
+    (typeof ratingRaw === 'object' ? ratingRaw?.count : null);
+  const reviewsCountNum = Number(reviewsCountRaw);
 
   const titleRaw = toServiceText(service?.title);
   const title = titleRaw
     ? titleRaw.charAt(0).toUpperCase() + titleRaw.slice(1)
     : '—';
+  const sellerId =
+    seller?.id ??
+    service?.seller_id ??
+    service?.sellerId ??
+    service?.user_id ??
+    service?.creator_id ??
+    null;
 
   return {
     id: String(service?.id ?? ''),
@@ -541,11 +611,16 @@ const mapApiServiceToUi = service => {
     deliveryDays: delivery == null || delivery === '' ? '—' : String(delivery),
     revisions: service?.revisions == null ? '—' : String(service.revisions),
     rating: Number.isFinite(ratingNum) ? ratingNum.toFixed(1) : '0.0',
-    reviewsCount: Number(service?.reviews_count ?? 0) || 0,
+    reviewsCount:
+      Number.isFinite(reviewsCountNum) && reviewsCountNum >= 0
+        ? reviewsCountNum
+        : reviews.length,
+    reviews,
     ordersCount: Number(service?.orders_count ?? 0) || 0,
     image: images[0] || '',
     images,
     tags,
+    sellerId: sellerId != null && sellerId !== '' ? Number(sellerId) : null,
     sellerName,
     initials:
       sellerName
@@ -619,6 +694,18 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     visible: false,
     service: null,
   });
+  const [confirmBookingModal, setConfirmBookingModal] = useState({
+    visible: false,
+    service: null,
+  });
+  const [isCreatingBooking, setIsCreatingBooking] = useState(false);
+  const [contactedServiceIds, setContactedServiceIds] = useState({});
+  const [reviewedBookingIds, setReviewedBookingIds] = useState({});
+  const [reviewModal, setReviewModal] = useState({
+    visible: false,
+    booking: null,
+  });
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [bookings, setBookings] = useState([]);
   const [isBookingsLoading, setIsBookingsLoading] = useState(false);
 
@@ -642,13 +729,128 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         limit: 20,
       });
       const list = Array.isArray(response?.data) ? response.data : [];
-      setBookings(list.map(mapApiBookingToUi));
+      const mapped = list.map(mapApiBookingToUi);
+      setBookings(mapped);
+      setReviewedBookingIds(prev => {
+        const next = { ...prev };
+        mapped.forEach(item => {
+          if (item.hasReview) next[String(item.id)] = true;
+        });
+        return next;
+      });
     } catch (error) {
       setBookings([]);
     } finally {
       setIsBookingsLoading(false);
     }
   }, [token, bookingFilter]);
+
+  const fetchBuyerReviews = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await getBuyerReviewsApi(token, { page: 1, limit: 100 });
+      const list = Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response?.data?.reviews)
+          ? response.data.reviews
+          : Array.isArray(response?.reviews)
+            ? response.reviews
+            : [];
+      const next = {};
+      list.forEach(review => {
+        const bookingId = String(
+          review?.booking_id ?? review?.bookingId ?? review?.booking?.id ?? '',
+        ).trim();
+        if (bookingId) next[bookingId] = true;
+      });
+      setReviewedBookingIds(prev => ({ ...next, ...prev }));
+    } catch (error) {
+      // Keep local marks if fetch fails
+    }
+  }, [token]);
+
+  const markBookingReviewed = useCallback(bookingId => {
+    const id = String(bookingId || '').trim();
+    if (!id) return;
+    setReviewedBookingIds(prev => (prev[id] ? prev : { ...prev, [id]: true }));
+  }, []);
+
+  const openReviewModal = useCallback(booking => {
+    if (!booking) return;
+    setTimeout(() => {
+      setReviewModal({ visible: true, booking });
+    }, 80);
+  }, []);
+
+  const closeReviewModal = useCallback(() => {
+    if (isSubmittingReview) return;
+    setReviewModal({ visible: false, booking: null });
+  }, [isSubmittingReview]);
+
+  const handleSubmitReview = useCallback(
+    async ({ rating, comment } = {}) => {
+      const booking = reviewModal.booking;
+      if (!booking?.id || isSubmittingReview) return;
+
+      setIsSubmittingReview(true);
+      try {
+        await createBuyerReviewApi(token, {
+          booking_id: booking.id,
+          rating,
+          comment,
+        });
+        markBookingReviewed(booking.id);
+        setReviewModal({ visible: false, booking: null });
+        Alert.alert(SUBMIT_REVIEW_MODAL.successTitle, SUBMIT_REVIEW_MODAL.successMessage);
+        if (isBookingsTab) {
+          fetchBuyerBookings();
+        }
+      } catch (error) {
+        Alert.alert(
+          SUBMIT_REVIEW_MODAL.title,
+          getApiErrorMessage(error?.data, error?.message || SUBMIT_REVIEW_MODAL.failed),
+        );
+      } finally {
+        setIsSubmittingReview(false);
+      }
+    },
+    [
+      reviewModal.booking,
+      isSubmittingReview,
+      token,
+      markBookingReviewed,
+      isBookingsTab,
+      fetchBuyerBookings,
+    ],
+  );
+
+  const markServiceContacted = useCallback(serviceId => {
+    const id = String(serviceId || '').trim();
+    if (!id) return;
+    setContactedServiceIds(prev => (prev[id] ? prev : { ...prev, [id]: true }));
+  }, []);
+
+  const fetchContactedServices = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await getBuyerBookingsApi(token, {
+        tab: 'active',
+        page: 1,
+        limit: 50,
+      });
+      const list = Array.isArray(response?.data) ? response.data : [];
+      const next = {};
+      list.forEach(booking => {
+        const serviceId = String(
+          booking?.service_id ?? booking?.serviceId ?? booking?.service?.id ?? '',
+        ).trim();
+        if (serviceId) next[serviceId] = true;
+      });
+      setContactedServiceIds(prev => ({ ...next, ...prev }));
+    } catch (error) {
+      // Keep any locally marked contacts if fetch fails
+    }
+  }, [token]);
 
   const fetchBuyerServices = useCallback(
     async (page = 1, { isLoadMore = false } = {}) => {
@@ -726,6 +928,79 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     setServiceDetailModal({ visible: false, service: null });
   }, []);
 
+  const openConfirmBooking = useCallback(service => {
+    if (!service) return;
+    setServiceDetailModal({ visible: false, service: null });
+    setTimeout(() => {
+      setConfirmBookingModal({ visible: true, service });
+    }, 80);
+  }, []);
+
+  const closeConfirmBooking = useCallback(() => {
+    if (isCreatingBooking) return;
+    setConfirmBookingModal({ visible: false, service: null });
+  }, [isCreatingBooking]);
+
+  const handleConfirmBooking = useCallback(
+    async ({ notes } = {}) => {
+      const service = confirmBookingModal.service;
+      if (!service || isCreatingBooking) return;
+
+      const sellerId =
+        service.sellerId ??
+        service?.raw?.seller_id ??
+        service?.raw?.seller?.id ??
+        service?.raw?.user_id;
+      const amount = Number(service.priceRaw ?? service.price);
+      const deliveryDays =
+        service.deliveryDays != null && service.deliveryDays !== '—'
+          ? Number(service.deliveryDays)
+          : undefined;
+
+      if (!sellerId || Number.isNaN(Number(sellerId))) {
+        Alert.alert(CONFIRM_BOOKING_MODAL.title, CONFIRM_BOOKING_MODAL.missingSeller);
+        return;
+      }
+      if (!Number.isFinite(amount)) {
+        Alert.alert(CONFIRM_BOOKING_MODAL.title, CONFIRM_BOOKING_MODAL.failed);
+        return;
+      }
+
+      setIsCreatingBooking(true);
+      try {
+        await createBuyerBookingApi(token, {
+          seller_id: sellerId,
+          service_id: service.id,
+          title: service.title,
+          amount,
+          delivery_days: Number.isFinite(deliveryDays) ? deliveryDays : undefined,
+          notes,
+        });
+        markServiceContacted(service.id);
+        setConfirmBookingModal({ visible: false, service: null });
+        Alert.alert(CONFIRM_BOOKING_MODAL.successTitle, CONFIRM_BOOKING_MODAL.successMessage);
+        if (isBookingsTab) {
+          fetchBuyerBookings();
+        }
+      } catch (error) {
+        Alert.alert(
+          CONFIRM_BOOKING_MODAL.title,
+          getApiErrorMessage(error?.data, error?.message || CONFIRM_BOOKING_MODAL.failed),
+        );
+      } finally {
+        setIsCreatingBooking(false);
+      }
+    },
+    [
+      confirmBookingModal.service,
+      isCreatingBooking,
+      token,
+      isBookingsTab,
+      fetchBuyerBookings,
+      markServiceContacted,
+    ],
+  );
+
   const fetchBuyerJobs = useCallback(async (page = 1, { isLoadMore = false } = {}) => {
     if (!token || jobsFetchingRef.current) return;
     if (isLoadMore && !hasMoreJobsRef.current) return;
@@ -800,8 +1075,9 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     useCallback(() => {
       if (!isBookingsTab || !token) return undefined;
       fetchBuyerBookings();
+      fetchBuyerReviews();
       return undefined;
-    }, [isBookingsTab, token, fetchBuyerBookings]),
+    }, [isBookingsTab, token, fetchBuyerBookings, fetchBuyerReviews]),
   );
 
   useFocusEffect(
@@ -813,9 +1089,10 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       setServices([]);
       fetchServiceCategories();
       fetchBuyerServices(1, { isLoadMore: false });
+      fetchContactedServices();
 
       return undefined;
-    }, [isServicesTab, token, fetchBuyerServices, fetchServiceCategories]),
+    }, [isServicesTab, token, fetchBuyerServices, fetchServiceCategories, fetchContactedServices]),
   );
 
   useEffect(() => {
@@ -973,7 +1250,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     } catch (error) {
       // Fallback: prefill from list card if detail API fails
       const budgetParts = String(job.budgetRange || '')
-        .replace(/₹/g, '')
+        .replace(/[$₹]/g, '')
         .split('–');
       setPostJobForm({
         title: job.title || '',
@@ -1103,6 +1380,15 @@ const JobsBookingsScreen = ({ navigation, route }) => {
 
     setIsConfirmingBooking(true);
     try {
+      const acceptedBooking =
+        actionType === 'accept'
+          ? bookings.find(item => String(item.id) === String(bookingId)) || {
+              id: String(bookingId),
+              title: 'Booking',
+              sellerName: '',
+            }
+          : null;
+
       if (actionType === 'accept') {
         await acceptBuyerBookingApi(token, bookingId);
       } else if (actionType === 'reject') {
@@ -1118,6 +1404,14 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         reasonError: '',
       }));
       await fetchBuyerBookings();
+
+      if (actionType === 'accept' && acceptedBooking) {
+        openReviewModal({
+          ...acceptedBooking,
+          status: 'Completed',
+          apiStatus: 'completed',
+        });
+      }
     } catch (error) {
       Alert.alert(
         confirmModal.title,
@@ -1371,61 +1665,98 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     </View>
   );
 
-  const renderServiceCard = ({ item: service }) => (
-    <TouchableOpacity
-      style={styles.serviceCard}
-      activeOpacity={0.85}
-      onPress={() => openServiceDetail(service)}>
-      <View style={styles.serviceCardBody}>
-        <View
-          style={[
-            styles.serviceCardTop,
-            flexDirectionRow,
-            justifyContentSpaceBetween,
-            alignItemsCenter,
-          ]}>
-          <Text style={[styles.servicePrice, style.fontWeightMedium]}>{service.price}</Text>
-          <View style={[flexDirectionRow, alignItemsCenter, styles.serviceRatingRow]}>
-            <Icon name="star" size={12} color={goldColor} />
-            <Text style={[styles.serviceRatingText, style.fontWeightMedium]}>
-              {service.rating}
+  const renderServiceCard = ({ item: service }) => {
+    const hasContacted = Boolean(contactedServiceIds[String(service.id)]);
+    return (
+      <View style={styles.serviceCard}>
+        <TouchableOpacity
+          style={styles.serviceCardBody}
+          activeOpacity={0.85}
+          onPress={() => openServiceDetail(service)}>
+          <View
+            style={[
+              styles.serviceCardTop,
+              flexDirectionRow,
+              justifyContentSpaceBetween,
+              alignItemsCenter,
+            ]}>
+            <Text style={[styles.servicePrice, style.fontWeightMedium]}>{service.price}</Text>
+            <View style={[flexDirectionRow, alignItemsCenter, styles.serviceRatingRow]}>
+              <Icon name="star" size={12} color={goldColor} />
+              <Text style={[styles.serviceRatingText, style.fontWeightMedium]}>
+                {service.rating}
+              </Text>
+              <Text style={[styles.serviceReviewsText, style.fontWeightThin]}>
+                ({service.reviewsCount}{' '}
+                {service.reviewsCount === 1 ? 'review' : 'reviews'})
+              </Text>
+            </View>
+          </View>
+
+          <Text style={[styles.serviceTitle, style.fontWeightMedium]} numberOfLines={2}>
+            {service.title}
+          </Text>
+          <Text style={[styles.serviceCategory, style.fontWeightThin]} numberOfLines={1}>
+            {service.category}
+          </Text>
+          {service.description ? (
+            <Text style={[styles.serviceDescription, style.fontWeightThin]} numberOfLines={2}>
+              {service.description}
             </Text>
-            <Text style={[styles.serviceReviewsText, style.fontWeightThin]}>
-              ({service.reviewsCount})
+          ) : null}
+
+          <View style={[styles.serviceMetaRow, flexDirectionRow, alignItemsCenter]}>
+            <View style={[styles.serviceSellerAvatar, alignJustifyCenter]}>
+              <Text style={[styles.serviceSellerInitials, style.fontWeightMedium]}>
+                {service.initials}
+              </Text>
+            </View>
+            <Text style={[styles.serviceSellerName, style.fontWeightThin, flex]} numberOfLines={1}>
+              {service.sellerName}
+            </Text>
+            <Text style={[styles.deliveryText, style.fontWeightThin]}>
+              {service.deliveryDays === '—'
+                ? '—'
+                : `Delivery ${service.deliveryDays} days`}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
-        <Text style={[styles.serviceTitle, style.fontWeightMedium]} numberOfLines={2}>
-          {service.title}
-        </Text>
-        <Text style={[styles.serviceCategory, style.fontWeightThin]} numberOfLines={1}>
-          {service.category}
-        </Text>
-        {service.description ? (
-          <Text style={[styles.serviceDescription, style.fontWeightThin]} numberOfLines={2}>
-            {service.description}
-          </Text>
+        {hasContacted ? (
+          <View style={[styles.contactedHintRow, flexDirectionRow, alignItemsCenter]}>
+            <Icon name="check-circle" size={14} color={greenColor} />
+            <Text style={[styles.contactedHintText, style.fontWeightThin]}>
+              {CONTACTED_SELLER_HINT}
+            </Text>
+          </View>
         ) : null}
 
-        <View style={[styles.serviceMetaRow, flexDirectionRow, alignItemsCenter]}>
-          <View style={[styles.serviceSellerAvatar, alignJustifyCenter]}>
-            <Text style={[styles.serviceSellerInitials, style.fontWeightMedium]}>
-              {service.initials}
-            </Text>
-          </View>
-          <Text style={[styles.serviceSellerName, style.fontWeightThin, flex]} numberOfLines={1}>
-            {service.sellerName}
+        <TouchableOpacity
+          style={[
+            styles.contactSellerBtn,
+            hasContacted && styles.contactSellerBtnAgain,
+            alignJustifyCenter,
+            flexDirectionRow,
+          ]}
+          activeOpacity={0.85}
+          onPress={() => openConfirmBooking(service)}>
+          <Icon
+            name="message-circle"
+            size={14}
+            color={hasContacted ? redColor : whiteColor}
+          />
+          <Text
+            style={[
+              styles.contactSellerBtnText,
+              hasContacted && styles.contactSellerBtnTextAgain,
+              style.fontWeightMedium,
+            ]}>
+            {hasContacted ? CONTACT_SELLER_AGAIN_BTN : CONTACT_SELLER_BTN}
           </Text>
-          <Text style={[styles.deliveryText, style.fontWeightThin]}>
-            {service.deliveryDays === '—'
-              ? '—'
-              : `Delivery ${service.deliveryDays} days`}
-          </Text>
-        </View>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const renderServicesHeader = () => (
     <View>
@@ -1637,11 +1968,12 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           />
         ) : null}
 
-        {Platform.OS === 'ios' ? (
+        {Platform.OS === 'ios' && showDeadlinePicker ? (
           <Modal
-            visible={showDeadlinePicker}
+            visible
             transparent
             animationType="slide"
+            presentationStyle="overFullScreen"
             onRequestClose={() => setShowDeadlinePicker(false)}>
             <View style={styles.deadlineModalOverlay}>
               <View style={styles.deadlineModalCard}>
@@ -1666,14 +1998,18 @@ const JobsBookingsScreen = ({ navigation, route }) => {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <DateTimePicker
-                  value={selectedDeadline}
-                  mode="date"
-                  display="spinner"
-                  minimumDate={getTodayStart()}
-                  onChange={handleDeadlineChange}
-                  style={styles.deadlineIosPicker}
-                />
+                <View style={styles.deadlinePickerWrap}>
+                  <DateTimePicker
+                    value={selectedDeadline}
+                    mode="date"
+                    display="inline"
+                    minimumDate={getTodayStart()}
+                    onChange={handleDeadlineChange}
+                    style={styles.deadlineIosPicker}
+                    textColor={blackColor}
+                    themeVariant="light"
+                  />
+                </View>
               </View>
             </View>
           </Modal>
@@ -1765,6 +2101,9 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   );
 
   const renderBookingActions = booking => {
+    const isReviewed =
+      Boolean(reviewedBookingIds[String(booking.id)]) || Boolean(booking.hasReview);
+
     if (booking.apiStatus === 'pending' || booking.apiStatus === 'ongoing') {
       return (
         <TouchableOpacity
@@ -1799,6 +2138,27 @@ const JobsBookingsScreen = ({ navigation, route }) => {
             <Text style={[styles.rejectBtnText, style.fontWeightMedium]}>{BOOKING_ACTIONS.REJECT}</Text>
           </TouchableOpacity>
         </View>
+      );
+    }
+    if (booking.apiStatus === 'completed') {
+      if (isReviewed) {
+        return (
+          <View style={[styles.reviewedBadge, flexDirectionRow, alignItemsCenter]}>
+            <Icon name="check-circle" size={14} color={greenColor} />
+            <Text style={[styles.reviewedBadgeText, style.fontWeightMedium]}>
+              {BOOKING_ACTIONS.REVIEWED}
+            </Text>
+          </View>
+        );
+      }
+      return (
+        <TouchableOpacity
+          style={[styles.reviewBtn, flexDirectionRow, alignItemsCenter]}
+          onPress={() => openReviewModal(booking)}
+          disabled={isSubmittingReview}>
+          <Icon name="star" size={14} color={whiteColor} />
+          <Text style={[styles.reviewBtnText, style.fontWeightMedium]}>{BOOKING_ACTIONS.REVIEW}</Text>
+        </TouchableOpacity>
       );
     }
     return null;
@@ -1936,7 +2296,28 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       <BuyerServiceDetailModal
         visible={serviceDetailModal.visible}
         service={serviceDetailModal.service}
+        hasContacted={Boolean(
+          serviceDetailModal.service &&
+            contactedServiceIds[String(serviceDetailModal.service.id)],
+        )}
         onClose={closeServiceDetail}
+        onContactSeller={openConfirmBooking}
+      />
+
+      <ConfirmBookingModal
+        visible={confirmBookingModal.visible}
+        service={confirmBookingModal.service}
+        loading={isCreatingBooking}
+        onClose={closeConfirmBooking}
+        onConfirm={handleConfirmBooking}
+      />
+
+      <SubmitReviewModal
+        visible={reviewModal.visible}
+        booking={reviewModal.booking}
+        loading={isSubmittingReview}
+        onClose={closeReviewModal}
+        onSubmit={handleSubmitReview}
       />
     </SafeAreaView>
   );
@@ -2068,6 +2449,37 @@ const styles = StyleSheet.create({
   deliveryText: {
     fontSize: style.fontSizeExtraSmall.fontSize,
     color: grayColor,
+  },
+  contactSellerBtn: {
+    marginHorizontal: spacings.large,
+    marginBottom: spacings.large,
+    gap: 6,
+    minHeight: 40,
+    borderRadius: 10,
+    backgroundColor: redColor,
+  },
+  contactSellerBtnAgain: {
+    backgroundColor: whiteColor,
+    borderWidth: 1,
+    borderColor: redColor,
+  },
+  contactSellerBtnText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: whiteColor,
+  },
+  contactSellerBtnTextAgain: {
+    color: redColor,
+  },
+  contactedHintRow: {
+    marginHorizontal: spacings.large,
+    marginBottom: spacings.small,
+    gap: 6,
+  },
+  contactedHintText: {
+    flex: 1,
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: greenColor,
+    lineHeight: 16,
   },
   serviceCategoryRow: {
     gap: spacings.small,
@@ -2313,8 +2725,14 @@ const styles = StyleSheet.create({
   deadlineModalDone: {
     color: redColor,
   },
+  deadlinePickerWrap: {
+    width: '100%',
+    height: hp(38),
+    overflow: 'hidden',
+  },
   deadlineIosPicker: {
-    alignSelf: 'center',
+    width: '100%',
+    height: hp(38),
   },
   infoCard: {
     backgroundColor: whiteColor,
@@ -2471,6 +2889,30 @@ const styles = StyleSheet.create({
   rejectBtnText: {
     fontSize: style.fontSizeSmall1x.fontSize,
     color: whiteColor,
+  },
+  reviewBtn: {
+    backgroundColor: goldColor,
+    borderRadius: 8,
+    paddingHorizontal: spacings.normal,
+    paddingVertical: spacings.small,
+    gap: spacings.xsmall,
+  },
+  reviewBtnText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: whiteColor,
+  },
+  reviewedBadge: {
+    borderWidth: 1,
+    borderColor: greenColor,
+    borderRadius: 8,
+    paddingHorizontal: spacings.normal,
+    paddingVertical: spacings.small,
+    gap: spacings.xsmall,
+    backgroundColor: '#E8F8EE',
+  },
+  reviewedBadgeText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: greenColor,
   },
   emptyWrap: {
     paddingVertical: hp(8),

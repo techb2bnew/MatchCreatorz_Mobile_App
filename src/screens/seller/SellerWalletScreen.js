@@ -39,6 +39,7 @@ import {
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import CustomButton from '../../components/CustomButton';
 import EmptyState from '../../components/EmptyState';
+import { formatAppCurrency } from '../../utils/currency';
 import { heightPercentageToDP as hp } from '../../utils';
 
 const {
@@ -49,7 +50,7 @@ const {
   alignJustifyCenter,
 } = BaseStyle;
 
-const formatCurrency = value => `₹${value.toLocaleString('en-IN')}`;
+const formatCurrency = value => formatAppCurrency(value, { whole: true });
 
 const SellerWalletScreen = ({ navigation }) => {
   const [walletStats] = useState({

@@ -15,6 +15,7 @@ import {
   blackColor,
   borderLightColor,
   grayColor,
+  goldColor,
   inputBgColor,
   lightPink,
   redColor,
@@ -22,6 +23,7 @@ import {
 } from '../../constans/Color';
 import { style, spacings } from '../../constans/Fonts';
 import { SELLER_SERVICE_DETAIL_MODAL as COPY } from '../../constans/Constants';
+import { formatAppPrice } from '../../utils/currency';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter } = BaseStyle;
@@ -51,10 +53,21 @@ const getStatusStyle = status => {
   return { bg: '#F2F2F7', text: grayColor, label: normalized || 'PAUSED' };
 };
 
-const formatPrice = value => {
-  const num = Number(value);
-  if (Number.isNaN(num)) return '—';
-  return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+const formatPrice = value => formatAppPrice(value);
+
+const StarRow = ({ rating, size = 14 }) => {
+  const value = Number(rating) || 0;
+  return (
+    <View style={[styles.starsRow, flexDirectionRow, alignItemsCenter]}>
+      {[1, 2, 3, 4, 5].map(star => (
+        <Text
+          key={star}
+          style={[styles.starGlyph, { fontSize: size, color: star <= value ? goldColor : borderLightColor }]}>
+          ★
+        </Text>
+      ))}
+    </View>
+  );
 };
 
 const DetailRow = ({ label, value, multiline = false, last = false }) => (
@@ -78,6 +91,8 @@ const SellerServiceDetailModal = ({
 }) => {
   const statusStyle = getStatusStyle(service?.status);
   const images = Array.isArray(service?.images) ? service.images.filter(Boolean) : [];
+  const reviews = Array.isArray(service?.reviews) ? service.reviews : [];
+  const reviewsCount = service?.reviewsCount ?? reviews.length;
   const delivery =
     service?.deliveryDays != null && service.deliveryDays !== '—'
       ? `${service.deliveryDays} ${COPY.daysSuffix}`
@@ -137,6 +152,16 @@ const SellerServiceDetailModal = ({
                     </Text>
                   </View>
 
+                  <View style={[styles.ratingSummary, flexDirectionRow, alignItemsCenter]}>
+                    <StarRow rating={Math.round(Number(service.rating) || 0)} size={18} />
+                    <Text style={[styles.ratingValue, style.fontWeightMedium]}>
+                      {toText(service.rating) || '—'}
+                    </Text>
+                    <Text style={[styles.reviewsCountText, style.fontWeightThin]}>
+                      ({reviewsCount} {COPY.reviews?.toLowerCase?.() || 'reviews'})
+                    </Text>
+                  </View>
+
                   {images.length > 0 ? (
                     <View style={styles.imagesSection}>
                       <Text style={[styles.sectionLabel, style.fontWeightMedium]}>{COPY.images}</Text>
@@ -159,7 +184,6 @@ const SellerServiceDetailModal = ({
                     <DetailRow label={COPY.category} value={service.category} />
                     <DetailRow label={COPY.delivery} value={delivery} />
                     <DetailRow label={COPY.revisions} value={service.revisions} />
-                    <DetailRow label={COPY.rating} value={service.rating} />
                     <DetailRow
                       label={COPY.bookings}
                       value={
@@ -174,6 +198,35 @@ const SellerServiceDetailModal = ({
                       last
                     />
                   </View>
+
+                  {reviews.length > 0 ? (
+                    <View style={styles.reviewsSection}>
+                      <Text style={[styles.sectionLabel, style.fontWeightMedium]}>{COPY.reviews}</Text>
+                      {reviews.map(review => (
+                        <View key={review.id} style={styles.reviewCard}>
+                          <View
+                            style={[
+                              styles.reviewHeader,
+                              flexDirectionRow,
+                              alignItemsCenter,
+                            ]}>
+                            <Text style={[styles.reviewBuyer, style.fontWeightMedium]} numberOfLines={1}>
+                              {review.buyerName || 'Buyer'}
+                            </Text>
+                            <StarRow rating={review.rating} size={12} />
+                          </View>
+                          {review.comment ? (
+                            <Text style={[styles.reviewComment, style.fontWeightThin]}>
+                              {review.comment}
+                            </Text>
+                          ) : null}
+                          {review.date ? (
+                            <Text style={[styles.reviewDate, style.fontWeightThin]}>{review.date}</Text>
+                          ) : null}
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
 
                   {onEdit ? (
                     <TouchableOpacity
@@ -260,7 +313,7 @@ const styles = StyleSheet.create({
   },
   statusRow: {
     justifyContent: 'space-between',
-    marginBottom: spacings.large,
+    marginBottom: spacings.normal,
   },
   statusBadge: {
     paddingHorizontal: spacings.medium,
@@ -274,6 +327,24 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: style.fontSizeNormal2x.fontSize,
     color: redColor,
+  },
+  ratingSummary: {
+    gap: spacings.small,
+    marginBottom: spacings.large,
+  },
+  starsRow: {
+    gap: 2,
+  },
+  starGlyph: {
+    lineHeight: 20,
+  },
+  ratingValue: {
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: blackColor,
+  },
+  reviewsCountText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: grayColor,
   },
   imagesSection: {
     marginBottom: spacings.large,
@@ -318,6 +389,35 @@ const styles = StyleSheet.create({
   },
   detailValueMultiline: {
     lineHeight: 22,
+  },
+  reviewsSection: {
+    marginBottom: spacings.large,
+  },
+  reviewCard: {
+    backgroundColor: inputBgColor,
+    borderRadius: 10,
+    padding: spacings.large,
+    marginBottom: spacings.small,
+  },
+  reviewHeader: {
+    gap: spacings.small,
+    marginBottom: 4,
+  },
+  reviewBuyer: {
+    flex: 1,
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: blackColor,
+  },
+  reviewComment: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: blackColor,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  reviewDate: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: grayColor,
+    marginTop: 6,
   },
   editBtn: {
     gap: spacings.small,

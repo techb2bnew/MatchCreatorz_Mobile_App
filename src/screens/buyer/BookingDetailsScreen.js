@@ -81,7 +81,7 @@ const BookingDetailsScreen = ({ navigation, route }) => {
       date: '—',
       total: 0,
       fee: 0,
-      currency: '₹',
+      currency: '$',
       status: '—',
     },
   );

@@ -56,6 +56,7 @@ import {
   placeSellerJobBidApi,
 } from '../../services/sellerService';
 import { heightPercentageToDP as hp, widthPercentageToDP as wp } from '../../utils';
+import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
 
 const { flex, flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween, alignJustifyCenter } = BaseStyle;
 
@@ -63,7 +64,7 @@ const formatBudget = (min, max) => {
   const formatNum = value => {
     const num = Number(value);
     if (Number.isNaN(num)) return null;
-    return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+    return formatAppPrice(num);
   };
   const minStr = formatNum(min);
   const maxStr = formatNum(max);
@@ -174,11 +175,7 @@ const formatDeadlineForDisplay = value => {
   return String(value);
 };
 
-const formatDetailAmount = amount => {
-  const num = Number(amount);
-  if (Number.isNaN(num)) return '—';
-  return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-};
+const formatDetailAmount = amount => formatAppPrice(amount);
 
 const mapJobDetailForDisplay = job => {
   const min = job?.budget_min ?? job?.budgetMin;
@@ -238,11 +235,7 @@ const mapApiJobToUi = job => {
   };
 };
 
-const formatBidAmount = amount => {
-  const num = Number(amount);
-  if (Number.isNaN(num)) return '—';
-  return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-};
+const formatBidAmount = amount => formatAppPrice(amount);
 
 const getBidButtonConfig = job => {
   if (!job.hasBid) {

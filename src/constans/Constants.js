@@ -69,25 +69,7 @@ export const LOGIN_TABS = {
   EMAIL: 'email',
 };
 
-// TODO: Remove when API login is integrated
-export const MOCK_LOGIN_PASSWORD = 'Password1';
-export const MOCK_LOGIN_BUYER_EMAIL = 'buyer@yopmail.com';
-export const MOCK_LOGIN_SELLER_EMAIL = 'seller@yopmail.com';
-
-export const MOCK_LOGIN_USERS = {
-  [MOCK_LOGIN_BUYER_EMAIL]: USER_ROLES.BUYER,
-  [MOCK_LOGIN_SELLER_EMAIL]: USER_ROLES.CREATOR,
-};
-
 export const INVALID_LOGIN_MESSAGE = 'Invalid email or password';
-
-export const getMockLoginRole = (email, password) => {
-  const key = email.trim().toLowerCase();
-  if (MOCK_LOGIN_USERS[key] && password === MOCK_LOGIN_PASSWORD) {
-    return MOCK_LOGIN_USERS[key];
-  }
-  return null;
-};
 
 // Splash
 export const SPLASH_APP_NAME = 'MatchCreatorz';
@@ -119,7 +101,6 @@ export const CREATOR_SUBTITLE = 'I want to sell my work';
 export const BUYER_CLIENT = 'Buyer / Client';
 export const BUYER_SUBTITLE = 'I want to hire talent';
 export const OR_SIGN_UP_WITH = 'Or sign up with';
-export const EMAIL_OPTIONAL = 'Email address';
 export const FULL_NAME = 'Full name';
 export const CONFIRM_PASSWORD = 'Confirm password';
 export const ACCEPT_TERMS = 'I accept the';
@@ -190,7 +171,6 @@ export const DATE_OF_BIRTH = 'DATE OF BIRTH';
 export const COUNTRY = 'COUNTRY';
 export const STATE = 'STATE';
 export const CITY = 'City';
-export const ZIP_CODE = 'Zip Code';
 export const CITY_PLACEHOLDER = 'Enter your city';
 export const ZIP_PLACEHOLDER = '110001';
 export const GENDER = 'GENDER';
@@ -198,7 +178,6 @@ export const GENDER = 'GENDER';
 // Uppercase labels shown above form fields
 export const LABEL_FULL_NAME = 'FULL NAME';
 export const LABEL_EMAIL_ADDRESS = 'EMAIL ADDRESS';
-export const LABEL_EMAIL_OPTIONAL = 'EMAIL ADDRESS';
 export const LABEL_PHONE_NUMBER = 'PHONE NUMBER';
 export const LABEL_PASSWORD = 'PASSWORD';
 export const LABEL_CONFIRM_PASSWORD = 'CONFIRM PASSWORD';
@@ -217,16 +196,14 @@ export const ACCOUNT_CREATED_TITLE = 'Account Created!';
 export const ACCOUNT_CREATED_MESSAGE =
   'Your account has been created successfully. Please login after admin approval.';
 
+export const APP_CURRENCY = '$';
+
 export const PRICE_RANGE_OPTIONS = [
-  '₹500–₹1,000/project',
-  '₹1,000–₹5,000/project',
-  '₹5,000–₹10,000/project',
-  '₹10,000+/project',
+  '$500–$1,000/project',
+  '$1,000–$5,000/project',
+  '$5,000–$10,000/project',
+  '$10,000+/project',
 ];
-
-export const COUNTRY_OPTIONS = ['India', 'United States', 'United Kingdom', 'Canada', 'Australia'];
-
-export const STATE_OPTIONS = ['Delhi', 'Maharashtra', 'Karnataka', 'Tamil Nadu', 'Gujarat'];
 
 export const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
@@ -308,14 +285,6 @@ export const CHAT_VIEW_ORDER = 'View Order';
 export const CHAT_TYPE_MESSAGE = 'Type a message...';
 export const CHAT_PRESS_ENTER = 'Tap send to deliver your message';
 export const CHAT_TODAY = 'Today';
-export const CHAT_MENU_TITLE = 'Chat Options';
-export const CHAT_MENU_VIEW_PROFILE = 'View Profile';
-export const CHAT_MENU_MUTE = 'Mute Notifications';
-export const CHAT_MENU_CLEAR_CHAT = 'Clear Chat';
-export const CHAT_MENU_REPORT = 'Report User';
-export const CHAT_MUTED_TOAST = 'Notifications muted for this chat';
-export const CHAT_CLEARED_TOAST = 'Chat cleared';
-export const CHAT_REPORTED_TOAST = 'Report submitted. We will review shortly.';
 export const CHAT_EMPTY_CONVERSATION_MESSAGE = 'Send a message to start the conversation.';
 
 export const EMPTY_BIDS_TITLE = 'No bids yet';
@@ -358,15 +327,11 @@ export const EMPTY_WALLET_TRANSACTIONS_TITLE = 'No transactions yet';
 export const EMPTY_WALLET_TRANSACTIONS_MESSAGE = 'Your wallet activity will show up here.';
 export const TAB_PROFILE = 'Profile';
 export const PROFILE_TITLE = 'My Account';
-export const PROFILE_TAB_PROFILE = 'Profile';
-export const PROFILE_TAB_SECURITY = 'Security';
-export const PROFILE_TAB_SETTINGS = 'Settings';
 export const PROFILE_PERSONAL_INFO = 'Personal Information';
 export const PROFILE_SAVE = 'Save';
 export const PROFILE_EDIT = 'Edit';
 export const PROFILE_CANCEL = 'Cancel';
 export const PROFILE_UPLOAD_PHOTO = 'Update Profile Photo';
-export const PROFILE_REMOVE_PHOTO = 'Remove Photo';
 export const PROFILE_SAVED_TITLE = 'Profile Updated';
 export const PROFILE_SAVED_MESSAGE = 'Your profile has been saved successfully.';
 export const PROFILE_FULL_NAME = 'FULL NAME';
@@ -380,14 +345,11 @@ export const PROFILE_BUYER_ROLE = 'Buyer';
 export const PROFILE_STAT_WALLET = 'Wallet';
 export const PROFILE_STAT_BOOKINGS = 'Bookings';
 export const PROFILE_STAT_JOBS = 'Jobs Posted';
-export const PROFILE_STAT_FAVOURITES = 'Favourites';
-export const PROFILE_SECURITY_TITLE = 'Security Settings';
-export const PROFILE_CURRENT_PASSWORD = 'CURRENT PASSWORD';
-export const PROFILE_NEW_PASSWORD = 'NEW PASSWORD';
-export const PROFILE_CONFIRM_NEW_PASSWORD = 'CONFIRM NEW PASSWORD';
-export const PROFILE_UPDATE_PASSWORD = 'Update Password';
-export const PROFILE_PASSWORD_UPDATED = 'Password updated successfully.';
-export const PROFILE_SETTINGS_TITLE = 'Account Settings';
+export const BUYER_STAT_ACTIVE_BOOKINGS = 'Active Bookings';
+export const BUYER_STAT_COMPLETED_BOOKINGS = 'Completed';
+export const BUYER_STAT_TOTAL_SPENT = 'Total Spent';
+export const BUYER_STAT_TOTAL_JOBS = 'Total Jobs';
+export const BUYER_STAT_OPEN_JOBS = 'Open Jobs';
 export const PROFILE_NOTIFICATION_SETTINGS = 'Notification Settings';
 export const PROFILE_NOTIFICATION_SETTINGS_DESC = 'Control which alerts you receive';
 export const PROFILE_LOGOUT = 'Logout';
@@ -395,8 +357,6 @@ export const PROFILE_LOGOUT_TITLE = 'Logout?';
 export const PROFILE_LOGOUT_MESSAGE = 'Are you sure you want to logout from your account?';
 export const PROFILE_LOGOUT_CONFIRM = 'Yes, Logout';
 export const PROFILE_DELETE_ACCOUNT = 'Delete Account';
-export const PROFILE_DANGER_ZONE = 'Danger Zone';
-export const PROFILE_DELETE_DESC = 'Permanently delete your account and all data.';
 export const PROFILE_DELETE_TITLE = 'Delete Account?';
 export const PROFILE_DELETE_MESSAGE =
   'This action cannot be undone. All your data, bookings and wallet balance will be permanently removed.';
@@ -428,20 +388,8 @@ export const DASHBOARD_QUICK_ACTIONS = 'Quick Actions';
 export const DASHBOARD_RECENT_BOOKINGS = 'Recent Bookings';
 export const DASHBOARD_TOP_CREATORS = 'Top Creators';
 export const DASHBOARD_SEE_ALL = 'See all';
-export const DASHBOARD_AVAILABLE_TO_SPEND = 'Available to spend';
-export const DASHBOARD_NEEDS_ATTENTION = 'needs attention';
-export const DASHBOARD_RECEIVING_BIDS = 'receiving bids';
-export const DASHBOARD_SAVED_CREATORS = 'Saved creators';
 
-export const BUYER_STATIC_USER = {
-  name: 'Sarah Lee',
-  role: 'Buyer',
-  initials: 'SL',
-};
-
-export const PLACEHOLDER_COMING_SOON = 'Coming soon';
 export const NOTIFICATIONS_TITLE = 'Notifications';
-export const NO_NOTIFICATIONS = 'No notifications yet';
 export const MARK_ALL_READ = 'Mark all as read';
 export const UNREAD_NOTIFICATIONS_COUNT = 3;
 
@@ -476,8 +424,37 @@ export const BUYER_SERVICE_DETAIL_MODAL = {
   orders: 'Orders',
   description: 'Description',
   images: 'Images',
+  rating: 'Rating',
+  reviews: 'Reviews',
+  noReviews: 'No reviews yet for this service.',
   daysSuffix: 'days',
+  contactSeller: 'Contact Seller',
+  contactAgain: 'Contact Again',
+  contactedHint: 'You have already contacted this seller. You can contact again if you want.',
 };
+
+export const CONTACT_SELLER_BTN = 'Contact Seller';
+export const CONTACT_SELLER_AGAIN_BTN = 'Contact Again';
+export const CONTACTED_SELLER_HINT =
+  'You have already contacted this seller. You can contact again if you want.';
+
+export const CONFIRM_BOOKING_MODAL = {
+  title: 'Confirm Booking',
+  amount: 'Amount',
+  delivery: 'Delivery',
+  daysSuffix: 'days',
+  platformFeeNote: 'Platform fee of 10% will be applied. Total:',
+  notesLabel: 'NOTES (optional)',
+  notesPlaceholder: 'Any specific requirements or instructions for the seller...',
+  cancel: 'Cancel',
+  confirm: 'Confirm Booking',
+  successTitle: 'Booking Created',
+  successMessage: 'Your booking request has been sent to the seller.',
+  missingSeller: 'Seller information is missing for this service.',
+  failed: 'Could not create booking. Please try again.',
+};
+
+export const PLATFORM_FEE_RATE = 0.1;
 
 export const JOBS_SEARCH_PLACEHOLDER = 'Search...';
 
@@ -520,8 +497,8 @@ export const POST_JOB_LABELS = {
   description: 'Description',
   category: 'Category',
   jobType: 'Job Type',
-  budgetMin: 'Budget Min (₹)',
-  budgetMax: 'Budget Max (₹)',
+  budgetMin: 'Budget Min ($)',
+  budgetMax: 'Budget Max ($)',
   deadline: 'Deadline',
   experienceLevel: 'Experience Level',
   skills: 'Required Skills',
@@ -590,6 +567,23 @@ export const BOOKING_ACTIONS = {
   CANCEL: 'Cancel',
   ACCEPT: 'Accept',
   REJECT: 'Reject',
+  REVIEW: 'Leave Review',
+  REVIEWED: 'Reviewed',
+};
+
+export const SUBMIT_REVIEW_MODAL = {
+  title: 'Rate Your Experience',
+  subtitle: 'Share feedback for this completed booking',
+  ratingLabel: 'RATING',
+  commentLabel: 'COMMENT (optional)',
+  commentPlaceholder: 'What went well? Any feedback for the seller...',
+  cancel: 'Cancel',
+  submit: 'Submit Review',
+  ratingRequired: 'Please select a rating.',
+  successTitle: 'Review Submitted',
+  successMessage: 'Thanks! Your review has been submitted.',
+  failed: 'Could not submit review. Please try again.',
+  alreadyReviewed: 'You have already reviewed this booking.',
 };
 
 export const SELLER_PREFIX = 'Seller:';
@@ -661,13 +655,14 @@ export const SELLER_DASHBOARD_SEE_ALL = 'View all';
 
 export const SELLER_STAT_WALLET = 'Wallet Balance';
 export const SELLER_STAT_BOOKINGS = 'Active Bookings';
+export const SELLER_STAT_COMPLETED_BOOKINGS = 'Completed';
 export const SELLER_STAT_EARNINGS = 'Total Earnings';
 export const SELLER_STAT_RATING = 'Avg Rating';
+export const SELLER_STAT_TOTAL_SERVICES = 'Total Services';
+export const SELLER_STAT_PENDING_BIDS = 'Pending Bids';
 
 export const SELLER_JOBS_TITLE = 'Browse Jobs';
 export const SELLER_JOBS_SEARCH_PLACEHOLDER = 'Search jobs...';
-export const SELLER_WORK_TITLE = 'My Work';
-export const SELLER_WORK_SEARCH_PLACEHOLDER = 'Search...';
 export const SELLER_PROFILE_TITLE = 'My Account';
 export const SELLER_PROFILE_QUICK_LINKS = 'Seller Tools';
 export const SELLER_PROFILE_ROLE = 'Seller';
@@ -688,7 +683,7 @@ export const SELLER_WALLET_TOTAL_EARNINGS = 'Total Earnings';
 export const SELLER_WALLET_TOTAL_WITHDRAWN = 'Total Withdrawn';
 export const SELLER_WALLET_ALL_TIME = 'All time';
 export const SELLER_WALLET_WITHDRAW_TITLE = 'Request Withdrawal';
-export const SELLER_WALLET_WITHDRAW_DESC = 'Minimum withdrawal: ₹500 · Processed within 3-5 business days';
+export const SELLER_WALLET_WITHDRAW_DESC = 'Minimum withdrawal: $500 · Processed within 3-5 business days';
 export const SELLER_WALLET_WITHDRAW_BTN = 'Withdraw Funds';
 export const SELLER_WALLET_WITHDRAW_TOAST = 'Withdrawal request submitted successfully.';
 export const SELLER_WALLET_HISTORY = 'Transaction History';
@@ -709,7 +704,7 @@ export const SELLER_ADD_SERVICE_MODAL = {
   addPhoto: 'Add photo',
   categoryLabel: 'Category (multiple)',
   categoryPlaceholder: 'Select categories...',
-  priceLabel: 'Price (Rs.)',
+  priceLabel: 'Price ($)',
   pricePlaceholder: '999',
   deliveryLabel: 'Delivery (days)',
   deliveryPlaceholder: '3',
@@ -748,6 +743,8 @@ export const SELLER_SERVICE_DETAIL_MODAL = {
   tags: 'Tags',
   description: 'Description',
   rating: 'Rating',
+  reviews: 'Reviews',
+  noReviews: 'No reviews yet for this service.',
   bookings: 'Bookings',
   images: 'Images',
   edit: 'Edit',
@@ -777,7 +774,6 @@ export const SELLER_BIDS_FILTER_REJECTED = 'Rejected';
 export const SELLER_BIDS_YOUR_BID = 'Your Bid';
 export const SELLER_BIDS_BUDGET = 'Budget';
 export const SELLER_BIDS_DELIVERY = 'Delivery';
-export const SELLER_BIDS_CONNECTS_USED = 'Connects Used';
 export const SELLER_PLACE_BID = 'Place Bid';
 export const SELLER_VIEW_JOB = 'View';
 export const SELLER_BID_PENDING = 'Pending';
@@ -789,7 +785,7 @@ export const SELLER_PLACE_BID_MODAL = {
   title: 'Place a Bid',
   jobLabel: 'JOB',
   budgetSuffix: 'budget',
-  amountLabel: 'Bid Amount (₹)',
+  amountLabel: 'Bid Amount ($)',
   amountPlaceholder: 'e.g. 250',
   deliveryLabel: 'Delivery Days',
   deliveryPlaceholder: 'e.g. 5',
@@ -825,8 +821,6 @@ export const SELLER_BOOKINGS_VIEW = 'View';
 export const SELLER_BOOKINGS_ACCEPT = 'Accept';
 export const SELLER_BOOKINGS_CANCEL = 'Cancel';
 export const SELLER_BOOKINGS_SUBMIT = 'Submit Work';
-export const SELLER_BOOKINGS_MARK_COMPLETE = 'Mark Complete';
-export const SELLER_BOOKINGS_DISPUTE = 'Dispute';
 
 export const SELLER_BOOKING_ACCEPT_TITLE = 'Accept Booking?';
 export const SELLER_BOOKING_ACCEPT_MESSAGE =
@@ -858,10 +852,6 @@ export const SELLER_OFFER_ACCEPT_MESSAGE = 'Are you sure you want to accept this
 export const SELLER_OFFER_DECLINE_TITLE = 'Decline Offer?';
 export const SELLER_OFFER_DECLINE_MESSAGE = 'Are you sure you want to decline this offer?';
 
-export const SELLER_BOOKING_COMPLETE_TITLE = 'Mark as Complete?';
-export const SELLER_BOOKING_COMPLETE_MESSAGE =
-  'Confirm that you have delivered the work. The buyer will review and release payment.';
-
 export const SELLER_CONNECTS_BUY_CONFIRM_TITLE = 'Purchase Connects?';
 export const SELLER_CONNECTS_BUY_CONFIRM_MESSAGE = 'Are you sure you want to purchase this connects plan?';
 
@@ -881,29 +871,7 @@ export const SELLER_NOTIF_OFFER_ALERTS_DESC = 'When you receive new offers';
 
 export const SELLER_JOB_CATEGORIES = ['All', 'Design', 'Development', 'Marketing', 'Writing', 'Video'];
 
-// API
-export const API_BASE_URL = 'http://98.91.171.82:5000/api/v1';
 
-export const API_ENDPOINTS = {
-  AUTH_REGISTER: '/auth/register',
-  AUTH_LOGIN: '/auth/login',
-  AUTH_LOGOUT: '/auth/logout',
-  AUTH_FORGOT_PASSWORD: '/auth/forgot-password',
-  AUTH_VERIFY_FORGOT_OTP: '/auth/verify-forgot-otp',
-  AUTH_RESET_PASSWORD: '/auth/reset-password',
-  BUYER_PROFILE: '/buyer/profile',
-  BUYER_STATS: '/buyer/stats',
-  BUYER_JOBS: '/buyer/jobs',
-  BUYER_BOOKINGS: '/buyer/bookings',
-  BUYER_SERVICES: '/buyer/services',
-  SELLER_PROFILE: '/seller/profile',
-  SELLER_JOBS: '/seller/jobs',
-  SELLER_BIDS: '/seller/bids',
-  SELLER_BOOKINGS: '/seller/bookings',
-  SELLER_SERVICES: '/seller/services',
-  SELLER_UPLOAD: '/seller/upload',
-  CATEGORIES: '/categories',
-};
 
 export const API_ROLES = {
   SELLER: 'SELLER',
@@ -935,14 +903,38 @@ export const ERROR_SKILLS_REQUIRED = 'Please select at least one skill';
 export const ERROR_HOURLY_RATE_REQUIRED = 'Hourly rate is required';
 export const ERROR_HOURLY_RATE_INVALID = 'Enter a valid hourly rate';
 export const ERROR_REGISTER_FAILED = 'Registration failed. Please try again.';
-export const ERROR_LOGIN_FAILED = 'Login failed. Please try again.';
-export const ERROR_EMAIL_ALREADY_REGISTERED = 'Email already registered';
 export const ERROR_PROFILE_UPDATE_FAILED = 'Failed to update profile. Please try again.';
 export const ERROR_POST_JOB_FAILED = 'Failed to post job. Please try again.';
 export const ERROR_UPDATE_JOB_FAILED = 'Failed to update job. Please try again.';
 
 export const COMPANY_NAME = 'Company name (optional)';
 export const LABEL_COMPANY_NAME = 'COMPANY NAME';
-export const LABEL_HOURLY_RATE = 'HOURLY RATE (₹)';
+export const LABEL_HOURLY_RATE = 'HOURLY RATE ($)';
 export const HOURLY_RATE_PLACEHOLDER = 'e.g. 500';
-export const REGISTERING = 'Creating account...';
+
+// API
+export const API_BASE_URL = 'https://adminbackend.matchcreatorz.com/api/v1';
+
+export const API_ENDPOINTS = {
+  AUTH_REGISTER: '/auth/register',
+  AUTH_LOGIN: '/auth/login',
+  AUTH_LOGOUT: '/auth/logout',
+  AUTH_FORGOT_PASSWORD: '/auth/forgot-password',
+  AUTH_VERIFY_FORGOT_OTP: '/auth/verify-forgot-otp',
+  AUTH_RESET_PASSWORD: '/auth/reset-password',
+  BUYER_PROFILE: '/buyer/profile',
+  BUYER_STATS: '/buyer/stats',
+  BUYER_JOBS: '/buyer/jobs',
+  BUYER_BOOKINGS: '/buyer/bookings',
+  BUYER_SERVICES: '/buyer/services',
+  BUYER_REVIEWS: '/buyer/reviews',
+  SELLER_PROFILE: '/seller/profile',
+  SELLER_STATS: '/seller/stats',
+  SELLER_JOBS: '/seller/jobs',
+  SELLER_BIDS: '/seller/bids',
+  SELLER_BOOKINGS: '/seller/bookings',
+  SELLER_SERVICES: '/seller/services',
+  SELLER_REVIEWS: '/seller/reviews',
+  SELLER_UPLOAD: '/seller/upload',
+  CATEGORIES: '/categories',
+};

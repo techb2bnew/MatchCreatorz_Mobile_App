@@ -521,6 +521,61 @@ export const getBuyerServicesApi = async (token, params = {}) => {
 };
 
 /**
+ * POST /api/v1/buyer/bookings
+ * Create a new booking (from service or job)
+ * Body: { seller_id, title, amount, service_id?, job_id?, delivery_days?, notes? }
+ */
+export const createBuyerBookingApi = async (token, payload = {}) => {
+  const body = {
+    seller_id: Number(payload.seller_id),
+    title: String(payload.title || '').trim(),
+    amount: Number(payload.amount),
+  };
+  if (payload.service_id != null && payload.service_id !== '') {
+    body.service_id = Number(payload.service_id);
+  }
+  if (payload.job_id != null && payload.job_id !== '') {
+    body.job_id = Number(payload.job_id);
+  }
+  if (payload.delivery_days != null && payload.delivery_days !== '') {
+    body.delivery_days = Number(payload.delivery_days);
+  }
+  if (payload.notes != null && String(payload.notes).trim()) {
+    body.notes = String(payload.notes).trim();
+  }
+
+  console.log(
+    '[BuyerCreateBooking] Payload >>>',
+    JSON.stringify({ endpoint: API_ENDPOINTS.BUYER_BOOKINGS, ...body }, null, 2),
+  );
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.BUYER_BOOKINGS, {
+      method: 'POST',
+      headers: { Accept: '*/*' },
+      body,
+      token,
+    });
+    console.log('[BuyerCreateBooking] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log(
+      '[BuyerCreateBooking] Error response <<<',
+      JSON.stringify(
+        {
+          status: error?.status,
+          message: error?.message,
+          data: error?.data,
+        },
+        null,
+        2,
+      ),
+    );
+    throw error;
+  }
+};
+
+/**
  * GET /api/v1/buyer/bookings/:id
  * Get booking detail
  * Auth header: Bearer token
@@ -649,6 +704,95 @@ export const cancelBuyerBookingApi = async (token, bookingId, cancelReason = '')
       '[BuyerBookingCancel] Error response <<<',
       JSON.stringify(
         { status: error?.status, message: error?.message, data: error?.data },
+        null,
+        2,
+      ),
+    );
+    throw error;
+  }
+};
+
+/**
+ * POST /api/v1/buyer/reviews
+ * Submit a review for a completed booking
+ * Body: { booking_id, rating, comment? }
+ */
+export const createBuyerReviewApi = async (token, payload = {}) => {
+  const body = {
+    booking_id: Number(payload.booking_id),
+    rating: Number(payload.rating),
+  };
+  if (payload.comment != null && String(payload.comment).trim()) {
+    body.comment = String(payload.comment).trim();
+  }
+
+  console.log(
+    '[BuyerCreateReview] Payload >>>',
+    JSON.stringify({ endpoint: API_ENDPOINTS.BUYER_REVIEWS, ...body }, null, 2),
+  );
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.BUYER_REVIEWS, {
+      method: 'POST',
+      headers: { Accept: '*/*' },
+      body,
+      token,
+    });
+    console.log('[BuyerCreateReview] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log(
+      '[BuyerCreateReview] Error response <<<',
+      JSON.stringify(
+        {
+          status: error?.status,
+          message: error?.message,
+          data: error?.data,
+        },
+        null,
+        2,
+      ),
+    );
+    throw error;
+  }
+};
+
+/**
+ * GET /api/v1/buyer/reviews?page=1&limit=20
+ * List reviews given by this buyer
+ */
+export const getBuyerReviewsApi = async (token, params = {}) => {
+  const { page = 1, limit = 50 } = params;
+  const query = new URLSearchParams();
+  query.set('page', String(page));
+  query.set('limit', String(limit));
+  const endpoint = `${API_ENDPOINTS.BUYER_REVIEWS}?${query.toString()}`;
+
+  console.log('[BuyerReviews] Payload >>>', {
+    endpoint,
+    method: 'GET',
+    page,
+    limit,
+    hasToken: Boolean(token),
+  });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[BuyerReviews] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log(
+      '[BuyerReviews] Error response <<<',
+      JSON.stringify(
+        {
+          status: error?.status,
+          message: error?.message,
+          data: error?.data,
+        },
         null,
         2,
       ),

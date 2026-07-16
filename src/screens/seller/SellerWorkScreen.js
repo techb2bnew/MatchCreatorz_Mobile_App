@@ -104,6 +104,7 @@ import {
   cancelSellerBookingApi,
 } from '../../services/sellerService';
 import { heightPercentageToDP as hp, widthPercentageToDP as wp } from '../../utils';
+import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
 
 const { flex, flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween, alignJustifyCenter } = BaseStyle;
 
@@ -134,11 +135,7 @@ const getBookingStatusStyle = status => {
   return { bg: '#F3F4F6', text: grayColor };
 };
 
-const formatInr = amount => {
-  const num = Number(amount);
-  if (Number.isNaN(num)) return '₹—';
-  return `₹${num.toLocaleString('en-IN')}`;
-};
+const formatCurrency = amount => formatAppCurrency(amount, { decimals: 2 });
 
 const getInitials = name =>
   String(name || '')
@@ -150,11 +147,7 @@ const getInitials = name =>
     .slice(0, 2)
     .toUpperCase() || '—';
 
-const formatAmount = value => {
-  const num = Number(value);
-  if (Number.isNaN(num)) return '—';
-  return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-};
+const formatAmount = value => formatAppPrice(value);
 
 const formatBudgetRange = (min, max) => {
   const minStr = formatAmount(min);
@@ -283,8 +276,8 @@ const mapApiBookingToUi = booking => {
     date: formatBookingDate(booking.createdAt || booking.created_at),
     total: amount,
     fee,
-    amountDisplay: `₹${amount.toFixed(2)}`,
-    feeDisplay: fee > 0 ? `₹${fee.toFixed(2)}` : '',
+    amountDisplay: formatAppCurrency(amount, { decimals: 2 }),
+    feeDisplay: fee > 0 ? formatAppCurrency(fee, { decimals: 2 }) : '',
     serviceTitle: booking?.service?.title || booking?.title || title || '—',
     delivery: deliveryDays != null ? `${deliveryDays} days` : '—',
     notes: booking.notes || '',
@@ -384,7 +377,7 @@ const SellerWorkScreen = ({ navigation, route }) => {
   //       initials: 'AJ',
   //       project: 'Logo Design for Tech Startup',
   //       message: 'Hi, I love your portfolio. Would you be interested in working on our logo project?',
-  //       amount: '₹23,240',
+  //       amount: '$23,240',
   //       status: 'Pending',
   //     },
   //     {
@@ -393,7 +386,7 @@ const SellerWorkScreen = ({ navigation, route }) => {
   //       initials: 'CR',
   //       project: 'Brand Identity Package',
   //       message: 'We would like to offer you this project based on your previous work quality.',
-  //       amount: '₹41,500',
+  //       amount: '$41,500',
   //       status: 'Pending',
   //     },
   //   ],
@@ -404,7 +397,7 @@ const SellerWorkScreen = ({ navigation, route }) => {
   //       initials: 'BS',
   //       project: 'Website Redesign',
   //       message: 'I can deliver a modern responsive website within your timeline and budget.',
-  //       amount: '₹58,100',
+  //       amount: '$58,100',
   //       status: 'Pending',
   //     },
   //   ],
@@ -997,10 +990,10 @@ const SellerWorkScreen = ({ navigation, route }) => {
               <Text style={styles.sellerBookingDate}>{booking.date}</Text>
             </View>
             <View style={styles.sellerBookingPriceWrap}>
-              <Text style={[styles.sellerBookingPrice, style.fontWeightMedium]}>{formatInr(booking.total)}</Text>
+              <Text style={[styles.sellerBookingPrice, style.fontWeightMedium]}>{formatCurrency(booking.total)}</Text>
               {booking.fee > 0 ? (
                 <Text style={styles.sellerBookingFee}>
-                  {FEE_INCL_PREFIX} {formatInr(booking.fee)} {FEE_SUFFIX}
+                  {FEE_INCL_PREFIX} {formatCurrency(booking.fee)} {FEE_SUFFIX}
                 </Text>
               ) : null}
             </View>

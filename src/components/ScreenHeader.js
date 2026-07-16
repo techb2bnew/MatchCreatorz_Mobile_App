@@ -11,11 +11,7 @@ import {
   whiteColor,
 } from '../constans/Color';
 import { style, spacings } from '../constans/Fonts';
-import {
-  BUYER_STATIC_USER,
-  SCREEN_NAMES,
-  UNREAD_NOTIFICATIONS_COUNT,
-} from '../constans/Constants';
+import { SCREEN_NAMES, UNREAD_NOTIFICATIONS_COUNT } from '../constans/Constants';
 import { selectAuth } from '../redux/slices/authSlice';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
 
@@ -44,9 +40,9 @@ const ScreenHeader = ({
   const { user: authUser } = useSelector(selectAuth);
 
   const headerUser = useMemo(() => {
-    const source = user || authUser || BUYER_STATIC_USER;
-    const name = source?.name || source?.fullName || BUYER_STATIC_USER.name;
-    const initials = source?.initials || getInitials(name) || BUYER_STATIC_USER.initials;
+    const source = user || authUser;
+    const name = source?.name || source?.fullName || '';
+    const initials = source?.initials || getInitials(name) || '—';
     return { name, initials };
   }, [user, authUser]);
 

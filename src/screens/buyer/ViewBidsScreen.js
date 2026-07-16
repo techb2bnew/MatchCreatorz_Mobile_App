@@ -50,6 +50,7 @@ import SearchBar from '../../components/SearchBar';
 import EmptyState from '../../components/EmptyState';
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import { formatAppCurrency } from '../../utils/currency';
 
 const {
   flex,
@@ -81,12 +82,12 @@ const extractBidsList = response => {
 
 const formatBidAmount = bid => {
   if (bid.amount_display) return bid.amount_display;
-  if (typeof bid.amount === 'string' && bid.amount.includes('₹')) return bid.amount;
+  if (typeof bid.amount === 'string' && bid.amount.includes('$')) return bid.amount;
   const amount = bid.amount ?? bid.bid_amount ?? bid.price ?? bid.proposed_amount;
   if (amount == null || amount === '') return '—';
   const num = Number(amount);
   if (Number.isNaN(num)) return String(amount);
-  return `₹${num.toLocaleString('en-IN')}`;
+  return formatAppCurrency(num, { decimals: 0, whole: true });
 };
 
 const formatDelivery = bid => {
@@ -196,7 +197,7 @@ const ViewBidsScreen = ({ navigation, route }) => {
               title: apiJob.title || routeJob?.title || '—',
               budgetRange:
                 apiJob.budget_min != null || apiJob.budget_max != null
-                  ? `₹${Number(apiJob.budget_min || 0)}–₹${Number(apiJob.budget_max || 0)}`
+                  ? `$${Number(apiJob.budget_min || 0)}–$${Number(apiJob.budget_max || 0)}`
                   : routeJob?.budgetRange || '—',
               bidCount: Number(apiJob.bids_count ?? list.length) || 0,
             });

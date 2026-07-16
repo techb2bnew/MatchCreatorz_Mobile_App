@@ -2,6 +2,36 @@ import { API_ENDPOINTS } from '../constans/Constants';
 import { apiRequest } from './apiClient';
 
 /**
+ * GET /api/v1/seller/stats
+ * Seller dashboard statistics
+ * Auth header: Bearer token
+ */
+export const getSellerStatsApi = async token => {
+  console.log('[SellerStats] Payload >>>', {
+    endpoint: API_ENDPOINTS.SELLER_STATS,
+    method: 'GET',
+    hasToken: Boolean(token),
+  });
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.SELLER_STATS, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[SellerStats] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerStats] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
  * GET /api/v1/seller/bookings
  * List seller's bookings
  * Query: tab (active|completed|cancelled), page, limit
@@ -772,18 +802,118 @@ export const pauseSellerServiceApi = async (token, serviceId) => {
 };
 
 /**
- * PUT /api/v1/seller/profile
- * Body: { name, phone, bio, location }
- * Auth header: Bearer token
+ * GET /api/v1/seller/reviews?page=1&limit=20
+ * List reviews received by this seller
  */
+export const getSellerReviewsApi = async (token, params = {}) => {
+  const { page = 1, limit = 50 } = params;
+  const query = new URLSearchParams();
+  query.set('page', String(page));
+  query.set('limit', String(limit));
+  const endpoint = `${API_ENDPOINTS.SELLER_REVIEWS}?${query.toString()}`;
+
+  console.log('[SellerReviews] Payload >>>', {
+    endpoint,
+    method: 'GET',
+    page,
+    limit,
+    hasToken: Boolean(token),
+  });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[SellerReviews] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log(
+      '[SellerReviews] Error response <<<',
+      JSON.stringify(
+        {
+          status: error?.status,
+          message: error?.message,
+          data: error?.data,
+        },
+        null,
+        2,
+      ),
+    );
+    throw error;
+  }
+};
+
+/**
+ * PUT /api/v1/seller/profile
+ * JSON or multipart when resume is added/removed
+ */
+const appendProfileFile = (formData, field, file) => {
+  if (!file?.uri || file.isRemote) return;
+  formData.append(field, {
+    uri: file.uri,
+    name: file.name || `${field}_${Date.now()}`,
+    type: file.type || 'application/octet-stream',
+  });
+};
+
+export const buildUpdateSellerProfileFormData = ({
+  name,
+  phone,
+  bio,
+  location,
+  city,
+  country,
+  skills,
+  hourly_rate,
+  resumeFile,
+  removeResume,
+  portfolio_links,
+}) => {
+  const formData = new FormData();
+
+  formData.append('name', String(name || '').trim());
+  formData.append('phone', String(phone || '').trim());
+  formData.append('bio', String(bio || '').trim());
+  if (location) formData.append('location', String(location).trim());
+  if (city) formData.append('city', String(city).trim());
+  if (country) formData.append('country', String(country).trim());
+  if (skills) formData.append('skills', String(skills));
+  if (hourly_rate) formData.append('hourly_rate', String(hourly_rate));
+  if (removeResume) formData.append('remove_resume', 'true');
+  appendProfileFile(formData, 'resume', resumeFile);
+  if (Array.isArray(portfolio_links) && portfolio_links.length) {
+    formData.append('portfolio_links', JSON.stringify(portfolio_links));
+  }
+
+  return formData;
+};
+
 export const updateSellerProfileApi = async (token, payload) => {
-  console.log('[SellerProfileUpdate] Payload >>>', JSON.stringify(payload, null, 2));
+  const hasNewResume = payload?.resumeFile?.uri && !payload.resumeFile?.isRemote;
+  const needsMultipart = Boolean(hasNewResume || payload?.removeResume);
+  const debugPayload = needsMultipart
+    ? {
+        ...payload,
+        resumeFile: hasNewResume
+          ? {
+              name: payload.resumeFile.name,
+              type: payload.resumeFile.type,
+              uri: payload.resumeFile.uri,
+            }
+          : null,
+      }
+    : payload;
+  const body = needsMultipart ? buildUpdateSellerProfileFormData(payload) : payload;
+
+  console.log('[SellerProfileUpdate] Payload >>>', JSON.stringify(debugPayload, null, 2));
 
   try {
     const response = await apiRequest(API_ENDPOINTS.SELLER_PROFILE, {
       method: 'PUT',
       headers: { Accept: '*/*' },
-      body: payload,
+      body,
       token,
     });
     console.log('[SellerProfileUpdate] Response <<<', JSON.stringify(response, null, 2));

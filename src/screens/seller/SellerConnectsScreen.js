@@ -45,9 +45,9 @@ const SellerConnectsScreen = ({ navigation }) => {
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [plans] = useState([
-    { id: '1', name: 'Starter', price: '₹830', connects: 30, popular: false, discount: null },
-    { id: '2', name: 'Pro', price: '₹1,660', connects: 80, popular: true, discount: '15% off' },
-    { id: '3', name: 'Business', price: '₹3,320', connects: 200, popular: false, discount: '20% off' },
+    { id: '1', name: 'Starter', price: '$830', connects: 30, popular: false, discount: null },
+    { id: '2', name: 'Pro', price: '$1,660', connects: 80, popular: true, discount: '15% off' },
+    { id: '3', name: 'Business', price: '$3,320', connects: 200, popular: false, discount: '20% off' },
   ]);
   const [history] = useState([
     { id: '1', title: 'Purchased Pro Plan', date: 'Nov 10, 2024', amount: 80, type: 'credit' },

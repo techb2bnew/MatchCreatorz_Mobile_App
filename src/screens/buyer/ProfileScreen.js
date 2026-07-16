@@ -15,7 +15,12 @@ import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
 import { logoutUser, selectAuth } from '../../redux/slices/authSlice';
-import { getBuyerProfileApi, updateBuyerProfileApi } from '../../services/buyerService';
+import {
+  getBuyerProfileApi,
+  updateBuyerProfileApi,
+  getBuyerStatsApi,
+} from '../../services/buyerService';
+import { formatAppCurrency } from '../../utils/currency';
 import { getApiErrorMessage } from '../../services/apiClient';
 import {
   blackColor,
@@ -27,6 +32,8 @@ import {
   lightPink,
   redColor,
   whiteColor,
+  purpleColor,
+  goldColor,
 } from '../../constans/Color';
 import { style, spacings } from '../../constans/Fonts';
 import {
@@ -66,9 +73,11 @@ import {
   PROFILE_SAVE,
   PROFILE_SAVED_MESSAGE,
   PROFILE_SAVED_TITLE,
-  PROFILE_STAT_BOOKINGS,
-  PROFILE_STAT_JOBS,
-  PROFILE_STAT_WALLET,
+  BUYER_STAT_ACTIVE_BOOKINGS,
+  BUYER_STAT_COMPLETED_BOOKINGS,
+  BUYER_STAT_OPEN_JOBS,
+  BUYER_STAT_TOTAL_JOBS,
+  BUYER_STAT_TOTAL_SPENT,
   PROFILE_TITLE,
   PROFILE_UPLOAD_PHOTO,
   ERROR_FULL_NAME_REQUIRED,
@@ -108,6 +117,22 @@ const EMPTY_PROFILE = {
   initials: '',
   photoUri: null,
 };
+
+const EMPTY_PROFILE_STATS = {
+  activeBookings: '0',
+  completedBookings: '0',
+  totalSpent: formatAppCurrency(0, { whole: true }),
+  totalJobs: '0',
+  openJobs: '0',
+};
+
+const mapBuyerStatsToUi = stats => ({
+  activeBookings: String(stats?.activeBookings ?? 0),
+  completedBookings: String(stats?.completedBookings ?? 0),
+  totalSpent: formatAppCurrency(stats?.totalSpent ?? 0, { whole: true }),
+  totalJobs: String(stats?.totalJobs ?? 0),
+  openJobs: String(stats?.openJobs ?? 0),
+});
 
 const getInitials = name =>
   String(name || '')
@@ -149,11 +174,7 @@ const ProfileScreen = ({ navigation }) => {
   const [savedProfile, setSavedProfile] = useState(EMPTY_PROFILE);
   const [profileForm, setProfileForm] = useState(EMPTY_PROFILE);
 
-  const [profileStats] = useState({
-    wallet: '₹2,500',
-    bookings: '12',
-    jobsPosted: '5',
-  });
+  const [profileStats, setProfileStats] = useState(EMPTY_PROFILE_STATS);
 
   const [notificationSettings, setNotificationSettings] = useState([
     { key: 'email', title: NOTIF_EMAIL, description: NOTIF_EMAIL_DESC, enabled: true },
@@ -189,15 +210,24 @@ const ProfileScreen = ({ navigation }) => {
           return;
         }
         try {
-          const response = await getBuyerProfileApi(token);
+          const [profileResponse, statsResponse] = await Promise.all([
+            getBuyerProfileApi(token),
+            getBuyerStatsApi(token),
+          ]);
           if (cancelled) return;
-          const mapped = mapBuyerProfileToUi(response?.data);
+
+          const mapped = mapBuyerProfileToUi(profileResponse?.data);
           setSavedProfile(mapped);
           if (!isEditing) {
             setProfileForm(mapped);
           }
+
+          setProfileStats(mapBuyerStatsToUi(statsResponse?.data?.stats || {}));
         } catch (error) {
-          // Logged inside getBuyerProfileApi
+          // Logged inside buyer service APIs
+          if (!cancelled) {
+            setProfileStats(EMPTY_PROFILE_STATS);
+          }
         }
       };
 
@@ -314,10 +344,73 @@ const ProfileScreen = ({ navigation }) => {
   const hasBio = Boolean(String(savedProfile.bio || '').trim());
 
   const statItems = [
-    { id: 'wallet', label: PROFILE_STAT_WALLET, value: profileStats.wallet, icon: 'credit-card', color: greenColor },
-    { id: 'bookings', label: PROFILE_STAT_BOOKINGS, value: profileStats.bookings, icon: 'calendar', color: blueColor },
-    { id: 'jobs', label: PROFILE_STAT_JOBS, value: profileStats.jobsPosted, icon: 'briefcase', color: redColor },
+    {
+      id: 'activeBookings',
+      label: BUYER_STAT_ACTIVE_BOOKINGS,
+      value: profileStats.activeBookings,
+      icon: 'calendar',
+      iconColor: blueColor,
+      iconBg: '#E8F0F8',
+    },
+    {
+      id: 'completedBookings',
+      label: BUYER_STAT_COMPLETED_BOOKINGS,
+      value: profileStats.completedBookings,
+      icon: 'check-circle',
+      iconColor: greenColor,
+      iconBg: '#E8F8EE',
+    },
+    {
+      id: 'totalSpent',
+      label: BUYER_STAT_TOTAL_SPENT,
+      value: profileStats.totalSpent,
+      icon: 'dollar-sign',
+      iconColor: redColor,
+      iconBg: lightPink,
+    },
+    {
+      id: 'openJobs',
+      label: BUYER_STAT_OPEN_JOBS,
+      value: profileStats.openJobs,
+      icon: 'folder',
+      iconColor: purpleColor,
+      iconBg: '#F3E8FF',
+    },
+    {
+      id: 'totalJobs',
+      label: BUYER_STAT_TOTAL_JOBS,
+      value: profileStats.totalJobs,
+      icon: 'briefcase',
+      iconColor: goldColor,
+      iconBg: '#FFF8E8',
+    },
   ];
+
+  const renderStatsRow = items => (
+    <View style={[styles.statsRow, flexDirectionRow, alignItemsCenter]}>
+      {items.map((item, index) => (
+        <React.Fragment key={item.id}>
+          <View style={[styles.statItem, alignItemsCenter]}>
+            {/* <View
+              style={[
+                styles.statIconWrap,
+                alignJustifyCenter,
+                { backgroundColor: item.iconBg },
+              ]}>
+              <Icon name={item.icon} size={15} color={item.iconColor} />
+            </View> */}
+            <Text style={[styles.statValue, style.fontWeightMedium]} numberOfLines={1}>
+              {item.value}
+            </Text>
+            <Text style={[styles.statLabel, style.fontWeightThin]} numberOfLines={2}>
+              {item.label}
+            </Text>
+          </View>
+          {index < items.length - 1 ? <View style={styles.statDivider} /> : null}
+        </React.Fragment>
+      ))}
+    </View>
+  );
 
   const actionItems = [
     {
@@ -460,20 +553,13 @@ const ProfileScreen = ({ navigation }) => {
                   </View>
                 )}
               </TouchableOpacity>
-              {/* {isEditing ? (
-                <TouchableOpacity
-                  style={[styles.cameraBtn, alignJustifyCenter]}
-                  onPress={() => setShowPhotoOptions(true)}>
-                  <Icon name="camera" size={12} color={whiteColor} />
-                </TouchableOpacity>
-              ) : null} */}
             </View>
 
             <View style={styles.profileInfo}>
-              <Text style={[styles.profileName, style.fontWeightMedium]}>
+              <Text style={[styles.profileName, style.fontWeightMedium]} numberOfLines={1}>
                 {isEditing ? profileForm.fullName : savedProfile.fullName}
               </Text>
-              <Text style={[styles.profileEmail, style.fontWeightThin]}>
+              <Text style={[styles.profileEmail, style.fontWeightThin]} numberOfLines={1}>
                 {isEditing ? profileForm.email : savedProfile.email}
               </Text>
               <View style={[styles.roleBadge, flexDirectionRow, alignItemsCenter]}>
@@ -482,22 +568,12 @@ const ProfileScreen = ({ navigation }) => {
               </View>
             </View>
           </View>
+        </View>
 
-          <View style={[styles.statsGrid, flexDirectionRow]}>
-            {statItems.map(item => (
-              <View key={item.id} style={styles.statItem}>
-                <View style={[flexDirectionRow, alignItemsCenter, styles.statTop]}>
-                  <Icon name={item.icon} size={12} color={item.color} />
-                  <Text style={[styles.statLabel, style.fontWeightThin]} numberOfLines={1}>
-                    {item.label}
-                  </Text>
-                </View>
-                <Text style={[styles.statValue, style.fontWeightMedium]} numberOfLines={1}>
-                  {item.value}
-                </Text>
-              </View>
-            ))}
-          </View>
+        <View style={styles.statsSummaryCard}>
+          {renderStatsRow(statItems.slice(0, 3))}
+          <View style={styles.statsRowSeparator} />
+          <View style={styles.statsRowBottom}>{renderStatsRow(statItems.slice(3))}</View>
         </View>
 
         <View style={styles.contentCard}>
@@ -637,11 +713,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: borderLightColor,
     padding: spacings.xLarge,
-    marginBottom: hp(2),
+    marginBottom: spacings.normal,
   },
   profileTop: {
     gap: spacings.large,
-    marginBottom: spacings.large,
   },
   avatarWrap: {
     position: 'relative',
@@ -700,27 +775,54 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeExtraSmall.fontSize,
     color: blueColor,
   },
-  statsGrid: {
-    gap: spacings.small,
+  statsSummaryCard: {
+    backgroundColor: whiteColor,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: borderLightColor,
+    paddingVertical: spacings.xLarge,
+    paddingHorizontal: spacings.small,
+    marginBottom: hp(1.5),
+  },
+  statsRow: {
+    width: '100%',
+  },
+  statsRowSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: borderLightColor,
+    marginVertical: spacings.large,
+    marginHorizontal: spacings.normal,
+  },
+  statsRowBottom: {
+    paddingHorizontal: wp(10),
   },
   statItem: {
     flex: 1,
-    backgroundColor: inputBgColor,
-    borderRadius: 10,
-    padding: spacings.normal,
+    paddingHorizontal: spacings.xsmall,
+    gap: 4,
   },
-  statTop: {
-    gap: 3,
-    marginBottom: 4,
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: borderLightColor,
+    marginVertical: spacings.small,
+  },
+  statIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    marginBottom: spacings.xsmall,
   },
   statLabel: {
     fontSize: style.fontSizeExtraSmall.fontSize,
     color: grayColor,
-    flexShrink: 1,
+    textAlign: 'center',
+    lineHeight: 14,
   },
   statValue: {
-    fontSize: style.fontSizeNormal2x.fontSize,
+    fontSize: style.fontSizeLarge.fontSize,
     color: blackColor,
+    textAlign: 'center',
   },
   contentCard: {
     backgroundColor: whiteColor,

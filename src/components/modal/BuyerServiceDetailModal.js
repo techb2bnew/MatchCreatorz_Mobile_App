@@ -15,6 +15,7 @@ import {
   borderLightColor,
   grayColor,
   goldColor,
+  greenColor,
   inputBgColor,
   lightPink,
   redColor,
@@ -22,6 +23,7 @@ import {
 } from '../../constans/Color';
 import { style, spacings } from '../../constans/Fonts';
 import { BUYER_SERVICE_DETAIL_MODAL as COPY } from '../../constans/Constants';
+import { formatAppPrice } from '../../utils/currency';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
@@ -41,12 +43,7 @@ const toText = value => {
   return '';
 };
 
-const formatPrice = value => {
-  if (typeof value === 'string' && value.trim().startsWith('₹')) return value;
-  const num = Number(value);
-  if (Number.isNaN(num)) return '—';
-  return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-};
+const formatPrice = value => formatAppPrice(value);
 
 const DetailRow = ({ label, value, multiline = false, last = false }) => (
   <View style={[styles.detailRow, last && styles.detailRowLast]}>
@@ -59,9 +56,16 @@ const DetailRow = ({ label, value, multiline = false, last = false }) => (
   </View>
 );
 
-const BuyerServiceDetailModal = ({ visible, onClose, service }) => {
+const BuyerServiceDetailModal = ({
+  visible,
+  onClose,
+  service,
+  onContactSeller,
+  hasContacted = false,
+}) => {
   const images = Array.isArray(service?.images) ? service.images.filter(Boolean) : [];
   const tags = Array.isArray(service?.tags) ? service.tags.filter(Boolean) : [];
+  const reviews = Array.isArray(service?.reviews) ? service.reviews : [];
   const delivery =
     service?.deliveryDays != null && service.deliveryDays !== '—'
       ? `${service.deliveryDays} ${COPY?.daysSuffix || 'days'}`
@@ -111,12 +115,12 @@ const BuyerServiceDetailModal = ({ visible, onClose, service }) => {
                     {formatPrice(service.priceRaw ?? service.price)}
                   </Text>
                   <View style={[flexDirectionRow, alignItemsCenter, styles.ratingRow]}>
-                    <Icon name="star" size={14} color={goldColor} />
+                    <Text style={styles.starGlyph}>★</Text>
                     <Text style={[styles.ratingText, style.fontWeightMedium]}>
                       {toText(service.rating) || '0.0'}
                     </Text>
                     <Text style={[styles.reviewsText, style.fontWeightThin]}>
-                      ({service.reviewsCount ?? 0})
+                      ({service.reviewsCount ?? 0} {COPY?.reviews?.toLowerCase?.() || 'reviews'})
                     </Text>
                   </View>
                 </View>
@@ -154,6 +158,16 @@ const BuyerServiceDetailModal = ({ visible, onClose, service }) => {
                 <View style={styles.detailsCard}>
                   <DetailRow label={COPY?.seller || 'Seller'} value={service.sellerName} />
                   <DetailRow label={COPY?.category || 'Category'} value={service.category} />
+                  <DetailRow
+                    label={COPY?.rating || 'Rating'}
+                    value={
+                      (service.reviewsCount ?? 0) > 0
+                        ? `${toText(service.rating) || '0.0'} · ${service.reviewsCount} ${
+                            service.reviewsCount === 1 ? 'review' : 'reviews'
+                          }`
+                        : `${toText(service.rating) || '0.0'} · No reviews yet`
+                    }
+                  />
                   <DetailRow label={COPY?.delivery || 'Delivery Time'} value={delivery} />
                   <DetailRow label={COPY?.revisions || 'Revisions'} value={service.revisions} />
                   <DetailRow
@@ -169,9 +183,93 @@ const BuyerServiceDetailModal = ({ visible, onClose, service }) => {
                     last
                   />
                 </View>
+
+                {reviews.length > 0 ? (
+                  <View style={styles.reviewsSection}>
+                    <Text style={[styles.sectionLabel, style.fontWeightMedium]}>
+                      {COPY?.reviews || 'Reviews'}
+                    </Text>
+                    {reviews.map(review => (
+                      <View key={review.id} style={styles.reviewCard}>
+                        <View
+                          style={[styles.reviewHeader, flexDirectionRow, alignItemsCenter]}>
+                          <Text
+                            style={[styles.reviewBuyer, style.fontWeightMedium]}
+                            numberOfLines={1}>
+                            {review.buyerName || 'Buyer'}
+                          </Text>
+                          <View style={[flexDirectionRow, alignItemsCenter, styles.reviewStars]}>
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <Text
+                                key={star}
+                                style={[
+                                  styles.reviewStarGlyph,
+                                  {
+                                    color:
+                                      star <= (review.rating || 0) ? goldColor : borderLightColor,
+                                  },
+                                ]}>
+                                ★
+                              </Text>
+                            ))}
+                          </View>
+                        </View>
+                        {review.comment ? (
+                          <Text style={[styles.reviewComment, style.fontWeightThin]}>
+                            {review.comment}
+                          </Text>
+                        ) : null}
+                        {review.date ? (
+                          <Text style={[styles.reviewDate, style.fontWeightThin]}>
+                            {review.date}
+                          </Text>
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
               </>
             ) : null}
           </ScrollView>
+
+          {service && onContactSeller ? (
+            <>
+              {hasContacted ? (
+                <View style={[styles.contactedHintRow, flexDirectionRow, alignItemsCenter]}>
+                  <Icon name="check-circle" size={14} color={greenColor} />
+                  <Text style={[styles.contactedHintText, style.fontWeightThin]}>
+                    {COPY?.contactedHint ||
+                      'You have already contacted this seller. You can contact again if you want.'}
+                  </Text>
+                </View>
+              ) : null}
+              <TouchableOpacity
+                style={[
+                  styles.contactBtn,
+                  hasContacted && styles.contactBtnAfterHint,
+                  hasContacted && styles.contactBtnAgain,
+                  alignJustifyCenter,
+                ]}
+                activeOpacity={0.85}
+                onPress={() => onContactSeller(service)}>
+                <Icon
+                  name="message-circle"
+                  size={16}
+                  color={hasContacted ? redColor : whiteColor}
+                />
+                <Text
+                  style={[
+                    styles.contactBtnText,
+                    hasContacted && styles.contactBtnTextAgain,
+                    style.fontWeightMedium,
+                  ]}>
+                  {hasContacted
+                    ? COPY?.contactAgain || 'Contact Again'
+                    : COPY?.contactSeller || 'Contact Seller'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -234,6 +332,11 @@ const styles = StyleSheet.create({
   ratingRow: {
     gap: 4,
   },
+  starGlyph: {
+    fontSize: 14,
+    color: goldColor,
+    lineHeight: 16,
+  },
   ratingText: {
     fontSize: style.fontSizeSmall1x.fontSize,
     color: blackColor,
@@ -278,7 +381,7 @@ const styles = StyleSheet.create({
     backgroundColor: inputBgColor,
     borderRadius: 12,
     paddingHorizontal: spacings.large,
-    marginBottom: spacings.small,
+    marginBottom: spacings.large,
   },
   detailRow: {
     paddingVertical: spacings.medium,
@@ -300,5 +403,74 @@ const styles = StyleSheet.create({
   },
   detailValueMultiline: {
     lineHeight: 22,
+  },
+  reviewsSection: {
+    marginBottom: spacings.small,
+  },
+  reviewCard: {
+    backgroundColor: inputBgColor,
+    borderRadius: 10,
+    padding: spacings.large,
+    marginBottom: spacings.small,
+  },
+  reviewHeader: {
+    gap: spacings.small,
+    marginBottom: 4,
+  },
+  reviewBuyer: {
+    flex: 1,
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: blackColor,
+  },
+  reviewStars: {
+    gap: 1,
+  },
+  reviewStarGlyph: {
+    fontSize: 12,
+    lineHeight: 14,
+  },
+  reviewComment: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: blackColor,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  reviewDate: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: grayColor,
+    marginTop: 6,
+  },
+  contactBtn: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: spacings.large,
+    minHeight: 48,
+    borderRadius: 10,
+    backgroundColor: redColor,
+  },
+  contactBtnAgain: {
+    backgroundColor: whiteColor,
+    borderWidth: 1,
+    borderColor: redColor,
+  },
+  contactBtnAfterHint: {
+    marginTop: spacings.normal,
+  },
+  contactBtnText: {
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: whiteColor,
+  },
+  contactBtnTextAgain: {
+    color: redColor,
+  },
+  contactedHintRow: {
+    marginTop: spacings.large,
+    gap: 6,
+  },
+  contactedHintText: {
+    flex: 1,
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: greenColor,
+    lineHeight: 16,
   },
 });

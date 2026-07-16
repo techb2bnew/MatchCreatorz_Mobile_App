@@ -52,12 +52,14 @@ import { getApiErrorMessage } from '../../services/apiClient';
 import {
   createSellerServiceApi,
   getCategoriesApi,
+  getSellerReviewsApi,
   getSellerServiceByIdApi,
   getSellerServicesApi,
   pauseSellerServiceApi,
   publishSellerServiceApi,
   updateSellerServiceApi,
 } from '../../services/sellerService';
+import { formatAppPrice } from '../../utils/currency';
 import { heightPercentageToDP as hp, widthPercentageToDP as wp } from '../../utils';
 
 const { flex, flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween, alignJustifyCenter } =
@@ -97,11 +99,7 @@ const resolveHasMore = (response, page, listLength) => {
   return listLength >= SERVICES_PAGE_LIMIT;
 };
 
-const formatPrice = value => {
-  const num = Number(value);
-  if (Number.isNaN(num)) return '—';
-  return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-};
+const formatPrice = value => formatAppPrice(value);
 
 const toDisplayString = value => {
   if (value == null || value === '') return '';
@@ -145,6 +143,53 @@ const formatCategories = service => {
   return fromCategory || '—';
 };
 
+const formatReviewDate = dateStr => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return String(dateStr);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const mapApiReviewToUi = review => {
+  const buyer = review?.buyer || review?.user || review?.client || {};
+  const buyerName =
+    toDisplayString(buyer?.name || buyer?.full_name || review?.buyer_name || review?.user_name) ||
+    'Buyer';
+  return {
+    id: String(review?.id ?? `${buyerName}-${review?.rating ?? ''}-${review?.created_at ?? ''}`),
+    rating: Number(review?.rating) || 0,
+    comment: toDisplayString(review?.comment || review?.review || review?.message || review?.feedback),
+    buyerName,
+    date: formatReviewDate(review?.created_at || review?.createdAt || review?.date),
+    serviceId: String(
+      review?.service_id ?? review?.serviceId ?? review?.service?.id ?? '',
+    ),
+  };
+};
+
+const extractReviewsFromService = service => {
+  const raw =
+    service?.reviews ||
+    service?.recent_reviews ||
+    service?.service_reviews ||
+    service?.buyer_reviews ||
+    [];
+  if (!Array.isArray(raw)) return [];
+  return raw.map(mapApiReviewToUi);
+};
+
+const extractReviewsCount = (service, reviewsList = []) => {
+  const countRaw =
+    service?.reviews_count ??
+    service?.review_count ??
+    service?.total_reviews ??
+    service?.ratings_count ??
+    (typeof service?.rating === 'object' ? service.rating?.count : null);
+  const countNum = Number(countRaw);
+  if (Number.isFinite(countNum) && countNum >= 0) return countNum;
+  return reviewsList.length;
+};
+
 const mapApiServiceToUi = service => {
   const ratingRaw = service?.rating ?? service?.avg_rating ?? service?.average_rating;
   const ratingNum = Number(
@@ -159,6 +204,7 @@ const mapApiServiceToUi = service => {
       ? bookingsRaw.count ?? bookingsRaw.total ?? bookingsRaw.value
       : bookingsRaw,
   );
+  const reviews = extractReviewsFromService(service);
 
   return {
     id: String(service?.id ?? ''),
@@ -166,6 +212,8 @@ const mapApiServiceToUi = service => {
     category: formatCategories(service),
     price: formatPrice(service?.price),
     rating: Number.isFinite(ratingNum) ? ratingNum.toFixed(1) : '—',
+    reviewsCount: extractReviewsCount(service, reviews),
+    reviews,
     bookings: Number.isFinite(bookingsNum) ? bookingsNum : 0,
     status: mapServiceStatus(service?.status),
     raw: service,
@@ -436,12 +484,39 @@ const SellerMyServicesScreen = ({ navigation }) => {
 
     setDetailModal({ visible: true, loading: true, service: null, error: '' });
     try {
-      const response = await getSellerServiceByIdApi(token, service.id);
+      const [response, reviewsResponse] = await Promise.all([
+        getSellerServiceByIdApi(token, service.id),
+        getSellerReviewsApi(token, { page: 1, limit: 100 }).catch(() => null),
+      ]);
       const detail = response?.data || response;
+      const mapped = mapServiceDetailForDisplay(detail);
+
+      const allReviews = Array.isArray(reviewsResponse?.data)
+        ? reviewsResponse.data
+        : Array.isArray(reviewsResponse?.data?.reviews)
+          ? reviewsResponse.data.reviews
+          : Array.isArray(reviewsResponse?.reviews)
+            ? reviewsResponse.reviews
+            : [];
+      const serviceReviews = allReviews
+        .map(mapApiReviewToUi)
+        .filter(item => !item.serviceId || item.serviceId === String(service.id));
+
+      const reviews =
+        serviceReviews.length > 0
+          ? serviceReviews
+          : Array.isArray(mapped.reviews) && mapped.reviews.length
+            ? mapped.reviews
+            : [];
+
       setDetailModal({
         visible: true,
         loading: false,
-        service: mapServiceDetailForDisplay(detail),
+        service: {
+          ...mapped,
+          reviews,
+          reviewsCount: Math.max(mapped.reviewsCount || 0, reviews.length),
+        },
         error: '',
       });
     } catch (error) {
@@ -596,6 +671,9 @@ const SellerMyServicesScreen = ({ navigation }) => {
         <View style={[flexDirectionRow, alignItemsCenter, styles.ratingRow]}>
           <Icon name="star" size={12} color={goldColor} />
           <Text style={[styles.ratingText, style.fontWeightMedium]}>{String(service.rating)}</Text>
+          <Text style={[styles.bookingsText, style.fontWeightThin]}>
+            ({String(service.reviewsCount ?? 0)} reviews)
+          </Text>
           <Text style={[styles.bookingsText, style.fontWeightThin]}>
             · {String(service.bookings)} bookings
           </Text>

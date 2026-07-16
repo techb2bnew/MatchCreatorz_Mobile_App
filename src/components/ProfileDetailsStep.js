@@ -50,7 +50,7 @@ import {
   ZIP_PLACEHOLDER,
 } from '../constans/Constants';
 import { formatFileSize, showResumePicker } from '../utils/filePicker';
-import { heightPercentageToDP as hp, widthPercentageToDP as wp } from '../utils';
+import { heightPercentageToDP as hp } from '../utils';
 
 const {
   flexDirectionRow,
@@ -107,7 +107,14 @@ const parseDobDisplay = value => {
   return date;
 };
 
-const ProfileDetailsStep = ({ form, onChange, onToggleTag, errors = {} }) => {
+const ProfileDetailsStep = ({
+  form,
+  onChange,
+  onToggleTag,
+  errors = {},
+  variant = 'signup',
+}) => {
+  const isSellerProfile = variant === 'sellerProfile';
   const setField = (field, value) => onChange({ ...form, [field]: value });
   const stateOptions = useMemo(() => getStateNamesForCountry(form.country), [form.country]);
   const countryOptions = useMemo(() => getCountryNames(), []);
@@ -125,7 +132,23 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag, errors = {} }) => {
 
   const handleResumePick = () => {
     showResumePicker(file => {
-      if (file) setField('resumeFile', file);
+      if (file) {
+        onChange({
+          ...form,
+          resumeFile: file,
+          resumeRemoved: false,
+          resumeUrl: null,
+        });
+      }
+    });
+  };
+
+  const handleResumeRemove = () => {
+    onChange({
+      ...form,
+      resumeFile: null,
+      resumeUrl: null,
+      resumeRemoved: Boolean(form.resumeFile || form.resumeUrl),
     });
   };
 
@@ -143,6 +166,118 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag, errors = {} }) => {
     if (nextDate < minDate) nextDate = minDate;
     setField('dateOfBirth', formatDobDisplay(nextDate));
   };
+
+  const renderResumeField = () => (
+    <View style={isSellerProfile ? styles.fieldGap : styles.halfInput}>
+      <FormLabel label={RESUME_CV} />
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={handleResumePick}
+        style={[styles.uploadBox, form.resumeFile && styles.uploadBoxFilled]}>
+        {form.resumeFile ? (
+          <View style={[styles.filePreview, flexDirectionRow, alignItemsCenter]}>
+            <View style={styles.fileIconWrap}>
+              <Icon name="file-text" size={16} color={redColor} />
+            </View>
+            <View style={styles.fileInfo}>
+              <Text style={[styles.fileName, style.fontWeightMedium]} numberOfLines={1}>
+                {form.resumeFile.name}
+              </Text>
+              {form.resumeFile.size ? (
+                <Text style={[styles.fileSize, style.fontWeightThin]}>
+                  {formatFileSize(form.resumeFile.size)}
+                </Text>
+              ) : form.resumeFile.isRemote ? (
+                <Text style={[styles.fileSize, style.fontWeightThin]}>Uploaded resume</Text>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              onPress={handleResumeRemove}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Icon name="x" size={16} color={grayColor} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={[styles.uploadEmpty, flexDirectionRow, alignItemsCenter]}>
+            <Icon name="paperclip" size={16} color={grayColor} />
+            <Text style={[styles.uploadText, style.fontWeightThin]} numberOfLines={1}>
+              {UPLOAD_RESUME}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+
+  if (isSellerProfile) {
+    return (
+      <View>
+        <CustomTextInput
+          value={form.hourlyRate}
+          onChangeText={val => setField('hourlyRate', val.replace(/[^0-9.]/g, ''))}
+          label={LABEL_HOURLY_RATE}
+          required
+          placeholder={HOURLY_RATE_PLACEHOLDER}
+          leftIcon="dollar-sign"
+          keyboardType="decimal-pad"
+          error={errors.hourlyRate}
+          style={styles.fieldGap}
+        />
+
+        <View style={[styles.gridRow, flexDirectionRow]}>
+          <CustomDropdown
+            label={COUNTRY}
+            required
+            value={form.country}
+            options={countryOptions}
+            searchable
+            onSelect={handleCountryChange}
+          />
+          <CustomTextInput
+            value={form.city}
+            onChangeText={val => setField('city', val)}
+            label={LABEL_CITY}
+            required
+            placeholder={CITY_PLACEHOLDER}
+            leftIcon="map-pin"
+            error={errors.city}
+            style={styles.halfInput}
+          />
+        </View>
+        {errors.country ? <Text style={styles.errorText}>{errors.country}</Text> : null}
+
+        <FormLabel label={TAGS_SKILLS} required />
+        <View style={[styles.tagsBox, flexDirectionRow, flexWrap, errors.skills && styles.tagsBoxError]}>
+          {SKILL_TAGS.map(tag => {
+            const isSelected = form.tags.includes(tag);
+            return (
+              <TouchableOpacity
+                key={tag}
+                activeOpacity={0.85}
+                onPress={() => onToggleTag(tag)}
+                style={[styles.tag, isSelected && styles.tagSelected]}>
+                <Text style={[styles.tagText, style.fontWeightThin, isSelected && styles.tagTextSelected]}>
+                  {tag}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        {errors.skills ? <Text style={styles.errorText}>{errors.skills}</Text> : null}
+
+        <CustomTextInput
+          value={form.bio}
+          onChangeText={val => setField('bio', val)}
+          label={BIO}
+          placeholder={BIO_PLACEHOLDER}
+          style={styles.bioInput}
+          inputStyle={styles.bioTextInput}
+        />
+
+        {renderResumeField()}
+      </View>
+    );
+  }
 
   return (
     <View>
@@ -193,11 +328,12 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag, errors = {} }) => {
         />
       ) : null}
 
-      {Platform.OS === 'ios' ? (
+      {Platform.OS === 'ios' && showDobPicker ? (
         <Modal
-          visible={showDobPicker}
+          visible
           transparent
           animationType="slide"
+          presentationStyle="overFullScreen"
           onRequestClose={() => setShowDobPicker(false)}>
           <View style={styles.dobModalOverlay}>
             <View style={styles.dobModalCard}>
@@ -218,15 +354,19 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag, errors = {} }) => {
                   </Text>
                 </TouchableOpacity>
               </View>
-              <DateTimePicker
-                value={selectedDob}
-                mode="date"
-                display="spinner"
-                maximumDate={getTodayStart()}
-                minimumDate={getMinDobDate()}
-                onChange={handleDobChange}
-                style={styles.dobIosPicker}
-              />
+              <View style={styles.dobPickerWrap}>
+                <DateTimePicker
+                  value={selectedDob}
+                  mode="date"
+                  display="inline"
+                  maximumDate={getTodayStart()}
+                  minimumDate={getMinDobDate()}
+                  onChange={handleDobChange}
+                  style={styles.dobIosPicker}
+                  textColor={blackColor}
+                  themeVariant="light"
+                />
+              </View>
             </View>
           </View>
         </Modal>
@@ -328,41 +468,7 @@ const ProfileDetailsStep = ({ form, onChange, onToggleTag, errors = {} }) => {
       />
 
       <View style={[styles.bottomRow, flexDirectionRow, alignItemsFlexStart]}>
-        <View style={styles.halfInput}>
-          <FormLabel label={RESUME_CV} />
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={handleResumePick}
-            style={[styles.uploadBox, form.resumeFile && styles.uploadBoxFilled]}>
-            {form.resumeFile ? (
-              <View style={[styles.filePreview, flexDirectionRow, alignItemsCenter]}>
-                <View style={styles.fileIconWrap}>
-                  <Icon name="file-text" size={16} color={redColor} />
-                </View>
-                <View style={styles.fileInfo}>
-                  <Text style={[styles.fileName, style.fontWeightMedium]} numberOfLines={1}>
-                    {form.resumeFile.name}
-                  </Text>
-                  <Text style={[styles.fileSize, style.fontWeightThin]}>
-                    {formatFileSize(form.resumeFile.size)}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => setField('resumeFile', null)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Icon name="x" size={16} color={grayColor} />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={[styles.uploadEmpty, flexDirectionRow, alignItemsCenter]}>
-                <Icon name="paperclip" size={16} color={grayColor} />
-                <Text style={[styles.uploadText, style.fontWeightThin]} numberOfLines={1}>
-                  {UPLOAD_RESUME}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
+        {renderResumeField()}
         <CustomDropdown
           label={RESPONSE_TIME}
           value={form.responseTime}
@@ -435,8 +541,14 @@ const styles = StyleSheet.create({
   dobModalDone: {
     color: redColor,
   },
+  dobPickerWrap: {
+    width: '100%',
+    height: hp(38),
+    overflow: 'hidden',
+  },
   dobIosPicker: {
-    width: wp(100),
+    width: '100%',
+    height: hp(38),
   },
   tagsBox: {
     backgroundColor: inputBgColor,
@@ -475,6 +587,9 @@ const styles = StyleSheet.create({
   },
   tagTextSelected: {
     color: redColor,
+  },
+  fieldGap: {
+    marginBottom: hp(1.2),
   },
   bioInput: {
     marginBottom: hp(1.5),
