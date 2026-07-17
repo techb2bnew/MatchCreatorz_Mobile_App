@@ -1,5 +1,6 @@
-import { API_ENDPOINTS, mapAppRoleToApiRole, USER_ROLES } from '../constans/Constants';
+import { API_ENDPOINTS, ERROR_UPLOAD_TOO_LARGE, mapAppRoleToApiRole, USER_ROLES } from '../constans/Constants';
 import { apiRequest } from './apiClient';
+import { getFilesTotalSize, MAX_TOTAL_UPLOAD_BYTES } from '../utils/filePicker';
 
 const appendFile = (formData, field, file) => {
   if (!file?.uri) return;
@@ -39,9 +40,30 @@ export const buildRegisterFormData = ({
       ? phone
       : `+91${phoneDigits}`
     : '';
-  const skills = Array.isArray(profile.tags) ? profile.tags : [];
+  const skills =
+    typeof profile.skills === 'string'
+      ? profile.skills
+          .split(',')
+          .map(item => item.trim())
+          .filter(Boolean)
+      : Array.isArray(profile.tags)
+        ? profile.tags
+        : [];
   const portfolioFiles = Array.isArray(portfolio.portfolioFiles) ? portfolio.portfolioFiles : [];
   const portfolioLinks = Array.isArray(portfolio.portfolioLinks) ? portfolio.portfolioLinks : [];
+
+  const uploadFiles = [
+    profileImage,
+    profile.resumeFile,
+    ...portfolioFiles,
+  ].filter(Boolean);
+  const totalUploadBytes = getFilesTotalSize(uploadFiles);
+
+  if (totalUploadBytes > MAX_TOTAL_UPLOAD_BYTES) {
+    const error = new Error(ERROR_UPLOAD_TOO_LARGE);
+    error.status = 413;
+    throw error;
+  }
 
   const debugPayload = {
     name: fullName.trim(),
@@ -50,8 +72,9 @@ export const buildRegisterFormData = ({
     role: apiRole,
     phone: formattedPhone || undefined,
     profile_image: profileImage
-      ? { name: profileImage.name, type: profileImage.type, uri: profileImage.uri }
+      ? { name: profileImage.name, type: profileImage.type, uri: profileImage.uri, size: profileImage.size }
       : undefined,
+    total_upload_bytes: totalUploadBytes,
   };
 
   formData.append('name', debugPayload.name);
@@ -76,12 +99,14 @@ export const buildRegisterFormData = ({
           name: profile.resumeFile.name,
           type: profile.resumeFile.type,
           uri: profile.resumeFile.uri,
+          size: profile.resumeFile.size,
         }
       : undefined;
     debugPayload.portfolio_files = portfolioFiles.map(file => ({
       name: file.name,
       type: file.type,
       uri: file.uri,
+      size: file.size,
     }));
     debugPayload.portfolio_links = portfolioLinks.length ? portfolioLinks : undefined;
 
@@ -146,6 +171,7 @@ export const registerUserApi = async payload => {
       status: error?.status,
       message: error?.message,
       data: error?.data,
+      errors: error?.data?.errors,
     });
     throw error;
   }

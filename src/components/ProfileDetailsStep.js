@@ -39,6 +39,7 @@ import {
   LABEL_CITY,
   LABEL_HOURLY_RATE,
   LABEL_ZIP_CODE,
+  POST_JOB_PLACEHOLDERS,
   PROFILE_DETAILS,
   RESPONSE_TIME,
   RESPONSE_TIME_OPTIONS,
@@ -270,6 +271,7 @@ const ProfileDetailsStep = ({
           onChangeText={val => setField('bio', val)}
           label={BIO}
           placeholder={BIO_PLACEHOLDER}
+          multiline
           style={styles.bioInput}
           inputStyle={styles.bioTextInput}
         />
@@ -439,30 +441,23 @@ const ProfileDetailsStep = ({
         />
       </View>
 
-      <FormLabel label={TAGS_SKILLS} required />
-      <View style={[styles.tagsBox, flexDirectionRow, flexWrap, errors.skills && styles.tagsBoxError]}>
-        {SKILL_TAGS.map(tag => {
-          const isSelected = form.tags.includes(tag);
-          return (
-            <TouchableOpacity
-              key={tag}
-              activeOpacity={0.85}
-              onPress={() => onToggleTag(tag)}
-              style={[styles.tag, isSelected && styles.tagSelected]}>
-              <Text style={[styles.tagText, style.fontWeightThin, isSelected && styles.tagTextSelected]}>
-                {tag}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-      {errors.skills ? <Text style={styles.errorText}>{errors.skills}</Text> : null}
+      <CustomTextInput
+        value={form.skills || ''}
+        onChangeText={val => setField('skills', val)}
+        label={TAGS_SKILLS}
+        required
+        placeholder={POST_JOB_PLACEHOLDERS.skills}
+        leftIcon="tag"
+        error={errors.skills}
+        style={styles.fieldGap}
+      />
 
       <CustomTextInput
         value={form.bio}
         onChangeText={val => setField('bio', val)}
         label={BIO}
         placeholder={BIO_PLACEHOLDER}
+        multiline
         style={styles.bioInput}
         inputStyle={styles.bioTextInput}
       />
@@ -595,7 +590,8 @@ const styles = StyleSheet.create({
     marginBottom: hp(1.5),
   },
   bioTextInput: {
-    minHeight: hp(10),
+    minHeight: Platform.OS === 'ios' ? hp(8) : hp(10),
+    height: Platform.OS === 'ios' ? hp(8) : undefined,
     textAlignVertical: 'top',
   },
   uploadBox: {

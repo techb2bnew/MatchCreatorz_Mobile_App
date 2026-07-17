@@ -31,6 +31,35 @@ export const getBuyerProfileApi = async token => {
 };
 
 /**
+ * DELETE /api/v1/buyer/account
+ * Soft delete buyer account
+ * Body: { reason }
+ * Auth header: Bearer token
+ */
+export const deleteBuyerAccountApi = async (token, reason) => {
+  const payload = { reason: String(reason || '').trim() };
+  console.log('[BuyerDeleteAccount] Payload >>>', JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.BUYER_ACCOUNT, {
+      method: 'DELETE',
+      headers: { Accept: '*/*' },
+      body: payload,
+      token,
+    });
+    console.log('[BuyerDeleteAccount] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerDeleteAccount] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
  * GET /api/v1/buyer/stats
  * Auth header: Bearer token
  */

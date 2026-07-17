@@ -32,6 +32,35 @@ export const getSellerStatsApi = async token => {
 };
 
 /**
+ * DELETE /api/v1/seller/account
+ * Soft delete seller account
+ * Body: { reason }
+ * Auth header: Bearer token
+ */
+export const deleteSellerAccountApi = async (token, reason) => {
+  const payload = { reason: String(reason || '').trim() };
+  console.log('[SellerDeleteAccount] Payload >>>', JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.SELLER_ACCOUNT, {
+      method: 'DELETE',
+      headers: { Accept: '*/*' },
+      body: payload,
+      token,
+    });
+    console.log('[SellerDeleteAccount] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerDeleteAccount] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
  * GET /api/v1/seller/bookings
  * List seller's bookings
  * Query: tab (active|completed|cancelled), page, limit

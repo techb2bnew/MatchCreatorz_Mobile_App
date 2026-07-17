@@ -1,4 +1,4 @@
-package com.matchcreators
+package com.naim.matchcreators
 
 import android.app.Application
 import com.facebook.react.PackageList

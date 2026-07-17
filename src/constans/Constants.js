@@ -132,6 +132,7 @@ export const ERROR_PASSWORD_MIN = 'Password must be at least 8 characters';
 export const ERROR_CONFIRM_PASSWORD_REQUIRED = 'Confirm password is required';
 export const ERROR_PASSWORD_MISMATCH = 'Passwords do not match';
 export const ERROR_FULL_NAME_REQUIRED = 'Full name is required';
+export const ERROR_FULL_NAME_MIN = 'Full name must be at least 2 characters';
 export const ERROR_TERMS_REQUIRED = 'You must accept Terms and Conditions';
 
 // Seller signup steps
@@ -153,8 +154,8 @@ export const PROFILE_DETAILS = 'Profile Details';
 export const PORTFOLIO = 'Portfolio';
 export const OPTIONAL = 'Optional';
 export const PORTFOLIO_SUBTITLE = 'Showcase your best work to attract more clients.';
-export const UPLOAD_FILES = 'Upload images, videos or files';
-export const UPLOAD_FILES_HINT = 'JPG, PNG, PDF, MP4 (max 20MB each)';
+export const UPLOAD_FILES = 'Upload images or files';
+export const UPLOAD_FILES_HINT = 'JPG, PNG, PDF (max 5MB each, 8MB total)';
 export const PHOTO_LIBRARY = 'Photo Library';
 export const TAKE_PHOTO = 'Take Photo';
 export const BROWSE_FILES = 'Browse Files';
@@ -361,6 +362,9 @@ export const PROFILE_DELETE_TITLE = 'Delete Account?';
 export const PROFILE_DELETE_MESSAGE =
   'This action cannot be undone. All your data, bookings and wallet balance will be permanently removed.';
 export const PROFILE_DELETE_CONFIRM = 'Yes, Delete';
+export const PROFILE_DELETE_REASON_PLACEHOLDER = 'Tell us why you are deleting your account...';
+export const ERROR_DELETE_REASON_REQUIRED = 'Please enter a reason for deleting your account.';
+export const ERROR_DELETE_ACCOUNT_FAILED = 'Failed to delete account. Please try again.';
 export const NOTIFICATION_PREFS_TITLE = 'Notification Preferences';
 export const NOTIFICATION_PREFS_SUBTITLE = 'Control which alerts you receive';
 export const NOTIF_EMAIL = 'Email Notifications';
@@ -499,6 +503,8 @@ export const POST_JOB_LABELS = {
   jobType: 'Job Type',
   budgetMin: 'Budget Min ($)',
   budgetMax: 'Budget Max ($)',
+  rateMin: 'Min Rate ($)',
+  rateMax: 'Max Rate ($)',
   deadline: 'Deadline',
   experienceLevel: 'Experience Level',
   skills: 'Required Skills',
@@ -899,10 +905,12 @@ export const ERROR_PASSWORD_STRENGTH =
   'Password must include at least 1 uppercase letter and 1 number';
 export const ERROR_CITY_REQUIRED = 'City is required';
 export const ERROR_COUNTRY_REQUIRED = 'Country is required';
-export const ERROR_SKILLS_REQUIRED = 'Please select at least one skill';
+export const ERROR_SKILLS_REQUIRED = 'Please enter at least one skill';
 export const ERROR_HOURLY_RATE_REQUIRED = 'Hourly rate is required';
 export const ERROR_HOURLY_RATE_INVALID = 'Enter a valid hourly rate';
 export const ERROR_REGISTER_FAILED = 'Registration failed. Please try again.';
+export const ERROR_UPLOAD_TOO_LARGE =
+  'Upload is too large. Please use smaller files (max 5MB each, 8MB total).';
 export const ERROR_PROFILE_UPDATE_FAILED = 'Failed to update profile. Please try again.';
 export const ERROR_POST_JOB_FAILED = 'Failed to post job. Please try again.';
 export const ERROR_UPDATE_JOB_FAILED = 'Failed to update job. Please try again.';
@@ -923,12 +931,14 @@ export const API_ENDPOINTS = {
   AUTH_VERIFY_FORGOT_OTP: '/auth/verify-forgot-otp',
   AUTH_RESET_PASSWORD: '/auth/reset-password',
   BUYER_PROFILE: '/buyer/profile',
+  BUYER_ACCOUNT: '/buyer/account',
   BUYER_STATS: '/buyer/stats',
   BUYER_JOBS: '/buyer/jobs',
   BUYER_BOOKINGS: '/buyer/bookings',
   BUYER_SERVICES: '/buyer/services',
   BUYER_REVIEWS: '/buyer/reviews',
   SELLER_PROFILE: '/seller/profile',
+  SELLER_ACCOUNT: '/seller/account',
   SELLER_STATS: '/seller/stats',
   SELLER_JOBS: '/seller/jobs',
   SELLER_BIDS: '/seller/bids',

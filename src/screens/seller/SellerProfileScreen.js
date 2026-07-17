@@ -15,7 +15,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
 import { logoutUser, selectAuth, setAuthSession } from '../../redux/slices/authSlice';
-import { getSellerProfileApi, getSellerStatsApi, updateSellerProfileApi } from '../../services/sellerService';
+import { getSellerProfileApi, getSellerStatsApi, updateSellerProfileApi, deleteSellerAccountApi } from '../../services/sellerService';
 import { formatAppCurrency } from '../../utils/currency';
 import { getApiErrorMessage } from '../../services/apiClient';
 import {
@@ -53,6 +53,9 @@ import {
   PROFILE_CANCEL,
   PROFILE_DELETE_ACCOUNT,
   PROFILE_DELETE_CONFIRM,
+  PROFILE_DELETE_REASON_PLACEHOLDER,
+  ERROR_DELETE_REASON_REQUIRED,
+  ERROR_DELETE_ACCOUNT_FAILED,
   PROFILE_DELETE_MESSAGE,
   PROFILE_DELETE_TITLE,
   PROFILE_DETAILS,
@@ -258,6 +261,9 @@ const SellerProfileScreen = ({ navigation }) => {
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleteReasonError, setDeleteReasonError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
 
@@ -526,9 +532,43 @@ const SellerProfileScreen = ({ navigation }) => {
     resetToLogin();
   };
 
-  const handleDeleteAccount = () => {
+  const openDeleteModal = () => {
+    setDeleteReason('');
+    setDeleteReasonError('');
+    setShowDeleteModal(true);
+  };
+
+  const handleCancelDelete = () => {
+    if (isDeleting) return;
     setShowDeleteModal(false);
-    resetToLogin();
+    setDeleteReason('');
+    setDeleteReasonError('');
+  };
+
+  const handleDeleteAccount = async () => {
+    const reason = String(deleteReason || '').trim();
+    if (!reason) {
+      setDeleteReasonError(ERROR_DELETE_REASON_REQUIRED);
+      return;
+    }
+
+    if (!token) return;
+
+    setIsDeleting(true);
+    setDeleteReasonError('');
+
+    try {
+      await deleteSellerAccountApi(token, reason);
+      setShowDeleteModal(false);
+      setDeleteReason('');
+      await resetToLogin();
+    } catch (error) {
+      setDeleteReasonError(
+        getApiErrorMessage(error?.data, error?.message || ERROR_DELETE_ACCOUNT_FAILED),
+      );
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const statItems = [
@@ -603,7 +643,7 @@ const SellerProfileScreen = ({ navigation }) => {
       icon: 'trash-2',
       iconBg: lightPink,
       iconColor: redColor,
-      onPress: () => setShowDeleteModal(true),
+      onPress: openDeleteModal,
       danger: true,
     },
     {
@@ -1097,8 +1137,17 @@ const SellerProfileScreen = ({ navigation }) => {
         message={PROFILE_DELETE_MESSAGE}
         confirmText={PROFILE_DELETE_CONFIRM}
         iconName="trash-2"
+        showReasonInput
+        reasonValue={deleteReason}
+        onReasonChange={text => {
+          setDeleteReason(text);
+          if (deleteReasonError) setDeleteReasonError('');
+        }}
+        reasonPlaceholder={PROFILE_DELETE_REASON_PLACEHOLDER}
+        reasonError={deleteReasonError}
+        loading={isDeleting}
         onConfirm={handleDeleteAccount}
-        onCancel={() => setShowDeleteModal(false)}
+        onCancel={handleCancelDelete}
       />
     </SafeAreaView>
   );

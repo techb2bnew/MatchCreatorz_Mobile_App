@@ -11,8 +11,8 @@ import {
   whiteColor,
 } from '../constans/Color';
 import { style, spacings } from '../constans/Fonts';
-import { SCREEN_NAMES, UNREAD_NOTIFICATIONS_COUNT } from '../constans/Constants';
-import { selectAuth } from '../redux/slices/authSlice';
+import { SCREEN_NAMES, UNREAD_NOTIFICATIONS_COUNT, BUYER_TABS, SELLER_TABS, USER_ROLES } from '../constans/Constants';
+import { selectAuth, selectAppRole } from '../redux/slices/authSlice';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
 
 const { flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween, alignJustifyCenter } =
@@ -38,6 +38,7 @@ const ScreenHeader = ({
   user,
 }) => {
   const { user: authUser } = useSelector(selectAuth);
+  const appRole = useSelector(selectAppRole);
 
   const headerUser = useMemo(() => {
     const source = user || authUser;
@@ -48,6 +49,19 @@ const ScreenHeader = ({
 
   const openNotifications = () => {
     navigation.getParent()?.getParent()?.navigate(SCREEN_NAMES.NOTIFICATIONS);
+  };
+
+  const openProfile = () => {
+    const tabNavigation = navigation.getParent();
+    if (!tabNavigation) return;
+
+    const isSeller = appRole === USER_ROLES.CREATOR;
+    const profileStack = isSeller ? SELLER_TABS.PROFILE_STACK : BUYER_TABS.PROFILE_STACK;
+    const profileScreen = isSeller ? SCREEN_NAMES.SELLER_PROFILE : SCREEN_NAMES.PROFILE;
+
+    tabNavigation.navigate(profileStack, {
+      screen: profileScreen,
+    });
   };
 
   return (
@@ -79,11 +93,14 @@ const ScreenHeader = ({
             </TouchableOpacity>
           ) : null}
           {showAvatar ? (
-            <View style={[styles.avatar, alignJustifyCenter]}>
+            <TouchableOpacity
+              style={[styles.avatar, alignJustifyCenter]}
+              onPress={openProfile}
+              activeOpacity={0.7}>
               <Text style={[styles.avatarText, style.fontWeightMedium]}>
                 {headerUser.initials}
               </Text>
-            </View>
+            </TouchableOpacity>
           ) : null}
         </View>
       )}

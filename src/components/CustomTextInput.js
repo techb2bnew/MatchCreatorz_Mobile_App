@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../constans/Style';
 import { blackColor, grayColor, inputBgColor, redColor } from '../constans/Color';
@@ -28,6 +28,7 @@ const CustomTextInput = ({
   maxLength,
   onFocus,
   onBlur,
+  multiline = false,
   ...rest
 }) => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -40,7 +41,7 @@ const CustomTextInput = ({
         style={[
           styles.container,
           flexDirectionRow,
-          alignItemsCenter,
+          multiline ? styles.containerMultiline : alignItemsCenter,
           error ? styles.containerError : null,
         ]}>
         {leftIcon ? (
@@ -59,7 +60,14 @@ const CustomTextInput = ({
           maxLength={maxLength}
           onFocus={onFocus}
           onBlur={onBlur}
-          style={[styles.input, style.fontSizeNormal2x, inputStyle]}
+          multiline={multiline}
+          textAlignVertical={multiline ? 'top' : 'center'}
+          style={[
+            styles.input,
+            style.fontSizeNormal2x,
+            multiline && styles.inputMultiline,
+            inputStyle,
+          ]}
           {...rest}
         />
 
@@ -92,6 +100,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
+  containerMultiline: {
+    alignItems: 'flex-start',
+    paddingVertical: Platform.OS === 'ios' ? spacings.small : 0,
+  },
   containerError: {
     borderColor: redColor,
   },
@@ -102,6 +114,10 @@ const styles = StyleSheet.create({
     flex: 1,
     color: blackColor,
     paddingVertical: spacings.medium,
+  },
+  inputMultiline: {
+    paddingTop: Platform.OS === 'ios' ? spacings.xsmall : spacings.medium,
+    paddingBottom: Platform.OS === 'ios' ? spacings.xsmall : spacings.medium,
   },
   rightIcon: {
     padding: spacings.xsmall,

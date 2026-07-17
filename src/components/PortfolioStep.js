@@ -36,6 +36,7 @@ import {
   UPLOAD_FILES_HINT,
 } from '../constans/Constants';
 import {
+  filterWithinTotalLimit,
   formatFileSize,
   isImageFile,
   pickDocuments,
@@ -63,6 +64,7 @@ const PortfolioStep = ({
   onToggleTerms,
   onToggleSms,
   termsError,
+  existingUploadBytes = 0,
 }) => {
   const [showUploadOptions, setShowUploadOptions] = useState(false);
   const setLink = value => onChange({ ...form, portfolioLink: value });
@@ -72,9 +74,13 @@ const PortfolioStep = ({
 
   const appendFiles = files => {
     if (!files.length) return;
+    // Reserve space already used by resume (and any other prior uploads).
+    const reserved = [{ size: existingUploadBytes }];
+    const accepted = filterWithinTotalLimit([...reserved, ...portfolioFiles], files);
+    if (!accepted.length) return;
     onChange({
       ...form,
-      portfolioFiles: [...portfolioFiles, ...files],
+      portfolioFiles: [...portfolioFiles, ...accepted],
     });
   };
 

@@ -30,7 +30,6 @@ import {
 } from '../constans/Color';
 import { style, spacings } from '../constans/Fonts';
 import {
-  CONTINUE_WITH_FACEBOOK,
   CONTINUE_WITH_GOOGLE,
   DONT_HAVE_ACCOUNT,
   EMAIL,
@@ -192,10 +191,8 @@ const LoginScreen = ({ navigation }) => {
           <Text style={[styles.title, style.fontWeightThin]}>{WELCOME_BACK}</Text>
           <Text style={[styles.subtitle, style.fontWeightThin]}>{SIGN_IN_SUBTITLE}</Text>
 
-          <SocialButton type="google" title={CONTINUE_WITH_GOOGLE} onPress={() => {}} style={styles.socialBtn} />
-          <SocialButton type="facebook" title={CONTINUE_WITH_FACEBOOK} onPress={() => {}} style={styles.socialBtn} />
+          <SocialButton type="google" title={CONTINUE_WITH_GOOGLE} onPress={() => { }} style={styles.socialBtn} />
 
-          {/* Divider */}
           <View style={[styles.dividerRow, flexDirectionRow, alignItemsCenter]}>
             <View style={styles.dividerLine} />
             <Text style={[styles.dividerText, style.fontWeightThin]}>{OR_SIGN_IN_WITH}</Text>
@@ -278,7 +275,7 @@ const LoginScreen = ({ navigation }) => {
           />
 
           <TouchableOpacity
-            style={styles.forgotPassword}
+            style={[styles.forgotPassword, { marginBottom: errors.login ? 0 : hp(2), }]}
             onPress={() => navigation.navigate(SCREEN_NAMES.FORGOT_PASSWORD)}>
             <Text style={[styles.forgotText, style.fontWeightMedium]}>{FORGOT_PASSWORD}</Text>
           </TouchableOpacity>
@@ -426,7 +423,7 @@ const styles = StyleSheet.create({
   inputSpacing: { marginBottom: hp(1.2) },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginBottom: hp(2),
+    // marginBottom: hp(2),
     paddingVertical: spacings.xsmall,
   },
   forgotText: { color: redColor, fontSize: style.fontSizeSmall1x.fontSize },
@@ -439,8 +436,7 @@ const styles = StyleSheet.create({
   loginError: {
     color: redColor,
     fontSize: style.fontSizeSmall1x.fontSize,
-    marginTop: spacings.normal,
-    textAlign: 'center',
+    marginBottom: spacings.large,
   },
   footer: { paddingVertical: spacings.normal, marginTop: spacings.normal },
   footerText: { fontSize: style.fontSizeNormal2x.fontSize, color: grayColor, textAlign: 'center' },

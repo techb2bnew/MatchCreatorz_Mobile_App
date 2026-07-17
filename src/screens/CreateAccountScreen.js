@@ -40,7 +40,6 @@ import {
   COMPANY_NAME,
   CONFIRM_PASSWORD,
   CONNECT_CREATE,
-  CONTINUE_WITH_FACEBOOK,
   CONTINUE_WITH_GOOGLE,
   CREATE_ACCOUNT,
   CREATOR_SELLER,
@@ -127,7 +126,7 @@ const createInitialProfileForm = () => ({
   zipCode: '',
   gender: GENDER_OPTIONS[0],
   category: CATEGORY_OPTIONS[0],
-  tags: [],
+  skills: '',
   bio: '',
   responseTime: RESPONSE_TIME_OPTIONS[2],
   resumeFile: null,
@@ -205,7 +204,7 @@ const CreateAccountScreen = ({ navigation }) => {
     const newErrors = {
       city: validateCity(profileForm.city),
       country: validateCountry(profileForm.country),
-      skills: validateSkills(profileForm.tags),
+      skills: validateSkills(profileForm.skills),
       hourlyRate: validateHourlyRate(profileForm.hourlyRate),
     };
     setErrors(prev => ({ ...prev, ...newErrors }));
@@ -250,18 +249,11 @@ const CreateAccountScreen = ({ navigation }) => {
     }
   };
 
-  const handleToggleTag = tag => {
-    setProfileForm(prev => ({
-      ...prev,
-      tags: prev.tags.includes(tag) ? prev.tags.filter(t => t !== tag) : [...prev.tags, tag],
-    }));
-    clearError('skills');
-  };
-
   const handleAddPortfolioLink = () => {
     const link = portfolioForm.portfolioLink.trim();
     if (!link) return;
     setPortfolioForm(prev => ({
+      ...prev,
       portfolioLink: '',
       portfolioLinks: [...prev.portfolioLinks, link],
     }));
@@ -402,7 +394,6 @@ const CreateAccountScreen = ({ navigation }) => {
               </View>
 
               <SocialButton type="google" title={CONTINUE_WITH_GOOGLE} onPress={() => {}} style={styles.socialBtn} />
-              <SocialButton type="facebook" title={CONTINUE_WITH_FACEBOOK} onPress={() => {}} style={styles.socialBtn} />
 
               <View style={[styles.dividerRow, flexDirectionRow, alignItemsCenter]}>
                 <View style={styles.dividerLine} />
@@ -560,7 +551,6 @@ const CreateAccountScreen = ({ navigation }) => {
                   }));
                 }
               }}
-              onToggleTag={handleToggleTag}
               errors={errors}
             />
           ) : null}
@@ -568,6 +558,7 @@ const CreateAccountScreen = ({ navigation }) => {
           {isPortfolioStep ? (
             <PortfolioStep
               form={portfolioForm}
+              existingUploadBytes={Number(profileForm.resumeFile?.size) || 0}
               onChange={setPortfolioForm}
               onAddLink={handleAddPortfolioLink}
               onRemoveLink={handleRemovePortfolioLink}

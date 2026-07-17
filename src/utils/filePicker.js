@@ -1,8 +1,17 @@
 import { Alert, Platform, PermissionsAndroid } from 'react-native';
-import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
+import { pick, keepLocalCopy, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 
-export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+/** Per-file limit — nginx body limit is typically much lower than 20MB. */
+export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+/** Combined resume + portfolio limit for register/upload requests. */
+export const MAX_TOTAL_UPLOAD_BYTES = 8 * 1024 * 1024;
+
+const IMAGE_PICKER_OPTIONS = {
+  quality: 0.5,
+  maxWidth: 1280,
+  maxHeight: 1280,
+};
 
 const requestAndroidCameraPermission = async () => {
   if (Platform.OS !== 'android') return true;
@@ -36,17 +45,67 @@ const mapDocument = doc => ({
 
 const filterBySize = files => files.filter(file => file.size <= MAX_FILE_SIZE_BYTES);
 
+// iOS puts picked documents in a tmp "Inbox" folder that can be purged before
+// the upload request reads them, so keep a stable local copy first.
+const copyDocumentsLocally = async docs => {
+  if (!docs.length) return docs;
+
+  try {
+    const copies = await keepLocalCopy({
+      files: docs.map(doc => ({ uri: doc.uri, fileName: doc.name })),
+      destination: 'cachesDirectory',
+    });
+
+    return docs.map(doc => {
+      const copy = copies.find(item => item.sourceUri === doc.uri);
+      return copy?.status === 'success' ? { ...doc, uri: copy.localUri } : doc;
+    });
+  } catch (error) {
+    console.warn('[filePicker] keepLocalCopy failed, using original uris:', error);
+    return docs;
+  }
+};
+
 const showOversizedAlert = (total, valid) => {
   if (total > valid) {
-    Alert.alert('File too large', 'Some files were skipped. Maximum file size is 20MB each.');
+    Alert.alert('File too large', 'Some files were skipped. Maximum file size is 5MB each.');
   }
+};
+
+export const getFilesTotalSize = (files = []) =>
+  files.reduce((sum, file) => sum + (Number(file?.size) || 0), 0);
+
+/**
+ * Keep newly picked files within total upload budget (existing + new).
+ * Returns accepted new files only.
+ */
+export const filterWithinTotalLimit = (existingFiles = [], newFiles = [], maxTotal = MAX_TOTAL_UPLOAD_BYTES) => {
+  const existingTotal = getFilesTotalSize(existingFiles);
+  const accepted = [];
+  let running = existingTotal;
+
+  for (const file of newFiles) {
+    const size = Number(file?.size) || 0;
+    if (running + size > maxTotal) continue;
+    accepted.push(file);
+    running += size;
+  }
+
+  if (accepted.length < newFiles.length) {
+    Alert.alert(
+      'Upload limit',
+      'Total upload size cannot exceed 8MB. Some files were skipped. Please use smaller files.',
+    );
+  }
+
+  return accepted;
 };
 
 export const pickImagesFromGallery = async (allowMultiple = true) => {
   const result = await launchImageLibrary({
-    mediaType: 'mixed',
+    mediaType: 'photo',
     selectionLimit: allowMultiple ? 0 : 1,
-    quality: 0.8,
+    ...IMAGE_PICKER_OPTIONS,
   });
 
   if (result.didCancel || !result.assets?.length) return [];
@@ -66,9 +125,9 @@ export const pickImageFromCamera = async () => {
   const result = await launchCamera({
     mediaType: 'photo',
     cameraType: 'front',
-    quality: 0.8,
     saveToPhotos: false,
     includeBase64: false,
+    ...IMAGE_PICKER_OPTIONS,
   });
 
   if (result.errorCode) {
@@ -89,14 +148,14 @@ export const pickImageFromCamera = async () => {
 export const pickDocuments = async (allowMultiple = true) => {
   try {
     const results = await pick({
-      type: [types.images, types.pdf, types.video, types.doc, types.docx],
+      type: [types.images, types.pdf, types.doc, types.docx],
       allowMultiSelection: allowMultiple,
       presentationStyle: 'fullScreen',
-      copyTo: 'cachesDirectory',
     });
 
-    const files = filterBySize((Array.isArray(results) ? results : [results]).map(mapDocument));
-    showOversizedAlert((Array.isArray(results) ? results : [results]).length, files.length);
+    const docs = (Array.isArray(results) ? results : [results]).map(mapDocument);
+    const files = await copyDocumentsLocally(filterBySize(docs));
+    showOversizedAlert(docs.length, files.length);
     return files;
   } catch (error) {
     if (isErrorWithCode(error) && error.code === errorCodes.OPERATION_CANCELED) {
@@ -112,15 +171,15 @@ export const pickResumeDocument = async () => {
       type: [types.pdf, types.doc, types.docx],
       allowMultiSelection: false,
       presentationStyle: 'fullScreen',
-      copyTo: 'cachesDirectory',
     });
 
     const file = mapDocument(Array.isArray(results) ? results[0] : results);
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      Alert.alert('File too large', 'Maximum file size is 20MB.');
+      Alert.alert('File too large', 'Maximum file size is 5MB.');
       return null;
     }
-    return file;
+    const [copiedFile] = await copyDocumentsLocally([file]);
+    return copiedFile;
   } catch (error) {
     if (isErrorWithCode(error) && error.code === errorCodes.OPERATION_CANCELED) {
       return null;

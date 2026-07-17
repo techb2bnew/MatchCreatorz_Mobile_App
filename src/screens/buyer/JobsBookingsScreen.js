@@ -1853,6 +1853,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
 
   const renderPostJobForm = () => {
     const selectedDeadline = parseIsoDate(postJobForm.deadline) || getTodayStart();
+    const isHourly = String(postJobForm.jobType || '').toLowerCase() === 'hourly';
 
     return (
     <View>
@@ -1916,7 +1917,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
 
         <View style={[flexDirectionRow, styles.budgetRow]}>
           <CustomTextInput
-            label={POST_JOB_LABELS.budgetMin}
+            label={isHourly ? POST_JOB_LABELS.rateMin : POST_JOB_LABELS.budgetMin}
             value={postJobForm.budgetMin}
             onChangeText={v => updateForm('budgetMin', v)}
             placeholder={POST_JOB_PLACEHOLDERS.budgetMin}
@@ -1926,7 +1927,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
             style={styles.budgetField}
           />
           <CustomTextInput
-            label={POST_JOB_LABELS.budgetMax}
+            label={isHourly ? POST_JOB_LABELS.rateMax : POST_JOB_LABELS.budgetMax}
             value={postJobForm.budgetMax}
             onChangeText={v => updateForm('budgetMax', v)}
             placeholder={POST_JOB_PLACEHOLDERS.budgetMax}

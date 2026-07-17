@@ -19,6 +19,7 @@ import {
   getBuyerProfileApi,
   updateBuyerProfileApi,
   getBuyerStatsApi,
+  deleteBuyerAccountApi,
 } from '../../services/buyerService';
 import { formatAppCurrency } from '../../utils/currency';
 import { getApiErrorMessage } from '../../services/apiClient';
@@ -54,6 +55,9 @@ import {
   PROFILE_CANCEL,
   PROFILE_DELETE_ACCOUNT,
   PROFILE_DELETE_CONFIRM,
+  PROFILE_DELETE_REASON_PLACEHOLDER,
+  ERROR_DELETE_REASON_REQUIRED,
+  ERROR_DELETE_ACCOUNT_FAILED,
   PROFILE_DELETE_MESSAGE,
   PROFILE_DELETE_TITLE,
   PROFILE_EDIT,
@@ -168,6 +172,9 @@ const ProfileScreen = ({ navigation }) => {
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleteReasonError, setDeleteReasonError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
 
@@ -335,9 +342,43 @@ const ProfileScreen = ({ navigation }) => {
     resetToLogin();
   };
 
-  const handleDeleteAccount = () => {
+  const openDeleteModal = () => {
+    setDeleteReason('');
+    setDeleteReasonError('');
+    setShowDeleteModal(true);
+  };
+
+  const handleCancelDelete = () => {
+    if (isDeleting) return;
     setShowDeleteModal(false);
-    resetToLogin();
+    setDeleteReason('');
+    setDeleteReasonError('');
+  };
+
+  const handleDeleteAccount = async () => {
+    const reason = String(deleteReason || '').trim();
+    if (!reason) {
+      setDeleteReasonError(ERROR_DELETE_REASON_REQUIRED);
+      return;
+    }
+
+    if (!token) return;
+
+    setIsDeleting(true);
+    setDeleteReasonError('');
+
+    try {
+      await deleteBuyerAccountApi(token, reason);
+      setShowDeleteModal(false);
+      setDeleteReason('');
+      await resetToLogin();
+    } catch (error) {
+      setDeleteReasonError(
+        getApiErrorMessage(error?.data, error?.message || ERROR_DELETE_ACCOUNT_FAILED),
+      );
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const hasLocation = Boolean(String(savedProfile.location || '').trim());
@@ -428,7 +469,7 @@ const ProfileScreen = ({ navigation }) => {
       icon: 'trash-2',
       iconBg: lightPink,
       iconColor: redColor,
-      onPress: () => setShowDeleteModal(true),
+      onPress: openDeleteModal,
       danger: true,
     },
     {
@@ -694,8 +735,17 @@ const ProfileScreen = ({ navigation }) => {
         message={PROFILE_DELETE_MESSAGE}
         confirmText={PROFILE_DELETE_CONFIRM}
         iconName="trash-2"
+        showReasonInput
+        reasonValue={deleteReason}
+        onReasonChange={text => {
+          setDeleteReason(text);
+          if (deleteReasonError) setDeleteReasonError('');
+        }}
+        reasonPlaceholder={PROFILE_DELETE_REASON_PLACEHOLDER}
+        reasonError={deleteReasonError}
+        loading={isDeleting}
         onConfirm={handleDeleteAccount}
-        onCancel={() => setShowDeleteModal(false)}
+        onCancel={handleCancelDelete}
       />
     </SafeAreaView>
   );

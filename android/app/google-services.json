@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "559577074349",
+    "project_id": "matchcreatorz-rahul",
+    "storage_bucket": "matchcreatorz-rahul.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:559577074349:android:f0341c2fd6813052e0d424",
+        "android_client_info": {
+          "package_name": "com.naim.matchcreators"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDmJQDtDPsoU97xVoz5UBlc5vFVqLYTxU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

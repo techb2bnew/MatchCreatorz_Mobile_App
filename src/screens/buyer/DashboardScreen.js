@@ -16,6 +16,7 @@ import { selectAuth } from '../../redux/slices/authSlice';
 import {
   getBuyerStatsApi,
   getBuyerBookingsApi,
+  getBuyerServicesApi,
 } from '../../services/buyerService';
 import { formatAppCurrency } from '../../utils/currency';
 import {
@@ -68,6 +69,35 @@ const {
 } = BaseStyle;
 
 const RECENT_BOOKINGS_LIMIT = 4;
+const TOP_CREATORS_LIMIT = 4;
+
+const getInitials = name =>
+  String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || '—';
+
+const mapTopCreatorFromService = service => {
+  const sellerName = service?.seller?.name || service?.seller_name || 'Creator';
+  const specialty =
+    service?.title ||
+    (Array.isArray(service?.tags) && service.tags.length ? service.tags.join(', ') : '') ||
+    'Service';
+  const ratingNum = Number(service?.rating ?? 0);
+
+  return {
+    id: String(service?.id ?? `${sellerName}-${specialty}`),
+    name: sellerName,
+    specialty,
+    price: formatAppCurrency(service?.price ?? 0, { whole: true }),
+    rating: Number.isFinite(ratingNum) ? ratingNum.toFixed(1) : '0.0',
+    initials: getInitials(sellerName),
+  };
+};
 
 const getStatusStyle = status => {
   const normalized = String(status || '')
@@ -207,6 +237,7 @@ const DashboardScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [countCards, setCountCards] = useState(INITIAL_COUNT_CARDS);
   const [recentBookings, setRecentBookings] = useState([]);
+  const [topCreators, setTopCreators] = useState([]);
   const [isBookingsLoading, setIsBookingsLoading] = useState(false);
   const welcomeName = user?.name || user?.fullName || 'there';
 
@@ -222,13 +253,25 @@ const DashboardScreen = ({ navigation }) => {
 
         setIsBookingsLoading(true);
         try {
-          const [statsResponse, activeRes, completedRes, cancelledRes] = await Promise.all([
+          const [statsResponse, activeRes, completedRes, cancelledRes, topCreatorsRes] =
+            await Promise.all([
               getBuyerStatsApi(token),
               getBuyerBookingsApi(token, { tab: 'active', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
               getBuyerBookingsApi(token, { tab: 'completed', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
               getBuyerBookingsApi(token, { tab: 'cancelled', page: 1, limit: RECENT_BOOKINGS_LIMIT }),
+              getBuyerServicesApi(token, {
+                sort: 'relevance',
+                page: 1,
+                limit: 12,
+                rating: 4,
+              }),
             ]);
           if (cancelled) return;
+
+          console.log(
+            '[BuyerDashboard] Top Creators response <<<',
+            JSON.stringify(topCreatorsRes, null, 2),
+          );
 
           const stats = statsResponse?.data?.stats || {};
           setCountCards(mapBuyerStatsToCards(stats));
@@ -242,8 +285,16 @@ const DashboardScreen = ({ navigation }) => {
           setRecentBookings(
             merged.slice(0, RECENT_BOOKINGS_LIMIT).map(mapDashboardBooking),
           );
+
+          const servicesList = Array.isArray(topCreatorsRes?.data) ? topCreatorsRes.data : [];
+          setTopCreators(
+            servicesList.slice(0, TOP_CREATORS_LIMIT).map(mapTopCreatorFromService),
+          );
         } catch (error) {
-          if (!cancelled) setRecentBookings([]);
+          if (!cancelled) {
+            setRecentBookings([]);
+            setTopCreators([]);
+          }
         } finally {
           if (!cancelled) setIsBookingsLoading(false);
         }
@@ -267,40 +318,6 @@ const DashboardScreen = ({ navigation }) => {
     { id: '2', title: 'Browse Creators', icon: 'search', color: '#3B6981' },
     { id: '3', title: 'View Bookings', icon: 'calendar', color: '#9B51E0' },
     { id: '4', title: 'Add Wallet Money', icon: 'credit-card', color: '#FFA928' },
-  ]);
-  const [topCreators] = useState([
-    {
-      id: '1',
-      name: 'Alex Johnson',
-      specialty: 'UI/UX Design',
-      price: '$1,500',
-      rating: '4.9',
-      initials: 'AJ',
-    },
-    {
-      id: '2',
-      name: 'Priya Sharma',
-      specialty: 'Brand Design',
-      price: '$2,000',
-      rating: '4.8',
-      initials: 'PS',
-    },
-    {
-      id: '3',
-      name: 'Rahul Mehta',
-      specialty: 'Video Editing',
-      price: '$1,800',
-      rating: '4.7',
-      initials: 'RM',
-    },
-    {
-      id: '4',
-      name: 'Anita Verma',
-      specialty: 'Photography',
-      price: '$2,200',
-      rating: '4.9',
-      initials: 'AV',
-    },
   ]);
 
   const tabNavigation = navigation.getParent();
@@ -330,8 +347,18 @@ const DashboardScreen = ({ navigation }) => {
     });
   };
 
+  const goToBrowseCreators = () => {
+    tabNavigation?.navigate(BUYER_TABS.JOBS_STACK, {
+      screen: SCREEN_NAMES.JOBS_BOOKINGS,
+      params: {
+        initialTab: JOBS_BOOKINGS_TABS.SERVICES,
+      },
+    });
+  };
+
   const handleQuickAction = actionId => {
     if (actionId === '1') goToPostJob();
+    else if (actionId === '2') goToBrowseCreators();
     else if (actionId === '3') goToBookings();
     else if (actionId === '4') goToWallet();
   };
@@ -475,7 +502,7 @@ const DashboardScreen = ({ navigation }) => {
           <Text style={[styles.sectionTitle, style.fontWeightMedium, styles.sectionTitleNoMargin]}>
             {DASHBOARD_TOP_CREATORS}
           </Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={goToBrowseCreators}>
             <Text style={[styles.seeAll, style.fontWeightMedium]}>{DASHBOARD_SEE_ALL}</Text>
           </TouchableOpacity>
         </View>

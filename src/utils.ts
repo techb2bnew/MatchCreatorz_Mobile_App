@@ -7,6 +7,7 @@ import {
   ERROR_COUNTRY_REQUIRED,
   ERROR_EMAIL_INVALID,
   ERROR_EMAIL_REQUIRED,
+  ERROR_FULL_NAME_MIN,
   ERROR_FULL_NAME_REQUIRED,
   ERROR_HOURLY_RATE_INVALID,
   ERROR_HOURLY_RATE_REQUIRED,
@@ -68,6 +69,7 @@ export const validateConfirmPassword = (password: string, confirmPassword: strin
 
 export const validateFullName = (name: string) => {
   if (!name.trim()) return ERROR_FULL_NAME_REQUIRED;
+  if (name.trim().length < 2) return ERROR_FULL_NAME_MIN;
   return '';
 };
 
@@ -93,8 +95,12 @@ export const validateCountry = (country: string) => {
   return '';
 };
 
-export const validateSkills = (skills: string[] = []) => {
-  if (!skills.length) return ERROR_SKILLS_REQUIRED;
+export const validateSkills = (skills: string | string[] = '') => {
+  const list =
+    typeof skills === 'string'
+      ? skills.split(',').map(item => item.trim()).filter(Boolean)
+      : skills;
+  if (!list.length) return ERROR_SKILLS_REQUIRED;
   return '';
 };
 

@@ -1,4 +1,4 @@
-package com.matchcreators
+package com.naim.matchcreators
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
