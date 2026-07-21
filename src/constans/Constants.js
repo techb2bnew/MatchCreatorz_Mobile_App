@@ -82,6 +82,7 @@ export const WELCOME_BACK = 'Welcome back';
 export const SIGN_IN_SUBTITLE = 'Sign in to your account to continue';
 export const OR_SIGN_IN_WITH = 'Or sign in with';
 export const CONTINUE_WITH_GOOGLE = 'Continue with Google';
+export const CONTINUE_WITH_APPLE = 'Continue with Apple';
 export const CONTINUE_WITH_FACEBOOK = 'Continue with Facebook';
 export const PHONE = 'Phone';
 export const EMAIL = 'Email';
@@ -909,6 +910,7 @@ export const ERROR_SKILLS_REQUIRED = 'Please enter at least one skill';
 export const ERROR_HOURLY_RATE_REQUIRED = 'Hourly rate is required';
 export const ERROR_HOURLY_RATE_INVALID = 'Enter a valid hourly rate';
 export const ERROR_REGISTER_FAILED = 'Registration failed. Please try again.';
+export const ERROR_GOOGLE_SIGNIN_FAILED = 'Google Sign-In failed. Please try again.';
 export const ERROR_UPLOAD_TOO_LARGE =
   'Upload is too large. Please use smaller files (max 5MB each, 8MB total).';
 export const ERROR_PROFILE_UPDATE_FAILED = 'Failed to update profile. Please try again.';
@@ -922,6 +924,10 @@ export const HOURLY_RATE_PLACEHOLDER = 'e.g. 500';
 
 // API
 export const API_BASE_URL = 'https://adminbackend.matchcreatorz.com/api/v1';
+
+// Firebase -> Project settings -> Your apps -> Web app -> Web client ID
+// Example: 559577074349-xxxxx.apps.googleusercontent.com
+export const GOOGLE_WEB_CLIENT_ID = '559577074349-9nd1l599v7df5bpmj6ql6a3n3fld2fpl.apps.googleusercontent.com';
 
 export const API_ENDPOINTS = {
   AUTH_REGISTER: '/auth/register',

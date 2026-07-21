@@ -10,17 +10,26 @@ const { flexDirectionRow, alignItemsCenter, alignJustifyCenter } = BaseStyle;
 
 const SOCIAL_ICONS = {
   google: { name: 'google', color: '#DB4437' },
+  apple: { name: 'apple', color: '#000000' },
   facebook: { name: 'facebook', color: '#1877F2' },
 };
 
-const SocialButton = ({ type = 'google', title, onPress, style: customStyle }) => {
+const SocialButton = ({ type = 'google', title, onPress, style: customStyle, disabled = false }) => {
   const icon = SOCIAL_ICONS[type];
 
   return (
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={onPress}
-      style={[styles.button, flexDirectionRow, alignItemsCenter, alignJustifyCenter, customStyle]}>
+      disabled={disabled}
+      style={[
+        styles.button,
+        flexDirectionRow,
+        alignItemsCenter,
+        alignJustifyCenter,
+        disabled && styles.buttonDisabled,
+        customStyle,
+      ]}>
       <Icon name={icon.name} size={17} color={icon.color} />
       <Text style={[styles.title, style.fontWeightThin]} numberOfLines={1}>
         {title}
@@ -42,6 +51,9 @@ const styles = StyleSheet.create({
     borderColor: borderLightColor,
     backgroundColor: whiteColor,
     gap: spacings.normal,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   title: {
     fontSize: style.fontSizeNormal2x.fontSize,

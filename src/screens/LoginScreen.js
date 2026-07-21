@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
@@ -20,6 +21,7 @@ import SocialButton from '../components/SocialButton';
 import { BaseStyle } from '../constans/Style';
 import { setAuthSession } from '../redux/slices/authSlice';
 import { loginUserApi } from '../services/authService';
+import { getGoogleSignInErrorMessage, signInWithGoogle } from '../services/googleAuthService';
 import {
   blackColor,
   borderLightColor,
@@ -30,6 +32,7 @@ import {
 } from '../constans/Color';
 import { style, spacings } from '../constans/Fonts';
 import {
+  CONTINUE_WITH_APPLE,
   CONTINUE_WITH_GOOGLE,
   DONT_HAVE_ACCOUNT,
   EMAIL,
@@ -90,6 +93,7 @@ const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState({ phone: '', email: '', password: '', login: '' });
 
   const handleInputFocus = event => {
@@ -160,6 +164,23 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    // setGoogleLoading(true);
+    // setErrors(prev => ({ ...prev, login: '' }));
+
+    // try {
+    //   const result = await signInWithGoogle('login');
+    //   if (result?.cancelled) return;
+    // } catch (error) {
+    //   const message = getGoogleSignInErrorMessage(error);
+    //   if (message) {
+    //     setErrors(prev => ({ ...prev, login: message }));
+    //   }
+    // } finally {
+    //   setGoogleLoading(false);
+    // }
+  };
+
   return (
     <SafeAreaView style={[flex, styles.safeArea]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView style={flex} behavior={keyboardAvoidingBehavior}>
@@ -191,7 +212,16 @@ const LoginScreen = ({ navigation }) => {
           <Text style={[styles.title, style.fontWeightThin]}>{WELCOME_BACK}</Text>
           <Text style={[styles.subtitle, style.fontWeightThin]}>{SIGN_IN_SUBTITLE}</Text>
 
-          <SocialButton type="google" title={CONTINUE_WITH_GOOGLE} onPress={() => { }} style={styles.socialBtn} />
+          <SocialButton
+            type="google"
+            title={CONTINUE_WITH_GOOGLE}
+            onPress={handleGoogleSignIn}
+            disabled={googleLoading || loading}
+            style={styles.socialBtn}
+          />
+          {Platform.OS === 'ios' ? (
+            <SocialButton type="apple" title={CONTINUE_WITH_APPLE} onPress={() => { }} style={styles.socialBtn} />
+          ) : null}
 
           <View style={[styles.dividerRow, flexDirectionRow, alignItemsCenter]}>
             <View style={styles.dividerLine} />
@@ -223,7 +253,7 @@ const LoginScreen = ({ navigation }) => {
             <View style={styles.inputSpacing}>
               <FormLabel label={LABEL_PHONE_NUMBER} required />
               <RNPhoneInput
-                defaultCode="IN"
+                defaultCode="US"
                 layout="second"
                 value={phone}
                 onChangeText={handlePhoneChange}

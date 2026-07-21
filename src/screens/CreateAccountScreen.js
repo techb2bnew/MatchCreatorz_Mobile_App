@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -40,6 +41,7 @@ import {
   COMPANY_NAME,
   CONFIRM_PASSWORD,
   CONNECT_CREATE,
+  CONTINUE_WITH_APPLE,
   CONTINUE_WITH_GOOGLE,
   CREATE_ACCOUNT,
   CREATOR_SELLER,
@@ -101,6 +103,7 @@ import {
   useKeyboardBottomInset,
 } from '../utils/keyboard';
 import { registerUserApi } from '../services/authService';
+import { getGoogleSignInErrorMessage, signInWithGoogle } from '../services/googleAuthService';
 
 const {
   flex,
@@ -158,6 +161,7 @@ const CreateAccountScreen = ({ navigation }) => {
   const [selectedRole, setSelectedRole] = useState(USER_ROLES.BUYER);
   const [showSuccess, setShowSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -247,6 +251,20 @@ const CreateAccountScreen = ({ navigation }) => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleGoogleSignUp = async () => {
+    // setGoogleLoading(true);
+    // setApiError('');
+
+    // try {
+    //   const result = await signInWithGoogle('register');
+    //   if (result?.cancelled) return;
+    // } catch (error) {
+    //   setApiError(getGoogleSignInErrorMessage(error) || ERROR_REGISTER_FAILED);
+    // } finally {
+    //   setGoogleLoading(false);
+    // }
   };
 
   const handleAddPortfolioLink = () => {
@@ -393,7 +411,16 @@ const CreateAccountScreen = ({ navigation }) => {
                 })}
               </View>
 
-              <SocialButton type="google" title={CONTINUE_WITH_GOOGLE} onPress={() => {}} style={styles.socialBtn} />
+              <SocialButton
+                type="google"
+                title={CONTINUE_WITH_GOOGLE}
+                onPress={handleGoogleSignUp}
+                disabled={googleLoading || submitting}
+                style={styles.socialBtn}
+              />
+              {Platform.OS === 'ios' ? (
+                <SocialButton type="apple" title={CONTINUE_WITH_APPLE} onPress={() => {}} style={styles.socialBtn} />
+              ) : null}
 
               <View style={[styles.dividerRow, flexDirectionRow, alignItemsCenter]}>
                 <View style={styles.dividerLine} />
@@ -446,7 +473,7 @@ const CreateAccountScreen = ({ navigation }) => {
               <View style={styles.inputSpacing}>
                 <FormLabel label={LABEL_PHONE_NUMBER} />
                 <RNPhoneInput
-                  defaultCode="IN"
+                  defaultCode="US"
                   layout="second"
                   value={phone}
                   onChangeText={handlePhoneChange}

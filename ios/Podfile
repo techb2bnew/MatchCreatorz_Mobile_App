@@ -34,6 +34,12 @@ target 'MatchCreators' do
   pod 'FirebaseCoreInternal', '12.15.0', :modular_headers => true
   pod 'GoogleUtilities', '8.1.2', :modular_headers => true
 
+  # Google Sign-In (RNGoogleSignin) + static Firebase need module maps on these pods.
+  pod 'RecaptchaInterop', :modular_headers => true
+  pod 'AppCheckCore', :modular_headers => true
+  pod 'AppAuth', :modular_headers => true
+  pod 'GTMAppAuth', :modular_headers => true
+
   post_install do |installer|
     react_native_post_install(
       installer,

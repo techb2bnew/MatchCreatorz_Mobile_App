@@ -7,9 +7,11 @@ import {
   initializeNotifications,
   subscribeToTokenRefresh,
 } from './src/services/notificationService';
+import { configureGoogleSignIn } from './src/services/googleAuthService';
 
 const App = () => {
   useEffect(() => {
+    configureGoogleSignIn();
     initializeNotifications();
     const unsubscribeFromTokenRefresh = subscribeToTokenRefresh();
 
