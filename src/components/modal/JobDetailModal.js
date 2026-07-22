@@ -7,6 +7,8 @@ import {
   ScrollView,
   ActivityIndicator,
   StyleSheet,
+  Image,
+  Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
@@ -14,6 +16,7 @@ import {
   blackColor,
   borderLightColor,
   grayColor,
+  inputBgColor,
   lightPink,
   redColor,
   whiteColor,
@@ -25,6 +28,8 @@ import {
   POST_JOB_LABELS,
 } from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+
+const isImageUrl = url => /\.(png|jpe?g|gif|webp|bmp)(\?.*)?$/i.test(String(url || ''));
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter } = BaseStyle;
 
@@ -114,6 +119,40 @@ const JobDetailModal = ({ visible, onClose, loading, error, job }) => {
                     value={job.skills || JOB_DETAIL_MODAL.noSkills}
                     multiline
                   />
+
+                  {job.attachments?.length ? (
+                    <View style={styles.attachmentsSection}>
+                      <Text style={[styles.detailLabel, style.fontWeightMedium]}>
+                        {POST_JOB_LABELS.attachments}
+                      </Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.attachmentsRow}>
+                        {job.attachments.map((file, index) =>
+                          isImageUrl(file.url) ? (
+                            <TouchableOpacity
+                              key={`${file.url}-${index}`}
+                              onPress={() => Linking.openURL(file.url)}
+                              activeOpacity={0.85}>
+                              <Image source={{ uri: file.url }} style={styles.attachmentImage} />
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              key={`${file.url}-${index}`}
+                              onPress={() => Linking.openURL(file.url)}
+                              activeOpacity={0.85}
+                              style={[styles.attachmentFileChip, flexDirectionRow, alignItemsCenter]}>
+                              <Icon name="file" size={13} color={redColor} />
+                              <Text style={[styles.attachmentFileName, style.fontWeightThin]} numberOfLines={1}>
+                                {file.name || 'File'}
+                              </Text>
+                            </TouchableOpacity>
+                          ),
+                        )}
+                      </ScrollView>
+                    </View>
+                  ) : null}
                 </>
               ) : null}
             </ScrollView>
@@ -224,5 +263,31 @@ const styles = StyleSheet.create({
   },
   detailValueMultiline: {
     lineHeight: 22,
+  },
+  attachmentsSection: {
+    paddingVertical: spacings.medium,
+  },
+  attachmentsRow: {
+    gap: spacings.normal,
+    paddingTop: spacings.small,
+  },
+  attachmentImage: {
+    width: hp(9),
+    height: hp(9),
+    borderRadius: 10,
+    backgroundColor: inputBgColor,
+  },
+  attachmentFileChip: {
+    backgroundColor: inputBgColor,
+    borderRadius: 8,
+    paddingHorizontal: spacings.normal,
+    paddingVertical: spacings.normal,
+    gap: spacings.small,
+    maxWidth: wp(40),
+  },
+  attachmentFileName: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: blackColor,
+    flexShrink: 1,
   },
 });

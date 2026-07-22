@@ -11,6 +11,7 @@ import {
   Platform,
   Modal,
   Alert,
+  Image,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,6 +34,7 @@ import {
   getBuyerReviewsApi,
   createBuyerJobApi,
   updateBuyerJobApi,
+  uploadBuyerJobAttachmentsApi,
 } from '../../services/buyerService';
 import { getCategoriesApi } from '../../services/sellerService';
 import { getApiErrorMessage } from '../../services/apiClient';
@@ -83,6 +85,7 @@ import {
   JOB_ACTIONS,
   JOB_DETAIL_MODAL,
   JOB_CATEGORIES,
+  JOB_TITLE_MAX_LENGTH,
   JOB_TYPES,
   JOBS_BOOKINGS_TABS,
   JOBS_SCREEN_TITLE,
@@ -99,10 +102,14 @@ import {
   EMPTY_SEARCH_TITLE,
   EMPTY_SERVICES_MESSAGE,
   EMPTY_SERVICES_TITLE,
+  ERROR_JOB_CATEGORY_REQUIRED,
+  ERROR_JOB_TITLE_REQUIRED,
   ERROR_POST_JOB_FAILED,
   ERROR_UPDATE_JOB_FAILED,
+  ADD_MORE_FILES,
   PLATFORM_STATS,
   PLATFORM_STATS_TITLE,
+  POST_JOB_ATTACHMENTS_HINT,
   POST_JOB_BTN,
   POST_JOB_LABELS,
   POST_JOB_PLACEHOLDERS,
@@ -119,6 +126,7 @@ import {
   TAB_SERVICES,
   TIPS_TITLE,
   UPDATE_JOB_BTN,
+  UPLOAD_FILES,
 } from '../../constans/Constants';
 import CustomTextInput from '../../components/CustomTextInput';
 import CustomButton from '../../components/CustomButton';
@@ -132,7 +140,15 @@ import BookingDetailModal from '../../components/modal/BookingDetailModal';
 import BuyerServiceDetailModal from '../../components/modal/BuyerServiceDetailModal';
 import ConfirmBookingModal from '../../components/modal/ConfirmBookingModal';
 import SubmitReviewModal from '../../components/modal/SubmitReviewModal';
+import UploadOptionsModal from '../../components/modal/UploadOptionsModal';
 import EmptyState from '../../components/EmptyState';
+import {
+  filterWithinTotalLimit,
+  isImageFile,
+  pickDocuments,
+  pickImageFromCamera,
+  pickImagesFromGallery,
+} from '../../utils/filePicker';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
 import {
@@ -286,7 +302,7 @@ const mapBookingDetailForDisplay = booking => mapApiBookingToUi(booking);
 const EMPTY_POST_JOB_FORM = {
   title: '',
   description: '',
-  category: 'Design',
+  category: '',
   jobType: 'Fixed Price',
   budgetMin: '',
   budgetMax: '',
@@ -305,6 +321,20 @@ const extractJobsList = response => {
   if (Array.isArray(data?.rows)) return data.rows;
   if (Array.isArray(data?.data)) return data.data;
   return [];
+};
+
+const extractUploadedAttachments = response => {
+  const data = response?.data;
+  const list = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.files)
+      ? data.files
+      : Array.isArray(response?.files)
+        ? response.files
+        : [];
+  return list
+    .map(item => ({ url: item?.url || item?.path || '', name: item?.name || item?.filename || '' }))
+    .filter(item => item.url);
 };
 
 const extractPagination = response => response?.pagination || response?.data?.pagination || null;
@@ -415,6 +445,18 @@ const formatDeadlineForDisplay = value => {
   return `${day}-${month}-${year}`;
 };
 
+const mapJobAttachmentsList = job => {
+  const raw = job?.attachments || job?.files || job?.attachment_urls || job?.attachmentUrls || [];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(item =>
+      typeof item === 'string'
+        ? { url: item, name: item.split('/').pop() }
+        : { url: item?.url || item?.path || '', name: item?.name || item?.filename || '' },
+    )
+    .filter(item => item.url);
+};
+
 const mapJobDetailForDisplay = job => {
   const min = job?.budget_min ?? job?.budgetMin;
   const max = job?.budget_max ?? job?.budgetMax;
@@ -437,6 +479,7 @@ const mapJobDetailForDisplay = job => {
     skills,
     bidCount: Number(job?.bid_count ?? job?.bidCount ?? job?.bids_count ?? 0) || 0,
     date: formatJobDate(job?.created_at || job?.createdAt || job?.date),
+    attachments: mapJobAttachmentsList(job),
   };
 };
 
@@ -651,6 +694,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   const [bookingFilter, setBookingFilter] = useState(BOOKINGS_FILTER_TABS.ACTIVE);
   const [serviceCategory, setServiceCategory] = useState('All');
   const [serviceCategoryFilters, setServiceCategoryFilters] = useState(['All']);
+  const [jobCategoryOptions, setJobCategoryOptions] = useState(JOB_CATEGORIES);
   const [searchQuery, setSearchQuery] = useState('');
   const [jobs, setJobs] = useState([]);
   const [jobsTotalCount, setJobsTotalCount] = useState(0);
@@ -663,6 +707,9 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   const [isLoadingJobDetail, setIsLoadingJobDetail] = useState(false);
   const [showDeadlinePicker, setShowDeadlinePicker] = useState(false);
   const [postJobError, setPostJobError] = useState('');
+  const [postJobFieldErrors, setPostJobFieldErrors] = useState({ title: '', category: '' });
+  const [postJobAttachments, setPostJobAttachments] = useState([]);
+  const [showJobUploadOptions, setShowJobUploadOptions] = useState(false);
   const [editingJobId, setEditingJobId] = useState(null);
   const [confirmModal, setConfirmModal] = useState({
     visible: false,
@@ -907,6 +954,21 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     }
   }, []);
 
+  const fetchJobCategories = useCallback(async () => {
+    try {
+      const response = await getCategoriesApi();
+      const list = Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response?.data?.data)
+          ? response.data.data
+          : [];
+      const names = list.map(item => toServiceText(item?.name || item)).filter(Boolean);
+      if (names.length) setJobCategoryOptions(names);
+    } catch (error) {
+      // Keep the static JOB_CATEGORIES fallback already in state.
+    }
+  }, []);
+
   const handleLoadMoreServices = useCallback(() => {
     if (!isServicesTab) return;
     if (isServicesInitialLoading || isServicesLoadingMore || !hasMoreServicesRef.current) return;
@@ -1096,6 +1158,11 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   );
 
   useEffect(() => {
+    if (jobsSubTab !== MY_JOBS_SUB_TABS.NEW_JOB) return;
+    fetchJobCategories();
+  }, [jobsSubTab, fetchJobCategories]);
+
+  useEffect(() => {
     if (!isPostedJobsView || !token) return undefined;
 
     const timer = setTimeout(() => {
@@ -1152,6 +1219,9 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   const updateForm = (key, value) => {
     setPostJobForm(prev => ({ ...prev, [key]: value }));
     if (postJobError) setPostJobError('');
+    if (postJobFieldErrors[key]) {
+      setPostJobFieldErrors(prev => ({ ...prev, [key]: '' }));
+    }
   };
 
   const handleInputFocus = event => {
@@ -1162,7 +1232,26 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     setPostJobForm({ ...EMPTY_POST_JOB_FORM });
     setEditingJobId(null);
     setPostJobError('');
+    setPostJobFieldErrors({ title: '', category: '' });
+    setPostJobAttachments([]);
     setShowDeadlinePicker(false);
+  };
+
+  const appendJobAttachments = files => {
+    if (!files.length) return;
+    const accepted = filterWithinTotalLimit(postJobAttachments, files);
+    if (!accepted.length) return;
+    setPostJobAttachments(prev => [...prev, ...accepted]);
+  };
+
+  const handleJobUploadOption = async option => {
+    if (option === 'gallery') appendJobAttachments(await pickImagesFromGallery(true));
+    if (option === 'camera') appendJobAttachments(await pickImageFromCamera());
+    if (option === 'files') appendJobAttachments(await pickDocuments(true));
+  };
+
+  const removeJobAttachment = index => {
+    setPostJobAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleDeadlineChange = (event, selectedDate) => {
@@ -1272,7 +1361,19 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   };
 
   const handlePostJob = async () => {
-    if (!postJobForm.title.trim() || isPostingJob) return;
+    if (isPostingJob) return;
+
+    const fieldErrors = {
+      title: postJobForm.title.trim() ? '' : ERROR_JOB_TITLE_REQUIRED,
+      category: postJobForm.category.trim() ? '' : ERROR_JOB_CATEGORY_REQUIRED,
+    };
+
+    if (fieldErrors.title || fieldErrors.category) {
+      setPostJobFieldErrors(fieldErrors);
+      return;
+    }
+
+    setPostJobFieldErrors({ title: '', category: '' });
 
     if (!token) {
       setPostJobError(editingJobId ? ERROR_UPDATE_JOB_FAILED : ERROR_POST_JOB_FAILED);
@@ -1283,10 +1384,19 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     setPostJobError('');
 
     try {
+      let uploadedAttachments = [];
+      if (postJobAttachments.length) {
+        const uploadResponse = await uploadBuyerJobAttachmentsApi(token, postJobAttachments);
+        uploadedAttachments = extractUploadedAttachments(uploadResponse);
+        console.log('[PostJob] Uploaded attachments >>>', uploadedAttachments);
+      }
+
+      const jobPayload = { ...postJobForm, attachments: uploadedAttachments };
+
       if (editingJobId) {
-        await updateBuyerJobApi(token, editingJobId, postJobForm);
+        await updateBuyerJobApi(token, editingJobId, jobPayload);
       } else {
-        await createBuyerJobApi(token, postJobForm);
+        await createBuyerJobApi(token, jobPayload);
       }
 
       resetPostJobForm();
@@ -1886,7 +1996,9 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           onChangeText={v => updateForm('title', v)}
           placeholder={POST_JOB_PLACEHOLDERS.title}
           leftIcon="edit-2"
+          maxLength={JOB_TITLE_MAX_LENGTH}
           onFocus={handleInputFocus}
+          error={postJobFieldErrors.title}
         />
 
         <CustomTextInput
@@ -1901,10 +2013,13 @@ const JobsBookingsScreen = ({ navigation, route }) => {
 
         <CustomDropdown
           label={POST_JOB_LABELS.category}
+          required
           value={postJobForm.category}
-          options={JOB_CATEGORIES}
+          options={jobCategoryOptions}
+          searchable
           onSelect={v => updateForm('category', v)}
           style={styles.formField}
+          error={postJobFieldErrors.category}
         />
 
         <CustomDropdown
@@ -2032,6 +2147,67 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           leftIcon="code"
           onFocus={handleInputFocus}
           style={styles.formField}
+        />
+
+        <View style={styles.formField}>
+          <FormLabel label={POST_JOB_LABELS.attachments} />
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => setShowJobUploadOptions(true)}
+            style={[styles.jobUploadArea, postJobAttachments.length > 0 && styles.jobUploadAreaFilled]}>
+            {postJobAttachments.length === 0 ? (
+              <View style={alignJustifyCenter}>
+                <View style={styles.jobUploadIconCircle}>
+                  <Icon name="upload-cloud" size={24} color="#5B9BD5" />
+                </View>
+                <Text style={[styles.jobUploadTitle, style.fontWeightMedium]}>{UPLOAD_FILES}</Text>
+                <Text style={[styles.jobUploadHint, style.fontWeightThin]}>{POST_JOB_ATTACHMENTS_HINT}</Text>
+              </View>
+            ) : (
+              <View style={styles.jobAttachmentsPreview}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.jobAttachmentsRow}>
+                  {postJobAttachments.map((file, index) =>
+                    isImageFile(file) ? (
+                      <View key={`${file.uri}-${index}`} style={styles.jobImagePreviewWrap}>
+                        <Image source={{ uri: file.uri }} style={styles.jobImagePreview} />
+                        <TouchableOpacity
+                          style={styles.jobRemoveImageBtn}
+                          onPress={() => removeJobAttachment(index)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Icon name="x" size={12} color={whiteColor} />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View
+                        key={`${file.uri}-${index}`}
+                        style={[styles.jobFileChip, flexDirectionRow, alignItemsCenter]}>
+                        <Icon name="file" size={13} color={redColor} />
+                        <Text style={[styles.jobFileChipName, style.fontWeightThin]} numberOfLines={1}>
+                          {file.name}
+                        </Text>
+                        <TouchableOpacity onPress={() => removeJobAttachment(index)}>
+                          <Icon name="x" size={13} color={grayColor} />
+                        </TouchableOpacity>
+                      </View>
+                    ),
+                  )}
+                </ScrollView>
+                <View style={[styles.jobAddMoreRow, flexDirectionRow, alignItemsCenter]}>
+                  <Icon name="plus-circle" size={14} color={redColor} />
+                  <Text style={[styles.jobAddMoreText, style.fontWeightMedium]}>{ADD_MORE_FILES}</Text>
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <UploadOptionsModal
+          visible={showJobUploadOptions}
+          onClose={() => setShowJobUploadOptions(false)}
+          onSelect={handleJobUploadOption}
         />
 
         {postJobError ? <Text style={styles.postJobError}>{postJobError}</Text> : null}
@@ -2664,6 +2840,89 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   formField: { marginTop: spacings.large },
+  jobUploadArea: {
+    backgroundColor: inputBgColor,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: borderLightColor,
+    borderStyle: 'dashed',
+    paddingVertical: hp(2.5),
+    paddingHorizontal: spacings.large,
+    minHeight: hp(14),
+    justifyContent: 'center',
+  },
+  jobUploadAreaFilled: {
+    paddingVertical: spacings.large,
+  },
+  jobUploadIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E8F4FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacings.normal,
+  },
+  jobUploadTitle: {
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: blackColor,
+    marginBottom: spacings.xsmall,
+    textAlign: 'center',
+  },
+  jobUploadHint: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: grayColor,
+    textAlign: 'center',
+  },
+  jobAttachmentsPreview: {
+    gap: spacings.normal,
+  },
+  jobAttachmentsRow: {
+    gap: spacings.normal,
+    paddingVertical: spacings.xsmall,
+  },
+  jobImagePreviewWrap: {
+    position: 'relative',
+  },
+  jobImagePreview: {
+    width: hp(9),
+    height: hp(9),
+    borderRadius: 10,
+    backgroundColor: '#E8E8ED',
+  },
+  jobRemoveImageBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  jobFileChip: {
+    backgroundColor: whiteColor,
+    borderRadius: 8,
+    paddingHorizontal: spacings.normal,
+    paddingVertical: spacings.normal,
+    gap: spacings.normal,
+    marginBottom: spacings.small,
+  },
+  jobFileChipName: {
+    maxWidth: wp(40),
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: blackColor,
+  },
+  jobAddMoreRow: {
+    justifyContent: 'center',
+    gap: spacings.normal,
+    paddingTop: spacings.xsmall,
+  },
+  jobAddMoreText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: redColor,
+  },
   budgetRow: {
     gap: spacings.normal,
     marginTop: spacings.large,

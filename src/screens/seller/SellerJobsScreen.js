@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import {
   EMPTY_SELLER_JOBS_TITLE,
   EMPTY_SEARCH_MESSAGE,
   EMPTY_SEARCH_TITLE,
+  SCREEN_NAMES,
   SELLER_JOB_CATEGORIES,
   SELLER_JOBS_SEARCH_PLACEHOLDER,
   SELLER_JOBS_TITLE,
@@ -39,22 +40,16 @@ import {
   SELLER_BID_ACCEPTED,
   SELLER_BID_REJECTED,
   SELLER_YOUR_BID_PREFIX,
-  SELLER_JOB_DETAIL_MODAL,
   SELLER_PLACE_BID_MODAL,
 } from '../../constans/Constants';
 import SearchBar from '../../components/SearchBar';
 import ScreenHeader from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
-import SellerJobDetailModal from '../../components/modal/SellerJobDetailModal';
 import PlaceBidModal from '../../components/modal/PlaceBidModal';
 import SuccessModal from '../../components/modal/SuccessModal';
 import { selectAuth } from '../../redux/slices/authSlice';
 import { getApiErrorMessage } from '../../services/apiClient';
-import {
-  getSellerJobsApi,
-  getSellerJobByIdApi,
-  placeSellerJobBidApi,
-} from '../../services/sellerService';
+import { getCategoriesApi, getSellerJobsApi, placeSellerJobBidApi } from '../../services/sellerService';
 import { heightPercentageToDP as hp, widthPercentageToDP as wp } from '../../utils';
 import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
 
@@ -128,88 +123,6 @@ const capitalizeTitle = value => {
   const text = String(value || '').trim();
   if (!text) return '—';
   return text.charAt(0).toUpperCase() + text.slice(1);
-};
-
-const mapApiStatusToUi = status => {
-  const normalized = String(status || '')
-    .trim()
-    .toUpperCase()
-    .replace(/-/g, '_');
-  if (normalized === 'OPEN') return 'Open';
-  if (normalized === 'IN_PROGRESS') return 'In Progress';
-  if (normalized === 'CLOSED') return 'Closed';
-  if (normalized === 'CANCELLED') return 'Cancelled';
-  return status || '—';
-};
-
-const mapJobTypeToUi = jobType => {
-  const normalized = String(jobType || '')
-    .trim()
-    .toLowerCase();
-  return normalized === 'hourly' ? 'Hourly' : 'Fixed Price';
-};
-
-const mapExperienceLevelToUi = level => {
-  const normalized = String(level || '')
-    .trim()
-    .toLowerCase();
-  if (normalized === 'beginner' || normalized === 'entry') return 'Entry Level';
-  if (normalized === 'intermediate') return 'Intermediate';
-  if (normalized === 'expert') return 'Expert';
-  return 'Any Level';
-};
-
-const formatJobDate = dateStr => {
-  if (!dateStr) return '—';
-  const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) return String(dateStr);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-};
-
-const formatDeadlineForDisplay = value => {
-  if (!value) return '—';
-  const match = String(value)
-    .trim()
-    .match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) return `${match[3]}-${match[2]}-${match[1]}`;
-  return String(value);
-};
-
-const formatDetailAmount = amount => formatAppPrice(amount);
-
-const mapJobDetailForDisplay = job => {
-  const min = job?.budget_min ?? job?.budgetMin;
-  const max = job?.budget_max ?? job?.budgetMax;
-  const skills = Array.isArray(job?.skills)
-    ? job.skills.filter(Boolean).join(', ')
-    : String(job?.skills || '').trim();
-  const myBid = job?.my_bid || null;
-
-  return {
-    title: capitalizeTitle(job?.title),
-    status: mapApiStatusToUi(job?.status),
-    buyerName: job?.buyer?.name || 'Buyer',
-    category: job?.category || job?.job_category || '—',
-    jobType: mapJobTypeToUi(job?.job_type || job?.jobType),
-    budgetMin: min != null ? formatDetailAmount(min) : '—',
-    budgetMax: max != null ? formatDetailAmount(max) : '—',
-    deadline: formatDeadlineForDisplay(job?.deadline || job?.deadline_date || ''),
-    experienceLevel: mapExperienceLevelToUi(job?.experience_level || job?.experienceLevel),
-    description: job?.description || '',
-    skills,
-    bidCount: Number(job?.bid_count ?? job?.bidCount ?? job?.bids_count ?? 0) || 0,
-    date: formatJobDate(job?.created_at || job?.createdAt || job?.date),
-    hasBid: Boolean(job?.has_bid),
-    myBid: myBid
-      ? {
-          amount: formatDetailAmount(myBid.amount),
-          deliveryDays:
-            myBid.delivery_days != null ? `${myBid.delivery_days} days` : '—',
-          status: myBid.status,
-          proposal: myBid.proposal || '—',
-        }
-      : null,
-  };
 };
 
 const mapApiJobToUi = job => {
@@ -310,15 +223,10 @@ const SellerJobsScreen = ({ navigation }) => {
   const jobsPageRef = useRef(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [categoryOptions, setCategoryOptions] = useState(SELLER_JOB_CATEGORIES);
   const [jobs, setJobs] = useState([]);
   const [isInitialLoading, setIsInitialLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [jobDetailModal, setJobDetailModal] = useState({
-    visible: false,
-    loading: false,
-    job: null,
-    error: '',
-  });
   const [placeBidModal, setPlaceBidModal] = useState({
     visible: false,
     loading: false,
@@ -326,10 +234,6 @@ const SellerJobsScreen = ({ navigation }) => {
     error: '',
   });
   const [bidSuccessVisible, setBidSuccessVisible] = useState(false);
-
-  const closeJobDetailModal = () => {
-    setJobDetailModal({ visible: false, loading: false, job: null, error: '' });
-  };
 
   const closePlaceBidModal = () => {
     if (placeBidModal.loading) return;
@@ -410,30 +314,29 @@ const SellerJobsScreen = ({ navigation }) => {
     }
   };
 
-  const handleViewJob = async job => {
-    if (!token || !job?.id || jobDetailModal.loading) return;
-
-    setJobDetailModal({ visible: true, loading: true, job: null, error: '' });
-
-    try {
-      const response = await getSellerJobByIdApi(token, job.id);
-      const detail = response?.data || response;
-      setJobDetailModal({
-        visible: true,
-        loading: false,
-        job: mapJobDetailForDisplay(detail),
-        error: '',
-      });
-    } catch (error) {
-      const fallback = job.raw || job;
-      setJobDetailModal({
-        visible: true,
-        loading: false,
-        job: mapJobDetailForDisplay(fallback),
-        error: getApiErrorMessage(error?.data, error?.message || SELLER_JOB_DETAIL_MODAL.loadError),
-      });
-    }
+  const handleViewJob = job => {
+    if (!job?.id) return;
+    navigation.navigate(SCREEN_NAMES.SELLER_JOB_DETAILS, { job });
   };
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const response = await getCategoriesApi();
+      const list = Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response?.data?.data)
+          ? response.data.data
+          : [];
+      const names = list.map(item => String(item?.name || item || '').trim()).filter(Boolean);
+      if (names.length) setCategoryOptions(['All', ...names]);
+    } catch (error) {
+      // Keep the static SELLER_JOB_CATEGORIES fallback already in state.
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   useFocusEffect(
     useCallback(() => {
@@ -563,7 +466,7 @@ const SellerJobsScreen = ({ navigation }) => {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryRow}>
-          {SELLER_JOB_CATEGORIES.map(cat => {
+          {categoryOptions.map(cat => {
             const isActive = activeCategory === cat;
             return (
               <TouchableOpacity
@@ -597,14 +500,6 @@ const SellerJobsScreen = ({ navigation }) => {
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
         bounces={false}
-      />
-
-      <SellerJobDetailModal
-        visible={jobDetailModal.visible}
-        loading={jobDetailModal.loading}
-        error={jobDetailModal.error}
-        job={jobDetailModal.job}
-        onClose={closeJobDetailModal}
       />
 
       <PlaceBidModal

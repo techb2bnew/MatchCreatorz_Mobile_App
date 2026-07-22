@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { CommonActions, getFocusedRouteNameFromRoute, StackActions } from '@react-navigation/native';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import SellerDashboardStack from './dashboardStack';
@@ -48,51 +48,15 @@ const TAB_ROOT_SCREENS = {
   [SELLER_TABS.PROFILE_STACK]: SCREEN_NAMES.SELLER_PROFILE,
 };
 
-const getNestedState = (navigation, tabName, route) => {
-  const tabRoute = navigation.getState().routes.find(r => r.name === tabName);
-  return tabRoute?.state ?? route.state;
-};
-
-const shouldResetTab = (tabName, nestedState) => {
-  const rootScreen = TAB_ROOT_SCREENS[tabName];
-  const focusedScreen = nestedState ? getFocusedRouteNameFromRoute({ state: nestedState }) : rootScreen;
-  return focusedScreen !== rootScreen;
-};
-
-const resetTabStack = (navigation, tabName, nestedState) => {
-  const rootScreen = TAB_ROOT_SCREENS[tabName];
-  if (!shouldResetTab(tabName, nestedState)) return;
-
-  const nestedIndex = nestedState?.index ?? 0;
-  const stackKey = nestedState?.key;
-
-  if (nestedIndex > 0 && stackKey) {
-    navigation.dispatch({
-      ...StackActions.popToTop(),
-      target: stackKey,
-    });
-    return;
-  }
-
-  navigation.dispatch(
-    CommonActions.navigate({
-      name: tabName,
-      params: { screen: rootScreen },
-      merge: false,
-    }),
-  );
-};
-
 const createTabListeners = tabName => ({ navigation, route }) => ({
-  blur: () => {
-    resetTabStack(navigation, tabName, getNestedState(navigation, tabName, route));
-  },
   tabPress: e => {
-    const nestedState = getNestedState(navigation, tabName, route);
-    if (!shouldResetTab(tabName, nestedState)) return;
-
-    e.preventDefault();
-    resetTabStack(navigation, tabName, nestedState);
+    const nestedIndex = route.state?.index ?? 0;
+    if (nestedIndex > 0) {
+      e.preventDefault();
+      navigation.navigate(tabName, {
+        screen: TAB_ROOT_SCREENS[tabName],
+      });
+    }
   },
 });
 

@@ -188,6 +188,12 @@ export const buildCreateJobPayload = form => {
   const deadline = formatDeadlineForApi(form.deadline);
   if (deadline) payload.deadline = deadline;
 
+  // NOTE: field name unconfirmed — POST /buyer/jobs schema doesn't document an
+  // attachments field yet. Included defensively; verify with backend that it's saved.
+  if (Array.isArray(form.attachments) && form.attachments.length) {
+    payload.attachments = form.attachments;
+  }
+
   return payload;
 };
 
@@ -204,6 +210,11 @@ export const buildUpdateJobPayload = form => {
 
   const deadline = formatDeadlineForApi(form.deadline);
   if (deadline) payload.deadline = deadline;
+
+  // NOTE: field name unconfirmed — see buildCreateJobPayload.
+  if (Array.isArray(form.attachments) && form.attachments.length) {
+    payload.attachments = form.attachments;
+  }
 
   return payload;
 };
@@ -327,6 +338,43 @@ export const rejectBuyerJobBidApi = async (token, jobId, bidId) => {
 };
 
 /**
+ * PATCH /api/v1/buyer/jobs/:id/bids/:bidId/counter
+ * Counter a bid with a new amount / delivery (negotiation)
+ * Body: { amount (required), delivery_days?, note? }
+ * Auth header: Bearer token
+ */
+export const counterBuyerJobBidApi = async (token, jobId, bidId, form = {}) => {
+  const payload = { amount: Number(form.amount) };
+  if (form.delivery_days != null && form.delivery_days !== '') {
+    payload.delivery_days = Number(form.delivery_days);
+  }
+  if (form.note != null && String(form.note).trim()) {
+    payload.note = String(form.note).trim();
+  }
+
+  const endpoint = `${API_ENDPOINTS.BUYER_JOBS}/${jobId}/bids/${bidId}/counter`;
+  console.log('[BuyerCounterBid] Payload >>>', JSON.stringify({ endpoint, jobId, bidId, ...payload }, null, 2));
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'PATCH',
+      headers: { Accept: '*/*' },
+      body: payload,
+      token,
+    });
+    console.log('[BuyerCounterBid] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerCounterBid] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
  * GET /api/v1/buyer/jobs/:id
  * Auth header: Bearer token
  */
@@ -360,6 +408,49 @@ export const getBuyerJobByIdApi = async (token, jobId) => {
         2,
       ),
     );
+    throw error;
+  }
+};
+
+/**
+ * POST /api/v1/buyer/jobs/upload
+ * Upload job attachment documents to S3 (max 5 files, 10 MB each)
+ * Body: multipart/form-data { files: [binary, ...] }
+ * Response: { data: [{ url, name }, ...] } (exact shape not confirmed — parsed defensively by caller)
+ * Auth header: Bearer token
+ */
+export const uploadBuyerJobAttachmentsApi = async (token, files = []) => {
+  const formData = new FormData();
+  files.slice(0, 5).forEach((file, index) => {
+    if (!file?.uri) return;
+    formData.append('files', {
+      uri: file.uri,
+      name: file.name || `attachment_${Date.now()}_${index}`,
+      type: file.type || 'application/octet-stream',
+    });
+  });
+
+  console.log('[BuyerJobsUpload] Payload >>>', {
+    endpoint: API_ENDPOINTS.BUYER_JOBS_UPLOAD,
+    method: 'POST',
+    fileCount: files.length,
+  });
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.BUYER_JOBS_UPLOAD, {
+      method: 'POST',
+      headers: { Accept: '*/*' },
+      body: formData,
+      token,
+    });
+    console.log('[BuyerJobsUpload] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerJobsUpload] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
     throw error;
   }
 };
@@ -849,6 +940,269 @@ export const updateBuyerProfileApi = async (token, payload) => {
     return response;
   } catch (error) {
     console.log('[BuyerProfileUpdate] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * GET /api/v1/buyer/notifications?page=1&limit=20&unread_only=
+ * Auth header: Bearer token
+ */
+export const getBuyerNotificationsApi = async (token, params = {}) => {
+  const { page = 1, limit = 20, unreadOnly } = params;
+  const query = new URLSearchParams();
+  query.set('page', String(page));
+  query.set('limit', String(limit));
+  if (unreadOnly) query.set('unread_only', 'true');
+
+  const endpoint = `${API_ENDPOINTS.BUYER_NOTIFICATIONS}?${query.toString()}`;
+  console.log('[BuyerNotifications] Payload >>>', {
+    endpoint,
+    method: 'GET',
+    page,
+    limit,
+    unreadOnly: Boolean(unreadOnly),
+    hasToken: Boolean(token),
+  });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[BuyerNotifications] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerNotifications] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * PUT /api/v1/buyer/notifications/:id/read
+ * Auth header: Bearer token
+ */
+export const markBuyerNotificationReadApi = async (token, notificationId) => {
+  const endpoint = `${API_ENDPOINTS.BUYER_NOTIFICATIONS}/${notificationId}/read`;
+  console.log('[BuyerNotificationRead] Payload >>>', { endpoint, method: 'PUT', notificationId });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'PUT',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[BuyerNotificationRead] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerNotificationRead] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * PUT /api/v1/buyer/notifications/read-all
+ * Auth header: Bearer token
+ */
+export const markAllBuyerNotificationsReadApi = async token => {
+  console.log('[BuyerNotificationsReadAll] Payload >>>', {
+    endpoint: API_ENDPOINTS.BUYER_NOTIFICATIONS,
+    method: 'PUT',
+  });
+
+  try {
+    const response = await apiRequest(`${API_ENDPOINTS.BUYER_NOTIFICATIONS}/read-all`, {
+      method: 'PUT',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[BuyerNotificationsReadAll] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerNotificationsReadAll] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * DELETE /api/v1/buyer/notifications/:id
+ * Auth header: Bearer token
+ */
+export const deleteBuyerNotificationApi = async (token, notificationId) => {
+  const endpoint = `${API_ENDPOINTS.BUYER_NOTIFICATIONS}/${notificationId}`;
+  console.log('[BuyerNotificationDelete] Payload >>>', { endpoint, method: 'DELETE', notificationId });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'DELETE',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[BuyerNotificationDelete] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerNotificationDelete] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * GET /api/v1/buyer/notifications/unread-count
+ * Auth header: Bearer token
+ */
+export const getBuyerUnreadNotificationsCountApi = async token => {
+  const endpoint = `${API_ENDPOINTS.BUYER_NOTIFICATIONS}/unread-count`;
+  console.log('[BuyerUnreadCount] Payload >>>', { endpoint, method: 'GET', hasToken: Boolean(token) });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[BuyerUnreadCount] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerUnreadCount] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * GET /api/v1/buyer/preferences
+ * Auth header: Bearer token
+ */
+export const getBuyerPreferencesApi = async token => {
+  console.log('[BuyerPreferences] Payload >>>', {
+    endpoint: API_ENDPOINTS.BUYER_PREFERENCES,
+    method: 'GET',
+    hasToken: Boolean(token),
+  });
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.BUYER_PREFERENCES, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[BuyerPreferences] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerPreferences] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * PUT /api/v1/buyer/preferences
+ * Body: { notifications?: {...}, privacy?: {...} } — shallow-merged per group by the backend
+ * Auth header: Bearer token
+ */
+export const updateBuyerPreferencesApi = async (token, payload) => {
+  console.log('[BuyerPreferencesUpdate] Payload >>>', JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.BUYER_PREFERENCES, {
+      method: 'PUT',
+      headers: { Accept: '*/*' },
+      body: payload,
+      token,
+    });
+    console.log('[BuyerPreferencesUpdate] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerPreferencesUpdate] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * PUT /api/v1/buyer/fcm-token
+ * Body: { platform: 'mobile', token: <FCM device token> }
+ * Auth header: Bearer token
+ */
+export const registerBuyerFcmTokenApi = async (token, fcmToken) => {
+  const payload = { platform: 'mobile', token: fcmToken };
+  console.log('[BuyerRegisterFcmToken] Payload >>>', {
+    endpoint: API_ENDPOINTS.BUYER_FCM_TOKEN,
+    method: 'PUT',
+    hasFcmToken: Boolean(fcmToken),
+  });
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.BUYER_FCM_TOKEN, {
+      method: 'PUT',
+      headers: { Accept: '*/*' },
+      body: payload,
+      token,
+    });
+    console.log('[BuyerRegisterFcmToken] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerRegisterFcmToken] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * DELETE /api/v1/buyer/fcm-token
+ * Body: { platform: 'mobile' } — clears only the mobile token on logout
+ * Auth header: Bearer token
+ */
+export const clearBuyerFcmTokenApi = async token => {
+  console.log('[BuyerClearFcmToken] Payload >>>', {
+    endpoint: API_ENDPOINTS.BUYER_FCM_TOKEN,
+    method: 'DELETE',
+  });
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.BUYER_FCM_TOKEN, {
+      method: 'DELETE',
+      headers: { Accept: '*/*' },
+      body: { platform: 'mobile' },
+      token,
+    });
+    console.log('[BuyerClearFcmToken] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerClearFcmToken] Error response <<<', {
       status: error?.status,
       message: error?.message,
       data: error?.data,

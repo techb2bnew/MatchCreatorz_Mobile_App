@@ -5,10 +5,14 @@ import {
   AUTH_TOKEN_KEY,
   AUTH_USER_KEY,
   ERROR_REGISTER_FAILED,
+  USER_ROLES,
   mapApiRoleToAppRole,
 } from '../../constans/Constants';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { registerUserApi, logoutUserApi } from '../../services/authService';
+import { clearBuyerFcmTokenApi } from '../../services/buyerService';
+import { clearSellerFcmTokenApi } from '../../services/sellerService';
+import { setAppBadgeCount } from '../../services/notificationService';
 
 const AUTH_STORAGE_KEYS = [AUTH_TOKEN_KEY, AUTH_USER_KEY, AUTH_ROLE_KEY];
 
@@ -143,8 +147,16 @@ export const setAuthSession = createAsyncThunk('auth/setAuthSession', async ({ t
 
 export const logoutUser = createAsyncThunk('auth/logoutUser', async (_, { getState }) => {
   const token = getState()?.auth?.token;
+  const role = getState()?.auth?.role;
 
   if (token) {
+    try {
+      const clearFcmTokenApi = role === USER_ROLES.CREATOR ? clearSellerFcmTokenApi : clearBuyerFcmTokenApi;
+      await clearFcmTokenApi(token);
+    } catch (error) {
+      console.log('[Logout] Failed to clear push token', error?.message || error);
+    }
+
     try {
       await logoutUserApi(token);
     } catch (error) {
@@ -153,6 +165,7 @@ export const logoutUser = createAsyncThunk('auth/logoutUser', async (_, { getSta
     }
   }
 
+  await setAppBadgeCount(0);
   await clearPersistedSession();
   return true;
 });

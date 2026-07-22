@@ -427,6 +427,70 @@ export const placeSellerJobBidApi = async (token, jobId, form) => {
 };
 
 /**
+ * PATCH /api/v1/seller/jobs/:id/bid/accept
+ * Accept the buyer's counter offer (creates a booking)
+ * Auth header: Bearer token
+ */
+export const acceptSellerJobBidApi = async (token, jobId) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_JOBS}/${jobId}/bid/accept`;
+  console.log('[SellerAcceptCounter] Payload >>>', { endpoint, method: 'PATCH', jobId, hasToken: Boolean(token) });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'PATCH',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[SellerAcceptCounter] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerAcceptCounter] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/seller/jobs/:id/bid/counter
+ * Counter back after the buyer countered your bid
+ * Body: { amount (required), delivery_days?, note? }
+ * Auth header: Bearer token
+ */
+export const counterSellerJobBidApi = async (token, jobId, form = {}) => {
+  const payload = { amount: Number(form.amount) };
+  if (form.delivery_days != null && form.delivery_days !== '') {
+    payload.delivery_days = Number(form.delivery_days);
+  }
+  if (form.note != null && String(form.note).trim()) {
+    payload.note = String(form.note).trim();
+  }
+
+  const endpoint = `${API_ENDPOINTS.SELLER_JOBS}/${jobId}/bid/counter`;
+  console.log('[SellerCounterBid] Payload >>>', JSON.stringify({ endpoint, jobId, ...payload }, null, 2));
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'PATCH',
+      headers: { Accept: '*/*' },
+      body: payload,
+      token,
+    });
+    console.log('[SellerCounterBid] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerCounterBid] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
  * GET /api/v1/seller/profile
  * Auth header: Bearer token
  */
@@ -949,6 +1013,332 @@ export const updateSellerProfileApi = async (token, payload) => {
     return response;
   } catch (error) {
     console.log('[SellerProfileUpdate] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * GET /api/v1/seller/notifications?page=1&limit=20&unread_only=
+ * Auth header: Bearer token
+ */
+export const getSellerNotificationsApi = async (token, params = {}) => {
+  const { page = 1, limit = 20, unreadOnly } = params;
+  const query = new URLSearchParams();
+  query.set('page', String(page));
+  query.set('limit', String(limit));
+  if (unreadOnly) query.set('unread_only', 'true');
+
+  const endpoint = `${API_ENDPOINTS.SELLER_NOTIFICATIONS}?${query.toString()}`;
+  console.log('[SellerNotifications] Payload >>>', {
+    endpoint,
+    method: 'GET',
+    page,
+    limit,
+    unreadOnly: Boolean(unreadOnly),
+    hasToken: Boolean(token),
+  });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[SellerNotifications] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerNotifications] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * PUT /api/v1/seller/notifications/:id/read
+ * Auth header: Bearer token
+ */
+export const markSellerNotificationReadApi = async (token, notificationId) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_NOTIFICATIONS}/${notificationId}/read`;
+  console.log('[SellerNotificationRead] Payload >>>', { endpoint, method: 'PUT', notificationId });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'PUT',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[SellerNotificationRead] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerNotificationRead] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * PUT /api/v1/seller/notifications/read-all
+ * Auth header: Bearer token
+ */
+export const markAllSellerNotificationsReadApi = async token => {
+  console.log('[SellerNotificationsReadAll] Payload >>>', {
+    endpoint: API_ENDPOINTS.SELLER_NOTIFICATIONS,
+    method: 'PUT',
+  });
+
+  try {
+    const response = await apiRequest(`${API_ENDPOINTS.SELLER_NOTIFICATIONS}/read-all`, {
+      method: 'PUT',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[SellerNotificationsReadAll] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerNotificationsReadAll] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * DELETE /api/v1/seller/notifications/:id
+ * Auth header: Bearer token
+ */
+export const deleteSellerNotificationApi = async (token, notificationId) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_NOTIFICATIONS}/${notificationId}`;
+  console.log('[SellerNotificationDelete] Payload >>>', { endpoint, method: 'DELETE', notificationId });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'DELETE',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[SellerNotificationDelete] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerNotificationDelete] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * GET /api/v1/seller/notifications/unread-count
+ * Auth header: Bearer token
+ */
+export const getSellerUnreadNotificationsCountApi = async token => {
+  const endpoint = `${API_ENDPOINTS.SELLER_NOTIFICATIONS}/unread-count`;
+  console.log('[SellerUnreadCount] Payload >>>', { endpoint, method: 'GET', hasToken: Boolean(token) });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[SellerUnreadCount] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerUnreadCount] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * GET /api/v1/seller/preferences
+ * Auth header: Bearer token
+ */
+export const getSellerPreferencesApi = async token => {
+  console.log('[SellerPreferences] Payload >>>', {
+    endpoint: API_ENDPOINTS.SELLER_PREFERENCES,
+    method: 'GET',
+    hasToken: Boolean(token),
+  });
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.SELLER_PREFERENCES, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[SellerPreferences] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerPreferences] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * PUT /api/v1/seller/preferences
+ * Body: { notifications?: {...}, privacy?: {...}, payout?: {...} } — shallow-merged per group
+ * Auth header: Bearer token
+ */
+export const updateSellerPreferencesApi = async (token, payload) => {
+  console.log('[SellerPreferencesUpdate] Payload >>>', JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.SELLER_PREFERENCES, {
+      method: 'PUT',
+      headers: { Accept: '*/*' },
+      body: payload,
+      token,
+    });
+    console.log('[SellerPreferencesUpdate] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerPreferencesUpdate] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * PUT /api/v1/seller/fcm-token
+ * Body: { platform: 'mobile', token: <FCM device token> }
+ * Auth header: Bearer token
+ */
+export const registerSellerFcmTokenApi = async (token, fcmToken) => {
+  const payload = { platform: 'mobile', token: fcmToken };
+  console.log('[SellerRegisterFcmToken] Payload >>>', {
+    endpoint: API_ENDPOINTS.SELLER_FCM_TOKEN,
+    method: 'PUT',
+    hasFcmToken: Boolean(fcmToken),
+  });
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.SELLER_FCM_TOKEN, {
+      method: 'PUT',
+      headers: { Accept: '*/*' },
+      body: payload,
+      token,
+    });
+    console.log('[SellerRegisterFcmToken] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerRegisterFcmToken] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * DELETE /api/v1/seller/fcm-token
+ * Body: { platform: 'mobile' } — clears only the mobile token on logout
+ * Auth header: Bearer token
+ */
+export const clearSellerFcmTokenApi = async token => {
+  console.log('[SellerClearFcmToken] Payload >>>', {
+    endpoint: API_ENDPOINTS.SELLER_FCM_TOKEN,
+    method: 'DELETE',
+  });
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.SELLER_FCM_TOKEN, {
+      method: 'DELETE',
+      headers: { Accept: '*/*' },
+      body: { platform: 'mobile' },
+      token,
+    });
+    console.log('[SellerClearFcmToken] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerClearFcmToken] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * GET /api/v1/seller/connects/balance
+ * Auth header: Bearer token
+ */
+export const getSellerConnectsBalanceApi = async token => {
+  const endpoint = `${API_ENDPOINTS.SELLER_CONNECTS}/balance`;
+  console.log('[SellerConnectsBalance] Payload >>>', { endpoint, method: 'GET', hasToken: Boolean(token) });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[SellerConnectsBalance] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerConnectsBalance] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * GET /api/v1/seller/connects/history?page=1&limit=20
+ * Auth header: Bearer token
+ */
+export const getSellerConnectsHistoryApi = async (token, params = {}) => {
+  const { page = 1, limit = 20 } = params;
+  const query = new URLSearchParams();
+  query.set('page', String(page));
+  query.set('limit', String(limit));
+
+  const endpoint = `${API_ENDPOINTS.SELLER_CONNECTS}/history?${query.toString()}`;
+  console.log('[SellerConnectsHistory] Payload >>>', {
+    endpoint,
+    method: 'GET',
+    page,
+    limit,
+    hasToken: Boolean(token),
+  });
+
+  try {
+    const response = await apiRequest(endpoint, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+    console.log('[SellerConnectsHistory] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerConnectsHistory] Error response <<<', {
       status: error?.status,
       message: error?.message,
       data: error?.data,

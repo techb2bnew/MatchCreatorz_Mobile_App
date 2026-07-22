@@ -22,6 +22,7 @@ export const SCREEN_NAMES = {
   NOTIFICATIONS: 'Notifications',
   SELLER_DASHBOARD: 'SellerDashboard',
   SELLER_JOBS: 'SellerJobs',
+  SELLER_JOB_DETAILS: 'SellerJobDetails',
   SELLER_WORK: 'SellerWork',
   SELLER_PROFILE: 'SellerProfile',
   SELLER_WALLET: 'SellerWallet',
@@ -396,7 +397,12 @@ export const DASHBOARD_SEE_ALL = 'See all';
 
 export const NOTIFICATIONS_TITLE = 'Notifications';
 export const MARK_ALL_READ = 'Mark all as read';
-export const UNREAD_NOTIFICATIONS_COUNT = 3;
+export const ERROR_LOAD_NOTIFICATIONS_FAILED = 'Could not load notifications.';
+export const ERROR_MARK_NOTIFICATION_READ_FAILED = 'Could not update notification.';
+export const ERROR_MARK_ALL_NOTIFICATIONS_READ_FAILED = 'Could not mark all as read.';
+export const DELETE_NOTIFICATION_TITLE = 'Delete Notification?';
+export const DELETE_NOTIFICATION_MESSAGE = 'This notification will be permanently removed.';
+export const ERROR_DELETE_NOTIFICATION_FAILED = 'Could not delete notification. Please try again.';
 
 export const NOTIFICATION_FILTER_TABS = {
   ALL: 'all',
@@ -470,6 +476,7 @@ export const MY_JOBS_SUB_TABS = {
 
 export const MY_JOBS_POSTED_TAB = 'My Posted Jobs';
 export const MY_JOBS_POST_NEW_TAB = 'Post New Job';
+export const JOB_TITLE_MAX_LENGTH = 255;
 export const POST_JOB_TITLE = 'Post a New Job';
 export const POST_JOB_SUBTITLE = 'Fill in the details to attract the right creators';
 export const POST_JOB_BTN = 'Post Job';
@@ -509,7 +516,10 @@ export const POST_JOB_LABELS = {
   deadline: 'Deadline',
   experienceLevel: 'Experience Level',
   skills: 'Required Skills',
+  attachments: 'Attachments',
 };
+
+export const POST_JOB_ATTACHMENTS_HINT = 'Add reference images or a brief (JPG, PNG, PDF, DOC)';
 
 export const POST_JOB_TIPS = [
   'Write a clear, specific title',
@@ -768,6 +778,11 @@ export const SELLER_CONNECTS_BUY_TITLE = 'Buy Connects';
 export const SELLER_CONNECTS_HISTORY = 'Connect History';
 export const SELLER_CONNECTS_BUY_NOW = 'Buy Now';
 export const SELLER_CONNECTS_MOST_POPULAR = 'Most Popular';
+export const SELLER_CONNECTS_BUY_UNAVAILABLE_TOAST =
+  'Connects purchase is coming soon. Contact admin to add connects to your account.';
+export const ERROR_LOAD_CONNECTS_FAILED = 'Could not load connects data.';
+export const EMPTY_CONNECTS_HISTORY_TITLE = 'No connects activity yet';
+export const EMPTY_CONNECTS_HISTORY_MESSAGE = 'Your connects purchases and usage will appear here.';
 
 export const SELLER_BIDS_TITLE = 'My Bids';
 export const SELLER_BOOKINGS_TITLE = 'My Bookings';
@@ -808,6 +823,35 @@ export const SELLER_PLACE_BID_MODAL = {
   successTitle: 'Bid Placed!',
   successMessage: 'Your bid has been submitted successfully.',
 };
+
+export const COUNTER_OFFER_MODAL = {
+  title: 'Counter Offer',
+  jobLabel: 'JOB',
+  amountLabel: 'Counter Amount ($)',
+  amountPlaceholder: 'e.g. 300',
+  deliveryLabel: 'Delivery Days',
+  deliveryPlaceholder: 'e.g. 5',
+  noteLabel: 'Note (optional)',
+  notePlaceholder: 'Add a note about your counter offer...',
+  cancel: 'Cancel',
+  submit: 'Send Counter',
+  amountRequired: 'Enter a valid counter amount',
+  deliveryRequired: 'Enter delivery days',
+  submitError: 'Failed to send counter offer. Please try again.',
+  successTitle: 'Counter Offer Sent',
+  successMessage: 'Your counter offer has been sent.',
+};
+
+export const BID_STATUS_COUNTERED = 'Countered';
+export const COUNTER_OFFER_BTN = 'Counter';
+export const ACCEPT_COUNTER_BTN = 'Accept';
+export const COUNTER_BACK_BTN = 'Counter Back';
+export const COUNTERED_BY_LABEL = 'Countered Offer';
+export const ERROR_ACCEPT_COUNTER_FAILED = 'Failed to accept counter offer. Please try again.';
+export const ACCEPT_COUNTER_OFFER_TITLE = 'Accept Counter Offer?';
+export const ACCEPT_COUNTER_OFFER_MESSAGE =
+  "This will accept the buyer's counter offer and create a booking.";
+export const ACCEPT_COUNTER_OFFER_CONFIRM_BTN = 'Yes, Accept';
 
 export const SELLER_JOB_DETAIL_MODAL = {
   title: 'Job Details',
@@ -914,7 +958,10 @@ export const ERROR_GOOGLE_SIGNIN_FAILED = 'Google Sign-In failed. Please try aga
 export const ERROR_UPLOAD_TOO_LARGE =
   'Upload is too large. Please use smaller files (max 5MB each, 8MB total).';
 export const ERROR_PROFILE_UPDATE_FAILED = 'Failed to update profile. Please try again.';
+export const ERROR_UPDATE_PREFERENCE_FAILED = 'Failed to update setting. Please try again.';
 export const ERROR_POST_JOB_FAILED = 'Failed to post job. Please try again.';
+export const ERROR_JOB_TITLE_REQUIRED = 'Job title is required.';
+export const ERROR_JOB_CATEGORY_REQUIRED = 'Please select a category for your job.';
 export const ERROR_UPDATE_JOB_FAILED = 'Failed to update job. Please try again.';
 
 export const COMPANY_NAME = 'Company name (optional)';
@@ -940,9 +987,13 @@ export const API_ENDPOINTS = {
   BUYER_ACCOUNT: '/buyer/account',
   BUYER_STATS: '/buyer/stats',
   BUYER_JOBS: '/buyer/jobs',
+  BUYER_JOBS_UPLOAD: '/buyer/jobs/upload',
   BUYER_BOOKINGS: '/buyer/bookings',
   BUYER_SERVICES: '/buyer/services',
   BUYER_REVIEWS: '/buyer/reviews',
+  BUYER_NOTIFICATIONS: '/buyer/notifications',
+  BUYER_FCM_TOKEN: '/buyer/fcm-token',
+  BUYER_PREFERENCES: '/buyer/preferences',
   SELLER_PROFILE: '/seller/profile',
   SELLER_ACCOUNT: '/seller/account',
   SELLER_STATS: '/seller/stats',
@@ -952,5 +1003,9 @@ export const API_ENDPOINTS = {
   SELLER_SERVICES: '/seller/services',
   SELLER_REVIEWS: '/seller/reviews',
   SELLER_UPLOAD: '/seller/upload',
+  SELLER_NOTIFICATIONS: '/seller/notifications',
+  SELLER_FCM_TOKEN: '/seller/fcm-token',
+  SELLER_PREFERENCES: '/seller/preferences',
+  SELLER_CONNECTS: '/seller/connects',
   CATEGORIES: '/categories',
 };

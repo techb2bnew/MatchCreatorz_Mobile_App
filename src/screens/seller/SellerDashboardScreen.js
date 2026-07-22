@@ -51,7 +51,7 @@ import {
 import SearchBar from '../../components/SearchBar';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
-import { getSellerStatsApi } from '../../services/sellerService';
+import { getSellerConnectsBalanceApi, getSellerStatsApi } from '../../services/sellerService';
 import { heightPercentageToDP as hp } from '../../utils';
 import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
 
@@ -190,11 +190,19 @@ const mapSellerStatsToDashboardCards = stats =>
     }
   });
 
+const extractConnectsBalance = response => {
+  const data = response?.data ?? response ?? {};
+  const available =
+    Number(data.available ?? data.available_connects ?? data.connects_balance ?? data.balance ?? 0) || 0;
+  const purchased = Number(data.total_purchased ?? data.purchased ?? 0) || 0;
+  return { remaining: available, total: purchased > 0 ? purchased : Math.max(available, 1) };
+};
+
 const SellerDashboardScreen = ({ navigation }) => {
   const { user, token } = useSelector(selectAuth);
   const welcomeName = user?.name || user?.fullName || 'there';
   const [searchQuery, setSearchQuery] = useState('');
-  const [connects] = useState({ remaining: 48, total: 100 });
+  const [connects, setConnects] = useState({ remaining: 0, total: 1 });
   const [statCards, setStatCards] = useState(INITIAL_STAT_CARDS);
   const [activeBookings, setActiveBookings] = useState([]);
   const [isBookingsLoading, setIsBookingsLoading] = useState(false);
@@ -220,8 +228,15 @@ const SellerDashboardScreen = ({ navigation }) => {
 
         setIsBookingsLoading(true);
         try {
-          const statsResponse = await getSellerStatsApi(token);
+          const [statsResponse, connectsResponse] = await Promise.all([
+            getSellerStatsApi(token),
+            getSellerConnectsBalanceApi(token).catch(() => null),
+          ]);
           if (cancelled) return;
+
+          if (connectsResponse) {
+            setConnects(extractConnectsBalance(connectsResponse));
+          }
 
           console.log(
             '[SellerDashboard] Stats response <<<',

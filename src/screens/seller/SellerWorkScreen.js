@@ -31,15 +31,24 @@ import {
 } from '../../constans/Color';
 import { style, spacings } from '../../constans/Fonts';
 import {
+  ACCEPT_COUNTER_BTN,
+  ACCEPT_COUNTER_OFFER_CONFIRM_BTN,
+  ACCEPT_COUNTER_OFFER_MESSAGE,
+  ACCEPT_COUNTER_OFFER_TITLE,
+  BID_STATUS_COUNTERED,
   BOOKINGS_FILTER_LABELS,
   BOOKINGS_FILTER_TABS,
   BUYER_PREFIX,
+  COUNTER_BACK_BTN,
+  COUNTER_OFFER_MODAL,
+  COUNTERED_BY_LABEL,
   EMPTY_BOOKINGS_MESSAGE,
   EMPTY_BOOKINGS_TITLE,
   EMPTY_SEARCH_MESSAGE,
   EMPTY_SEARCH_TITLE,
   EMPTY_SELLER_BIDS_MESSAGE,
   EMPTY_SELLER_BIDS_TITLE,
+  ERROR_ACCEPT_COUNTER_FAILED,
   // EMPTY_SELLER_OFFERS_MESSAGE,
   // EMPTY_SELLER_OFFERS_TITLE,
   FEE_INCL_PREFIX,
@@ -92,6 +101,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 // import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
+import CounterOfferModal from '../../components/modal/CounterOfferModal';
 import SellerBookingDetailModal from '../../components/modal/SellerBookingDetailModal';
 import { selectAuth } from '../../redux/slices/authSlice';
 import { getApiErrorMessage } from '../../services/apiClient';
@@ -102,6 +112,8 @@ import {
   acceptSellerBookingApi,
   submitSellerBookingApi,
   cancelSellerBookingApi,
+  acceptSellerJobBidApi,
+  counterSellerJobBidApi,
 } from '../../services/sellerService';
 import { heightPercentageToDP as hp, widthPercentageToDP as wp } from '../../utils';
 import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
@@ -121,6 +133,7 @@ const WORK_SEGMENTS = [
 const getBidIcon = status => {
   if (status === 'Accepted') return { name: 'check-circle', color: greenColor, bg: '#E8F8EE' };
   if (status === 'Rejected' || status === 'Withdrawn') return { name: 'x-circle', color: redColor, bg: lightPink };
+  if (status === BID_STATUS_COUNTERED) return { name: 'repeat', color: purpleColor, bg: '#F3E8FF' };
   return { name: 'clock', color: goldColor, bg: '#FFF4E5' };
 };
 
@@ -188,6 +201,7 @@ const mapBidStatusToUi = status => {
   if (normalized === 'accepted') return 'Accepted';
   if (normalized === 'rejected') return 'Rejected';
   if (normalized === 'withdrawn') return 'Withdrawn';
+  if (normalized.includes('counter')) return BID_STATUS_COUNTERED;
   return 'Pending';
 };
 
@@ -296,9 +310,12 @@ const mapApiBookingToUi = booking => {
 const mapApiBidToUi = bid => {
   const job = bid?.job || {};
   const buyerName = job?.buyer?.name || 'Buyer';
+  const status = String(bid.status || '').trim().toLowerCase();
+  const counterNote = bid.counter_note || bid.note || bid.counter_offer?.note || '';
 
   return {
     id: String(bid.id),
+    jobId: String(job.id || bid.job_id || ''),
     title: capitalizeTitle(job.title),
     client: buyerName,
     time: formatPosted(bid.createdAt || bid.created_at || job.created_at),
@@ -308,6 +325,8 @@ const mapApiBidToUi = bid => {
     totalBids: Number(job.bids_count ?? 0) || 0,
     proposal: bid.proposal || '',
     status: mapBidStatusToUi(bid.status),
+    isCountered: status.includes('counter'),
+    counterNote,
     raw: bid,
   };
 };
@@ -345,6 +364,7 @@ const SellerWorkScreen = ({ navigation, route }) => {
     booking: null,
     error: '',
   });
+  const [counterModal, setCounterModal] = useState({ visible: false, bid: null, loading: false, error: '' });
 
   const [bids, setBids] = useState([]);
   const [bidStats, setBidStats] = useState({
@@ -605,6 +625,14 @@ const SellerWorkScreen = ({ navigation, route }) => {
         confirmText: SELLER_BOOKING_CANCEL_CONFIRM,
         showReasonInput: true,
       },
+      acceptCounterBid: {
+        title: ACCEPT_COUNTER_OFFER_TITLE,
+        message: ACCEPT_COUNTER_OFFER_MESSAGE,
+        confirmColor: greenColor,
+        iconName: 'check-circle',
+        confirmText: ACCEPT_COUNTER_OFFER_CONFIRM_BTN,
+        showReasonInput: false,
+      },
     };
     const config = configs[actionType];
     if (!config) return;
@@ -703,6 +731,8 @@ const SellerWorkScreen = ({ navigation, route }) => {
         await submitSellerBookingApi(token, targetId);
       } else if (actionType === 'cancelBooking') {
         await cancelSellerBookingApi(token, targetId, reason);
+      } else if (actionType === 'acceptCounterBid') {
+        await acceptSellerJobBidApi(token, targetId);
       }
 
       setConfirmModal(prev => ({
@@ -712,16 +742,56 @@ const SellerWorkScreen = ({ navigation, route }) => {
         reasonError: '',
       }));
 
-      hasMoreBookingsRef.current = true;
-      bookingsPageRef.current = 1;
-      await fetchSellerBookings(1, { isLoadMore: false });
+      if (actionType === 'acceptCounterBid') {
+        hasMoreBidsRef.current = true;
+        bidsPageRef.current = 1;
+        await fetchSellerBids(1, { isLoadMore: false });
+      } else {
+        hasMoreBookingsRef.current = true;
+        bookingsPageRef.current = 1;
+        await fetchSellerBookings(1, { isLoadMore: false });
+      }
     } catch (error) {
       Alert.alert(
         confirmModal.title,
-        getApiErrorMessage(error?.data, error?.message || ERROR_BOOKING_ACTION_FAILED),
+        getApiErrorMessage(
+          error?.data,
+          error?.message ||
+            (actionType === 'acceptCounterBid' ? ERROR_ACCEPT_COUNTER_FAILED : ERROR_BOOKING_ACTION_FAILED),
+        ),
       );
     } finally {
       setIsConfirmingAction(false);
+    }
+  };
+
+  const openCounterModal = bid => {
+    if (!bid?.jobId || isConfirmingAction) return;
+    setCounterModal({ visible: true, bid, loading: false, error: '' });
+  };
+
+  const closeCounterModal = () => {
+    if (counterModal.loading) return;
+    setCounterModal({ visible: false, bid: null, loading: false, error: '' });
+  };
+
+  const handleSubmitCounterBack = async form => {
+    const bid = counterModal.bid;
+    if (!bid?.jobId || !token || counterModal.loading) return;
+
+    setCounterModal(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      await counterSellerJobBidApi(token, bid.jobId, form);
+      setCounterModal({ visible: false, bid: null, loading: false, error: '' });
+      hasMoreBidsRef.current = true;
+      bidsPageRef.current = 1;
+      await fetchSellerBids(1, { isLoadMore: false });
+    } catch (error) {
+      setCounterModal(prev => ({
+        ...prev,
+        loading: false,
+        error: getApiErrorMessage(error?.data, error?.message || COUNTER_OFFER_MODAL.submitError),
+      }));
     }
   };
 
@@ -841,6 +911,49 @@ const SellerWorkScreen = ({ navigation, route }) => {
               </Text>
             ) : null}
           </TouchableOpacity>
+        ) : null}
+
+        {bid.isCountered ? (
+          <>
+            {bid.counterNote ? (
+              <View style={styles.counterNoteWrap}>
+                <Text style={[styles.counterNoteLabel, style.fontWeightMedium]}>{COUNTERED_BY_LABEL}</Text>
+                <Text style={[styles.counterNoteText, style.fontWeightThin]} numberOfLines={3}>
+                  {bid.counterNote}
+                </Text>
+              </View>
+            ) : null}
+            <View style={[styles.bidActionsRow, flexDirectionRow, alignItemsCenter]}>
+              <TouchableOpacity
+                style={[styles.counterBackBtn, styles.actionBtnFlex, alignJustifyCenter, flexDirectionRow]}
+                onPress={() => openCounterModal(bid)}
+                disabled={isConfirmingAction}
+                activeOpacity={0.7}>
+                <Icon name="repeat" size={13} color={purpleColor} />
+                <Text
+                  style={[styles.counterBackBtnText, style.fontWeightMedium]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}>
+                  {COUNTER_BACK_BTN}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.acceptCounterBtn, styles.actionBtnFlex, alignJustifyCenter, flexDirectionRow]}
+                onPress={() => openConfirmModal('acceptCounterBid', bid.jobId)}
+                disabled={isConfirmingAction}
+                activeOpacity={0.7}>
+                <Icon name="check" size={13} color={whiteColor} />
+                <Text
+                  style={[styles.acceptCounterBtnText, style.fontWeightMedium]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}>
+                  {ACCEPT_COUNTER_BTN}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
         ) : null}
       </View>
     );
@@ -1200,6 +1313,17 @@ const SellerWorkScreen = ({ navigation, route }) => {
         booking={bookingDetailModal.booking}
         onClose={closeBookingDetailModal}
       />
+
+      <CounterOfferModal
+        visible={counterModal.visible}
+        job={counterModal.bid ? { title: counterModal.bid.title } : null}
+        title={COUNTER_OFFER_MODAL.title}
+        submitLabel={COUNTER_OFFER_MODAL.submit}
+        loading={counterModal.loading}
+        error={counterModal.error}
+        onClose={closeCounterModal}
+        onSubmit={handleSubmitCounterBack}
+      />
     </SafeAreaView>
   );
 };
@@ -1406,6 +1530,53 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: style.fontSizeExtraSmall.fontSize,
     color: redColor,
+  },
+  counterNoteWrap: {
+    backgroundColor: '#F3E8FF',
+    borderRadius: 8,
+    padding: spacings.normal,
+    marginTop: spacings.normal,
+  },
+  counterNoteLabel: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: purpleColor,
+    marginBottom: 2,
+  },
+  counterNoteText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: blackColor,
+    lineHeight: 18,
+  },
+  bidActionsRow: {
+    gap: spacings.normal,
+    marginTop: spacings.large,
+  },
+  actionBtnFlex: {
+    flex: 1,
+  },
+  counterBackBtn: {
+    borderRadius: 8,
+    paddingVertical: spacings.normal,
+    paddingHorizontal: spacings.small,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: purpleColor,
+    backgroundColor: whiteColor,
+  },
+  counterBackBtnText: {
+    color: purpleColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
+  },
+  acceptCounterBtn: {
+    backgroundColor: greenColor,
+    borderRadius: 8,
+    paddingVertical: spacings.normal,
+    paddingHorizontal: spacings.small,
+    gap: 6,
+  },
+  acceptCounterBtnText: {
+    color: whiteColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
   },
   sellerBookingCard: {
     backgroundColor: whiteColor,

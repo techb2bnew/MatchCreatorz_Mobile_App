@@ -1,15 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useDispatch, useSelector } from 'react-redux';
 import AuthStack from './authStack';
 import MainStack from './mainStack';
-import { SCREEN_NAMES } from '../constans/Constants';
+import { SCREEN_NAMES, USER_ROLES } from '../constans/Constants';
 import { redColor, whiteColor } from '../constans/Color';
 import { hydrateSession, selectAuth } from '../redux/slices/authSlice';
+import { fetchUnreadNotificationsCount } from '../redux/slices/notificationsSlice';
+import {
+  getCurrentFcmToken,
+  subscribeToForegroundMessages,
+  subscribeToTokenRefresh,
+} from '../services/notificationService';
+import { registerBuyerFcmTokenApi } from '../services/buyerService';
+import { registerSellerFcmTokenApi } from '../services/sellerService';
+import ForegroundNotificationBanner from '../components/ForegroundNotificationBanner';
 
 const RootStack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
+const FOREGROUND_BANNER_DURATION_MS = 4500;
 
 const BootLoader = () => (
   <View style={styles.boot}>
@@ -17,37 +28,119 @@ const BootLoader = () => (
   </View>
 );
 
+const registerFcmTokenForRole = (token, role, fcmToken) => {
+  if (!token || !fcmToken) return Promise.resolve();
+  const registerApi = role === USER_ROLES.CREATOR ? registerSellerFcmTokenApi : registerBuyerFcmTokenApi;
+  return registerApi(token, fcmToken).catch(error => {
+    console.log('[FCM] Failed to register push token', error?.message || error);
+  });
+};
+
 const RootNavigator = () => {
   const dispatch = useDispatch();
-  const { token, hydrated } = useSelector(selectAuth);
+  const { token, role, hydrated } = useSelector(selectAuth);
+  const sessionRef = useRef({ token, role });
+  const bannerTimeoutRef = useRef(null);
+  const [foregroundNotification, setForegroundNotification] = useState({
+    visible: false,
+    title: '',
+    body: '',
+  });
 
   useEffect(() => {
     dispatch(hydrateSession());
   }, [dispatch]);
+
+  useEffect(() => {
+    sessionRef.current = { token, role };
+  }, [token, role]);
+
+  const dismissForegroundBanner = () => {
+    if (bannerTimeoutRef.current) {
+      clearTimeout(bannerTimeoutRef.current);
+      bannerTimeoutRef.current = null;
+    }
+    setForegroundNotification(prev => ({ ...prev, visible: false }));
+  };
+
+  const handleForegroundBannerPress = () => {
+    dismissForegroundBanner();
+    if (navigationRef.isReady()) {
+      navigationRef.navigate(SCREEN_NAMES.MAIN, { screen: SCREEN_NAMES.NOTIFICATIONS });
+    }
+  };
+
+  useEffect(() => {
+    if (!hydrated || !token || !role) return;
+
+    dispatch(fetchUnreadNotificationsCount({ token, role }));
+
+    let cancelled = false;
+    getCurrentFcmToken().then(fcmToken => {
+      if (!cancelled) registerFcmTokenForRole(token, role, fcmToken);
+    });
+
+    const unsubscribeTokenRefresh = subscribeToTokenRefresh(newFcmToken => {
+      const latest = sessionRef.current;
+      registerFcmTokenForRole(latest.token, latest.role, newFcmToken);
+    });
+
+    const unsubscribeForegroundMessages = subscribeToForegroundMessages(remoteMessage => {
+      const title = remoteMessage?.notification?.title || remoteMessage?.data?.title || 'New notification';
+      const body = remoteMessage?.notification?.body || remoteMessage?.data?.body || '';
+
+      if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
+      setForegroundNotification({ visible: true, title, body });
+      bannerTimeoutRef.current = setTimeout(dismissForegroundBanner, FOREGROUND_BANNER_DURATION_MS);
+
+      const latest = sessionRef.current;
+      if (latest.token && latest.role) {
+        dispatch(fetchUnreadNotificationsCount({ token: latest.token, role: latest.role }));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribeTokenRefresh?.();
+      unsubscribeForegroundMessages?.();
+      if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
+    };
+  }, [dispatch, hydrated, token, role]);
 
   if (!hydrated) {
     return <BootLoader />;
   }
 
   return (
-    <NavigationContainer>
-      <RootStack.Navigator
-        key={token ? 'app' : 'auth'}
-        initialRouteName={token ? SCREEN_NAMES.MAIN : 'Auth'}
-        screenOptions={{ headerShown: false, animation: 'fade' }}>
-        {token ? (
-          <RootStack.Screen name={SCREEN_NAMES.MAIN} component={MainStack} />
-        ) : (
-          <RootStack.Screen name="Auth" component={AuthStack} />
-        )}
-      </RootStack.Navigator>
-    </NavigationContainer>
+    <View style={styles.flex}>
+      <NavigationContainer ref={navigationRef}>
+        <RootStack.Navigator
+          key={token ? 'app' : 'auth'}
+          initialRouteName={token ? SCREEN_NAMES.MAIN : 'Auth'}
+          screenOptions={{ headerShown: false, animation: 'fade' }}>
+          {token ? (
+            <RootStack.Screen name={SCREEN_NAMES.MAIN} component={MainStack} />
+          ) : (
+            <RootStack.Screen name="Auth" component={AuthStack} />
+          )}
+        </RootStack.Navigator>
+      </NavigationContainer>
+
+      <ForegroundNotificationBanner
+        visible={foregroundNotification.visible}
+        title={foregroundNotification.title}
+        message={foregroundNotification.body}
+        onPress={handleForegroundBannerPress}
+        onDismiss={dismissForegroundBanner}
+      />
+    </View>
   );
 };
 
 export default RootNavigator;
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   boot: {
     flex: 1,
     alignItems: 'center',

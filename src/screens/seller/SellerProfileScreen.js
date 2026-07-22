@@ -8,6 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Linking,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,7 +16,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
 import { logoutUser, selectAuth, setAuthSession } from '../../redux/slices/authSlice';
-import { getSellerProfileApi, getSellerStatsApi, updateSellerProfileApi, deleteSellerAccountApi } from '../../services/sellerService';
+import {
+  getSellerProfileApi,
+  getSellerStatsApi,
+  updateSellerProfileApi,
+  deleteSellerAccountApi,
+  getSellerPreferencesApi,
+  updateSellerPreferencesApi,
+} from '../../services/sellerService';
 import { formatAppCurrency } from '../../utils/currency';
 import { getApiErrorMessage } from '../../services/apiClient';
 import {
@@ -100,6 +108,7 @@ import {
   ERROR_FULL_NAME_REQUIRED,
   ERROR_PHONE_REQUIRED,
   ERROR_PROFILE_UPDATE_FAILED,
+  ERROR_UPDATE_PREFERENCE_FAILED,
 } from '../../constans/Constants';
 import CustomTextInput from '../../components/CustomTextInput';
 import CustomButton from '../../components/CustomButton';
@@ -274,7 +283,7 @@ const SellerProfileScreen = ({ navigation }) => {
   const [notificationSettings, setNotificationSettings] = useState([
     { key: 'email', title: NOTIF_EMAIL, description: NOTIF_EMAIL_DESC, enabled: true },
     { key: 'sms', title: NOTIF_SMS, description: NOTIF_SMS_DESC, enabled: true },
-    { key: 'newJobs', title: SELLER_NOTIF_NEW_JOBS, description: SELLER_NOTIF_NEW_JOBS_DESC, enabled: true },
+    { key: 'jobAlert', title: SELLER_NOTIF_NEW_JOBS, description: SELLER_NOTIF_NEW_JOBS_DESC, enabled: true },
     {
       key: 'bidResponses',
       title: SELLER_NOTIF_BID_RESPONSES,
@@ -282,25 +291,25 @@ const SellerProfileScreen = ({ navigation }) => {
       enabled: true,
     },
     {
-      key: 'offerAlerts',
+      key: 'offerAlert',
       title: SELLER_NOTIF_OFFER_ALERTS,
       description: SELLER_NOTIF_OFFER_ALERTS_DESC,
       enabled: true,
     },
     {
-      key: 'bookingUpdates',
+      key: 'bookingAlert',
       title: NOTIF_BOOKING_UPDATES,
       description: NOTIF_BOOKING_UPDATES_DESC,
       enabled: true,
     },
     {
-      key: 'paymentAlerts',
+      key: 'payAlert',
       title: NOTIF_PAYMENT_ALERTS,
       description: NOTIF_PAYMENT_ALERTS_DESC,
       enabled: false,
     },
     {
-      key: 'chatMessages',
+      key: 'chatAlert',
       title: NOTIF_CHAT_MESSAGES,
       description: NOTIF_CHAT_MESSAGES_DESC,
       enabled: true,
@@ -339,6 +348,19 @@ const SellerProfileScreen = ({ navigation }) => {
             setProfileStats(EMPTY_PROFILE_STATS);
           }
         }
+
+        try {
+          const preferencesResponse = await getSellerPreferencesApi(token);
+          if (cancelled) return;
+          const notifications = preferencesResponse?.data?.notifications || preferencesResponse?.notifications || {};
+          setNotificationSettings(prev =>
+            prev.map(item =>
+              notifications[item.key] != null ? { ...item, enabled: Boolean(notifications[item.key]) } : item,
+            ),
+          );
+        } catch (error) {
+          // Keep default toggle state if preferences can't be loaded.
+        }
       };
 
       fetchSellerProfile();
@@ -360,10 +382,24 @@ const SellerProfileScreen = ({ navigation }) => {
     if (saveError) setSaveError('');
   };
 
-  const handleToggleNotification = key => {
+  const handleToggleNotification = async key => {
+    const current = notificationSettings.find(item => item.key === key);
+    if (!current) return;
+    const nextEnabled = !current.enabled;
+
     setNotificationSettings(prev =>
-      prev.map(item => (item.key === key ? { ...item, enabled: !item.enabled } : item)),
+      prev.map(item => (item.key === key ? { ...item, enabled: nextEnabled } : item)),
     );
+
+    if (!token) return;
+    try {
+      await updateSellerPreferencesApi(token, { notifications: { [key]: nextEnabled } });
+    } catch (error) {
+      setNotificationSettings(prev =>
+        prev.map(item => (item.key === key ? { ...item, enabled: !nextEnabled } : item)),
+      );
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_UPDATE_PREFERENCE_FAILED));
+    }
   };
 
   const handlePhotoOption = async option => {

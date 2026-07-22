@@ -11,8 +11,9 @@ import {
   whiteColor,
 } from '../constans/Color';
 import { style, spacings } from '../constans/Fonts';
-import { SCREEN_NAMES, UNREAD_NOTIFICATIONS_COUNT, BUYER_TABS, SELLER_TABS, USER_ROLES } from '../constans/Constants';
+import { SCREEN_NAMES, BUYER_TABS, SELLER_TABS, USER_ROLES } from '../constans/Constants';
 import { selectAuth, selectAppRole } from '../redux/slices/authSlice';
+import { selectUnreadNotificationsCount } from '../redux/slices/notificationsSlice';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
 
 const { flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween, alignJustifyCenter } =
@@ -39,6 +40,7 @@ const ScreenHeader = ({
 }) => {
   const { user: authUser } = useSelector(selectAuth);
   const appRole = useSelector(selectAppRole);
+  const unreadCount = useSelector(selectUnreadNotificationsCount);
 
   const headerUser = useMemo(() => {
     const source = user || authUser;
@@ -85,9 +87,9 @@ const ScreenHeader = ({
           {showNotifications ? (
             <TouchableOpacity style={styles.iconBtn} onPress={openNotifications} activeOpacity={0.7}>
               <Icon name="bell" size={20} color={blackColor} />
-              {UNREAD_NOTIFICATIONS_COUNT > 0 ? (
+              {unreadCount > 0 ? (
                 <View style={[styles.badge, alignJustifyCenter]}>
-                  <Text style={styles.badgeText}>{UNREAD_NOTIFICATIONS_COUNT}</Text>
+                  <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                 </View>
               ) : null}
             </TouchableOpacity>

@@ -8,6 +8,7 @@ import {
   TextInput,
   StyleSheet,
   KeyboardAvoidingView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -20,6 +21,8 @@ import {
   updateBuyerProfileApi,
   getBuyerStatsApi,
   deleteBuyerAccountApi,
+  getBuyerPreferencesApi,
+  updateBuyerPreferencesApi,
 } from '../../services/buyerService';
 import { formatAppCurrency } from '../../utils/currency';
 import { getApiErrorMessage } from '../../services/apiClient';
@@ -87,6 +90,7 @@ import {
   ERROR_FULL_NAME_REQUIRED,
   ERROR_PHONE_REQUIRED,
   ERROR_PROFILE_UPDATE_FAILED,
+  ERROR_UPDATE_PREFERENCE_FAILED,
 } from '../../constans/Constants';
 import CustomTextInput from '../../components/CustomTextInput';
 import CustomButton from '../../components/CustomButton';
@@ -236,6 +240,19 @@ const ProfileScreen = ({ navigation }) => {
             setProfileStats(EMPTY_PROFILE_STATS);
           }
         }
+
+        try {
+          const preferencesResponse = await getBuyerPreferencesApi(token);
+          if (cancelled) return;
+          const notifications = preferencesResponse?.data?.notifications || preferencesResponse?.notifications || {};
+          setNotificationSettings(prev =>
+            prev.map(item =>
+              notifications[item.key] != null ? { ...item, enabled: Boolean(notifications[item.key]) } : item,
+            ),
+          );
+        } catch (error) {
+          // Keep default toggle state if preferences can't be loaded.
+        }
       };
 
       fetchBuyerProfile();
@@ -251,10 +268,24 @@ const ProfileScreen = ({ navigation }) => {
     if (saveError) setSaveError('');
   };
 
-  const handleToggleNotification = key => {
+  const handleToggleNotification = async key => {
+    const current = notificationSettings.find(item => item.key === key);
+    if (!current) return;
+    const nextEnabled = !current.enabled;
+
     setNotificationSettings(prev =>
-      prev.map(item => (item.key === key ? { ...item, enabled: !item.enabled } : item)),
+      prev.map(item => (item.key === key ? { ...item, enabled: nextEnabled } : item)),
     );
+
+    if (!token) return;
+    try {
+      await updateBuyerPreferencesApi(token, { notifications: { [key]: nextEnabled } });
+    } catch (error) {
+      setNotificationSettings(prev =>
+        prev.map(item => (item.key === key ? { ...item, enabled: !nextEnabled } : item)),
+      );
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_UPDATE_PREFERENCE_FAILED));
+    }
   };
 
   const handlePhotoOption = async option => {
