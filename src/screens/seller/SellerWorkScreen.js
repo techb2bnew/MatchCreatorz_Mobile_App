@@ -49,6 +49,8 @@ import {
   EMPTY_SELLER_BIDS_MESSAGE,
   EMPTY_SELLER_BIDS_TITLE,
   ERROR_ACCEPT_COUNTER_FAILED,
+  ERROR_START_CHAT_FAILED,
+  MESSAGE_BUYER_BTN,
   // EMPTY_SELLER_OFFERS_MESSAGE,
   // EMPTY_SELLER_OFFERS_TITLE,
   FEE_INCL_PREFIX,
@@ -91,7 +93,9 @@ import {
   // SELLER_OFFERS_RECEIVED,
   // SELLER_OFFERS_SENT,
   // SELLER_OFFERS_TITLE,
+  SELLER_TABS,
   SELLER_WORK_TABS,
+  SCREEN_NAMES,
   TAB_SELLER_BOOKINGS_SEGMENT,
   TAB_SELLER_MY_BIDS,
   // TAB_SELLER_OFFERS,
@@ -105,6 +109,7 @@ import CounterOfferModal from '../../components/modal/CounterOfferModal';
 import SellerBookingDetailModal from '../../components/modal/SellerBookingDetailModal';
 import { selectAuth } from '../../redux/slices/authSlice';
 import { getApiErrorMessage } from '../../services/apiClient';
+import { createOrGetConversationApi } from '../../services/chatService';
 import {
   getSellerBidsApi,
   getSellerBookingsApi,
@@ -282,6 +287,7 @@ const mapApiBookingToUi = booking => {
 
   return {
     id: String(booking.id),
+    buyerId: buyer.id ?? booking?.buyer_id ?? null,
     title: capitalizeTitle(title),
     client: buyerName,
     clientInitials: getInitials(buyerName),
@@ -358,6 +364,46 @@ const SellerWorkScreen = ({ navigation, route }) => {
     reasonError: '',
   });
   const [isConfirmingAction, setIsConfirmingAction] = useState(false);
+  const [startingChatBookingId, setStartingChatBookingId] = useState(null);
+
+  const handleMessageBookingBuyer = useCallback(
+    async booking => {
+      if (!token || !booking?.buyerId || startingChatBookingId) return;
+
+      setStartingChatBookingId(booking.id);
+      try {
+        const response = await createOrGetConversationApi(token, booking.buyerId);
+        const conversation = response?.data?.conversation || response?.data || response;
+        const conversationId = conversation?.id;
+        if (!conversationId) throw new Error('missing conversation id');
+
+        const tabNavigation = navigation.getParent();
+        // Prime the Chat tab's stack with its list screen first (in a separate tick so
+        // React Navigation commits it) so back navigation stays within the tab instead
+        // of jumping to the tab navigator's first route.
+        tabNavigation?.navigate(SELLER_TABS.CHAT_STACK, { screen: SCREEN_NAMES.CHAT });
+        setTimeout(() => {
+          tabNavigation?.navigate(SELLER_TABS.CHAT_STACK, {
+            screen: SCREEN_NAMES.CHAT_CONVERSATION,
+            params: {
+              conversationId,
+              otherUser: {
+                id: booking.buyerId,
+                name: booking.buyerName,
+                initials: booking.buyerInitials,
+                avatarColor: redColor,
+              },
+            },
+          });
+        }, 0);
+      } catch (error) {
+        Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_START_CHAT_FAILED));
+      } finally {
+        setStartingChatBookingId(null);
+      }
+    },
+    [token, startingChatBookingId, navigation],
+  );
   const [bookingDetailModal, setBookingDetailModal] = useState({
     visible: false,
     loading: false,
@@ -1113,6 +1159,21 @@ const SellerWorkScreen = ({ navigation, route }) => {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.bookingMessageBtn, alignJustifyCenter, flexDirectionRow]}
+          onPress={() => handleMessageBookingBuyer(booking)}
+          disabled={!booking.buyerId || Boolean(startingChatBookingId)}
+          activeOpacity={0.7}>
+          {startingChatBookingId === booking.id ? (
+            <ActivityIndicator size="small" color={redColor} />
+          ) : (
+            <>
+              <Icon name="message-circle" size={14} color={redColor} />
+              <Text style={[styles.bookingMessageBtnText, style.fontWeightMedium]}>{MESSAGE_BUYER_BTN}</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
         <View style={[styles.sellerBookingFooter, flexDirectionRow, justifyContentSpaceBetween, alignItemsCenter]}>
           <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
             <Text style={[styles.statusBadgeText, { color: statusStyle.text }]}>{booking.status}</Text>
@@ -1598,6 +1659,20 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeSmall1x.fontSize,
   },
   sellerBookingInfo: { flex: 1 },
+  bookingMessageBtn: {
+    alignSelf: 'flex-end',
+    marginTop: spacings.large,
+    borderWidth: 1,
+    borderColor: redColor,
+    borderRadius: 8,
+    paddingHorizontal: spacings.normal,
+    paddingVertical: spacings.small,
+    gap: spacings.xsmall,
+  },
+  bookingMessageBtnText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: redColor,
+  },
   sellerBookingTitle: {
     fontSize: style.fontSizeNormal2x.fontSize,
     color: blackColor,

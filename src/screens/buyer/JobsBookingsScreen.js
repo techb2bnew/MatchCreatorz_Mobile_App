@@ -37,6 +37,7 @@ import {
   uploadBuyerJobAttachmentsApi,
 } from '../../services/buyerService';
 import { getCategoriesApi } from '../../services/sellerService';
+import { createOrGetConversationApi } from '../../services/chatService';
 import { getApiErrorMessage } from '../../services/apiClient';
 import {
   blackColor,
@@ -58,6 +59,9 @@ import {
   BOOKING_ACCEPT_MESSAGE,
   BOOKING_ACCEPT_TITLE,
   BOOKING_ACTIONS,
+  BUYER_TABS,
+  ERROR_START_CHAT_FAILED,
+  MESSAGE_SELLER_BTN,
   BOOKING_CANCEL_CONFIRM_BTN,
   BOOKING_CANCEL_MESSAGE,
   BOOKING_CANCEL_TITLE,
@@ -259,6 +263,7 @@ const mapApiBookingToUi = booking => {
 
   return {
     id: String(booking.id),
+    sellerId: seller.id ?? booking?.seller_id ?? null,
     title,
     sellerName,
     sellerInitials: getBookingInitials(sellerName),
@@ -377,6 +382,13 @@ const mapApiJobToUi = job => {
     .toUpperCase()
     .replace(/-/g, '_');
 
+  // Hired-seller id field name is unconfirmed against swagger — parsed defensively;
+  // the message button below only shows once this resolves to a real id.
+  const hiredSeller = job?.hired_seller || job?.accepted_bid?.seller || job?.assigned_seller || {};
+  const hiredSellerId =
+    hiredSeller.id ?? job?.accepted_bid?.seller_id ?? job?.assigned_seller_id ?? job?.seller_id ?? null;
+  const hiredSellerName = hiredSeller.name || job?.accepted_bid?.seller_name || '';
+
   return {
     id: String(job.id),
     title: job.title
@@ -389,6 +401,8 @@ const mapApiJobToUi = job => {
     description: job.description || '',
     budgetRange: formatBudgetRange(job),
     bidCount: Number(job.bid_count ?? job.bidCount ?? job.bids_count ?? 0) || 0,
+    hiredSellerId,
+    hiredSellerName,
     raw: job,
   };
 };
@@ -997,6 +1011,122 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       setConfirmBookingModal({ visible: true, service });
     }, 80);
   }, []);
+
+  const [startingChatServiceId, setStartingChatServiceId] = useState(null);
+  const [startingChatJobId, setStartingChatJobId] = useState(null);
+  const [startingChatBookingId, setStartingChatBookingId] = useState(null);
+
+  const handleMessageBookingSeller = useCallback(
+    async booking => {
+      if (!token || !booking?.sellerId || startingChatBookingId) return;
+
+      setStartingChatBookingId(booking.id);
+      try {
+        const response = await createOrGetConversationApi(token, booking.sellerId);
+        const conversation = response?.data?.conversation || response?.data || response;
+        const conversationId = conversation?.id;
+        if (!conversationId) throw new Error('missing conversation id');
+
+        const tabNavigation = navigation.getParent();
+        // Prime the Chat tab's stack with its list screen first (in a separate tick so
+        // React Navigation commits it) so back navigation stays within the tab instead
+        // of jumping to the tab navigator's first route.
+        tabNavigation?.navigate(BUYER_TABS.CHAT_STACK, { screen: SCREEN_NAMES.CHAT });
+        setTimeout(() => {
+          tabNavigation?.navigate(BUYER_TABS.CHAT_STACK, {
+            screen: SCREEN_NAMES.CHAT_CONVERSATION,
+            params: {
+              conversationId,
+              otherUser: {
+                id: booking.sellerId,
+                name: booking.sellerName,
+                initials: booking.sellerInitials,
+                avatarColor: redColor,
+              },
+            },
+          });
+        }, 0);
+      } catch (error) {
+        Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_START_CHAT_FAILED));
+      } finally {
+        setStartingChatBookingId(null);
+      }
+    },
+    [token, startingChatBookingId, navigation],
+  );
+
+  const handleMessageHiredSeller = useCallback(
+    async job => {
+      if (!token || !job?.hiredSellerId || startingChatJobId) return;
+
+      setStartingChatJobId(job.id);
+      try {
+        const response = await createOrGetConversationApi(token, job.hiredSellerId);
+        const conversation = response?.data?.conversation || response?.data || response;
+        const conversationId = conversation?.id;
+        if (!conversationId) throw new Error('missing conversation id');
+
+        const tabNavigation = navigation.getParent();
+        // Prime the Chat tab's stack with its list screen first (in a separate tick so
+        // React Navigation commits it) so back navigation stays within the tab instead
+        // of jumping to the tab navigator's first route.
+        tabNavigation?.navigate(BUYER_TABS.CHAT_STACK, { screen: SCREEN_NAMES.CHAT });
+        setTimeout(() => {
+          tabNavigation?.navigate(BUYER_TABS.CHAT_STACK, {
+            screen: SCREEN_NAMES.CHAT_CONVERSATION,
+            params: {
+              conversationId,
+              otherUser: { id: job.hiredSellerId, name: job.hiredSellerName || 'Seller', avatarColor: redColor },
+            },
+          });
+        }, 0);
+      } catch (error) {
+        Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_START_CHAT_FAILED));
+      } finally {
+        setStartingChatJobId(null);
+      }
+    },
+    [token, startingChatJobId, navigation],
+  );
+
+  const handleMessageServiceSeller = useCallback(
+    async service => {
+      if (!token || !service?.sellerId || startingChatServiceId) return;
+
+      setStartingChatServiceId(service.id);
+      try {
+        const response = await createOrGetConversationApi(token, service.sellerId);
+        const conversation = response?.data?.conversation || response?.data || response;
+        const conversationId = conversation?.id;
+        if (!conversationId) throw new Error('missing conversation id');
+
+        const tabNavigation = navigation.getParent();
+        // Prime the Chat tab's stack with its list screen first (in a separate tick so
+        // React Navigation commits it) so back navigation stays within the tab instead
+        // of jumping to the tab navigator's first route.
+        tabNavigation?.navigate(BUYER_TABS.CHAT_STACK, { screen: SCREEN_NAMES.CHAT });
+        setTimeout(() => {
+          tabNavigation?.navigate(BUYER_TABS.CHAT_STACK, {
+            screen: SCREEN_NAMES.CHAT_CONVERSATION,
+            params: {
+              conversationId,
+              otherUser: {
+                id: service.sellerId,
+                name: service.sellerName,
+                initials: service.initials,
+                avatarColor: redColor,
+              },
+            },
+          });
+        }, 0);
+      } catch (error) {
+        Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_START_CHAT_FAILED));
+      } finally {
+        setStartingChatServiceId(null);
+      }
+    },
+    [token, startingChatServiceId, navigation],
+  );
 
   const closeConfirmBooking = useCallback(() => {
     if (isCreatingBooking) return;
@@ -1694,6 +1824,19 @@ const JobsBookingsScreen = ({ navigation, route }) => {
             </Text>
           </View>
           <View style={[flexDirectionRow, styles.jobActions]}>
+            {job.hiredSellerId ? (
+              <TouchableOpacity
+                style={[styles.messageIconBtnBordered, alignJustifyCenter]}
+                onPress={() => handleMessageHiredSeller(job)}
+                disabled={Boolean(startingChatJobId)}
+                activeOpacity={0.7}>
+                {startingChatJobId === job.id ? (
+                  <ActivityIndicator size="small" color={redColor} />
+                ) : (
+                  <Icon name="message-circle" size={15} color={redColor} />
+                )}
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity
               style={[styles.outlineBtn, flexDirectionRow, alignItemsCenter]}
               onPress={() => navigation.navigate(SCREEN_NAMES.VIEW_BIDS, { job })}>
@@ -1717,7 +1860,6 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   const renderPostedJobsHeader = () => (
     <View>
       {renderJobStats()}
-      {renderJobsSubTabs()}
       {isJobsInitialLoading ? (
         <View style={styles.jobsInitialLoader}>
           <ActivityIndicator size="small" color={redColor} />
@@ -1756,6 +1898,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         {renderHeader()}
         {renderSearch()}
         {renderMainTabs()}
+        {renderJobsSubTabs()}
       </View>
       <FlatList
         data={jobs}
@@ -1841,70 +1984,86 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           </View>
         ) : null}
 
-        <TouchableOpacity
-          style={[
-            styles.contactSellerBtn,
-            hasContacted && styles.contactSellerBtnAgain,
-            alignJustifyCenter,
-            flexDirectionRow,
-          ]}
-          activeOpacity={0.85}
-          onPress={() => openConfirmBooking(service)}>
-          <Icon
-            name="message-circle"
-            size={14}
-            color={hasContacted ? redColor : whiteColor}
-          />
-          <Text
+        <View style={[styles.serviceActionsRow, flexDirectionRow, alignItemsCenter]}>
+          <TouchableOpacity
             style={[
-              styles.contactSellerBtnText,
-              hasContacted && styles.contactSellerBtnTextAgain,
-              style.fontWeightMedium,
-            ]}>
-            {hasContacted ? CONTACT_SELLER_AGAIN_BTN : CONTACT_SELLER_BTN}
-          </Text>
-        </TouchableOpacity>
+              styles.contactSellerBtn,
+              hasContacted && styles.contactSellerBtnAgain,
+              alignJustifyCenter,
+              flexDirectionRow,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => openConfirmBooking(service)}>
+            <Icon
+              name="message-circle"
+              size={14}
+              color={hasContacted ? redColor : whiteColor}
+            />
+            <Text
+              style={[
+                styles.contactSellerBtnText,
+                hasContacted && styles.contactSellerBtnTextAgain,
+                style.fontWeightMedium,
+              ]}>
+              {hasContacted ? CONTACT_SELLER_AGAIN_BTN : CONTACT_SELLER_BTN}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.messageSellerBtn, alignJustifyCenter, flexDirectionRow]}
+            onPress={() => handleMessageServiceSeller(service)}
+            disabled={!service.sellerId || Boolean(startingChatServiceId)}
+            activeOpacity={0.7}>
+            {startingChatServiceId === service.id ? (
+              <ActivityIndicator size="small" color={redColor} />
+            ) : (
+              <>
+                <Icon name="message-circle" size={14} color={redColor} />
+                <Text style={[styles.messageSellerBtnText, style.fontWeightMedium]}>{MESSAGE_SELLER_BTN}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
 
-  const renderServicesHeader = () => (
-    <View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.serviceCategoryRow}>
-        {serviceCategoryFilters.map(cat => {
-          const isActive = serviceCategory === cat;
-          return (
-            <TouchableOpacity
-              key={cat}
-              style={[styles.serviceCategoryChip, isActive && styles.serviceCategoryChipActive]}
-              onPress={() => {
-                if (serviceCategory === cat) return;
-                setServiceCategory(cat);
-                hasMoreServicesRef.current = true;
-                servicesPageRef.current = 1;
-              }}>
-              <Text
-                style={[
-                  styles.serviceCategoryText,
-                  style.fontWeightMedium,
-                  isActive && styles.serviceCategoryTextActive,
-                ]}>
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-      {isServicesInitialLoading ? (
-        <View style={styles.jobsInitialLoader}>
-          <ActivityIndicator size="small" color={redColor} />
-        </View>
-      ) : null}
-    </View>
+  const renderServiceCategoryFilters = () => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.serviceCategoryRow}>
+      {serviceCategoryFilters.map(cat => {
+        const isActive = serviceCategory === cat;
+        return (
+          <TouchableOpacity
+            key={cat}
+            style={[styles.serviceCategoryChip, isActive && styles.serviceCategoryChipActive]}
+            onPress={() => {
+              if (serviceCategory === cat) return;
+              setServiceCategory(cat);
+              hasMoreServicesRef.current = true;
+              servicesPageRef.current = 1;
+            }}>
+            <Text
+              style={[
+                styles.serviceCategoryText,
+                style.fontWeightMedium,
+                isActive && styles.serviceCategoryTextActive,
+              ]}>
+              {cat}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
   );
+
+  const renderServicesHeader = () =>
+    isServicesInitialLoading ? (
+      <View style={styles.jobsInitialLoader}>
+        <ActivityIndicator size="small" color={redColor} />
+      </View>
+    ) : null;
 
   const renderServicesFooter = () => {
     if (!isServicesLoadingMore) return <View style={{ height: hp(3) }} />;
@@ -1932,6 +2091,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         {renderHeader()}
         {renderSearch()}
         {renderMainTabs()}
+        {renderServiceCategoryFilters()}
       </View>
       <FlatList
         data={services}
@@ -2367,6 +2527,21 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           </View>
         </View>
 
+        <TouchableOpacity
+          style={[styles.bookingMessageBtn, alignJustifyCenter, flexDirectionRow]}
+          onPress={() => handleMessageBookingSeller(booking)}
+          disabled={!booking.sellerId || Boolean(startingChatBookingId)}
+          activeOpacity={0.7}>
+          {startingChatBookingId === booking.id ? (
+            <ActivityIndicator size="small" color={redColor} />
+          ) : (
+            <>
+              <Icon name="message-circle" size={14} color={redColor} />
+              <Text style={[styles.bookingMessageBtnText, style.fontWeightMedium]}>{MESSAGE_SELLER_BTN}</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
         <View style={[styles.bookingFooter, flexDirectionRow, justifyContentSpaceBetween, alignItemsCenter]}>
           <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
             <Text style={[styles.statusText, { color: statusStyle.text }]}>{booking.status}</Text>
@@ -2385,22 +2560,44 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     );
   };
 
-  const renderBookings = () => (
-    <View>
-      {renderBookingFilters()}
-      {isBookingsLoading ? (
-        <View style={styles.bookingsLoader}>
-          <ActivityIndicator size="large" color={redColor} />
-        </View>
-      ) : filteredBookings.length === 0 ? (
-        <EmptyState
-          icon="calendar"
-          title={searchQuery.trim() ? EMPTY_SEARCH_TITLE : EMPTY_BOOKINGS_TITLE}
-          message={searchQuery.trim() ? EMPTY_SEARCH_MESSAGE : EMPTY_BOOKINGS_MESSAGE}
-        />
-      ) : (
-        filteredBookings.map(renderBookingCard)
-      )}
+  const renderBookingsListHeader = () =>
+    isBookingsLoading ? (
+      <View style={styles.bookingsLoader}>
+        <ActivityIndicator size="large" color={redColor} />
+      </View>
+    ) : null;
+
+  const renderBookingsEmpty = () => {
+    if (isBookingsLoading) return null;
+    return (
+      <EmptyState
+        icon="calendar"
+        title={searchQuery.trim() ? EMPTY_SEARCH_TITLE : EMPTY_BOOKINGS_TITLE}
+        message={searchQuery.trim() ? EMPTY_SEARCH_MESSAGE : EMPTY_BOOKINGS_MESSAGE}
+      />
+    );
+  };
+
+  const renderBookingsList = () => (
+    <View style={flex}>
+      <View style={styles.jobsFixedHeader}>
+        {renderHeader()}
+        {renderSearch()}
+        {renderMainTabs()}
+        {renderBookingFilters()}
+      </View>
+      <FlatList
+        data={filteredBookings}
+        keyExtractor={item => String(item.id)}
+        renderItem={({ item }) => renderBookingCard(item)}
+        ListHeaderComponent={renderBookingsListHeader}
+        ListEmptyComponent={renderBookingsEmpty}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.jobsListContent}
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="none"
+        bounces={false}
+      />
     </View>
   );
 
@@ -2411,17 +2608,16 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           renderPostedJobsList()
         ) : isServicesTab ? (
           renderServicesList()
+        ) : isBookingsTab ? (
+          renderBookingsList()
         ) : (
           <ScrollView
             ref={scrollRef}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[
               screenContentStyles.scrollContent,
-              jobsSubTab === MY_JOBS_SUB_TABS.NEW_JOB && styles.formScrollContent,
-              {
-                paddingBottom:
-                  (jobsSubTab === MY_JOBS_SUB_TABS.NEW_JOB ? hp(12) : hp(3)) + keyboardBottom,
-              },
+              styles.formScrollContent,
+              { paddingBottom: hp(12) + keyboardBottom },
             ]}
             bounces={false}
             keyboardShouldPersistTaps="handled"
@@ -2430,7 +2626,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
             {renderSearch()}
             {renderMainTabs()}
 
-            {isJobsTab ? renderPostJobForm() : renderBookings()}
+            {renderPostJobForm()}
           </ScrollView>
         )}
       </KeyboardAvoidingView>
@@ -2627,9 +2823,26 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeExtraSmall.fontSize,
     color: grayColor,
   },
-  contactSellerBtn: {
+  serviceActionsRow: {
     marginHorizontal: spacings.large,
     marginBottom: spacings.large,
+    gap: wp(2),
+  },
+  messageSellerBtn: {
+    flex: 2,
+    gap: 6,
+    minHeight: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: redColor,
+    backgroundColor: whiteColor,
+  },
+  messageSellerBtnText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: redColor,
+  },
+  contactSellerBtn: {
+    flex: 3,
     gap: 6,
     minHeight: 40,
     borderRadius: 10,
@@ -2796,6 +3009,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacings.normal,
     paddingVertical: spacings.small,
     gap: spacings.xsmall,
+  },
+  messageIconBtnBordered: {
+    borderWidth: 1,
+    borderColor: redColor,
+    borderRadius: 8,
+    paddingHorizontal: spacings.normal,
+    paddingVertical: spacings.small,
   },
   outlineBtnText: {
     fontSize: style.fontSizeSmall1x.fontSize,
@@ -3105,6 +3325,20 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeSmall1x.fontSize,
     color: grayColor,
     marginTop: 2,
+  },
+  bookingMessageBtn: {
+    alignSelf: 'flex-end',
+    marginTop: spacings.large,
+    borderWidth: 1,
+    borderColor: redColor,
+    borderRadius: 8,
+    paddingHorizontal: spacings.normal,
+    paddingVertical: spacings.small,
+    gap: spacings.xsmall,
+  },
+  bookingMessageBtnText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: redColor,
   },
   bookingFooter: {
     marginTop: spacings.large,

@@ -20,6 +20,7 @@ import {
   rejectBuyerJobBidApi,
   counterBuyerJobBidApi,
 } from '../../services/buyerService';
+import { createOrGetConversationApi } from '../../services/chatService';
 import { getApiErrorMessage } from '../../services/apiClient';
 import {
   blackColor,
@@ -37,6 +38,7 @@ import { style } from '../../constans/Fonts';
 import {
   BID_STATUS_COUNTERED,
   BIDS_SUFFIX,
+  BUYER_TABS,
   COUNTER_OFFER_BTN,
   COUNTER_OFFER_MODAL,
   COUNTERED_BY_LABEL,
@@ -46,14 +48,17 @@ import {
   EMPTY_SEARCH_TITLE,
   ERROR_HIRE_CREATOR_FAILED,
   ERROR_REJECT_BID_FAILED,
+  ERROR_START_CHAT_FAILED,
   HIRE_CREATOR,
   HIRE_CREATOR_CONFIRM_BTN,
   HIRE_CREATOR_CONFIRM_MESSAGE,
   HIRE_CREATOR_CONFIRM_TITLE,
+  MESSAGE_SELLER_BTN,
   REJECT_BID,
   REJECT_BID_CONFIRM_BTN,
   REJECT_BID_CONFIRM_MESSAGE,
   REJECT_BID_CONFIRM_TITLE,
+  SCREEN_NAMES,
   VIEW_BIDS_TITLE,
 } from '../../constans/Constants';
 import SearchBar from '../../components/SearchBar';
@@ -149,6 +154,7 @@ const mapApiBidToUi = bid => {
 
   return {
     id: String(bid.id),
+    sellerId: seller.id ?? bid.seller_id ?? bid.creator_id ?? bid.user_id ?? null,
     creatorName,
     initials: getInitials(creatorName),
     email,
@@ -189,6 +195,38 @@ const ViewBidsScreen = ({ navigation, route }) => {
   });
   const [isRejecting, setIsRejecting] = useState(false);
   const [counterModal, setCounterModal] = useState({ visible: false, bid: null, loading: false, error: '' });
+  const [startingChatBidId, setStartingChatBidId] = useState(null);
+
+  const handleMessageSeller = async bid => {
+    if (!token || !bid.sellerId || startingChatBidId) return;
+
+    setStartingChatBidId(bid.id);
+    try {
+      const response = await createOrGetConversationApi(token, bid.sellerId);
+      const conversation = response?.data?.conversation || response?.data || response;
+      const conversationId = conversation?.id;
+      if (!conversationId) throw new Error('missing conversation id');
+
+      const tabNavigation = navigation.getParent();
+      // Prime the Chat tab's stack with its list screen first (in a separate tick so
+      // React Navigation commits it) so back navigation stays within the tab instead
+      // of jumping to the tab navigator's first route.
+      tabNavigation?.navigate(BUYER_TABS.CHAT_STACK, { screen: SCREEN_NAMES.CHAT });
+      setTimeout(() => {
+        tabNavigation?.navigate(BUYER_TABS.CHAT_STACK, {
+          screen: SCREEN_NAMES.CHAT_CONVERSATION,
+          params: {
+            conversationId,
+            otherUser: { id: bid.sellerId, name: bid.creatorName, initials: bid.initials, avatarColor: redColor },
+          },
+        });
+      }, 0);
+    } catch (error) {
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_START_CHAT_FAILED));
+    } finally {
+      setStartingChatBidId(null);
+    }
+  };
 
   const fetchBids = useCallback(async () => {
     if (!token || !jobId) {
@@ -481,13 +519,31 @@ const ViewBidsScreen = ({ navigation, route }) => {
                             {bid.statusLabel}
                           </Text>
                         </View>
-                        {bid.hired ? (
-                          <View
-                            style={[styles.hireBtn, styles.hireBtnDone, alignJustifyCenter, flexDirectionRow]}>
-                            <Icon name="check" size={14} color={whiteColor} />
-                            <Text style={[styles.hireBtnText, style.fontWeightMedium]}>Hired</Text>
-                          </View>
-                        ) : null}
+                        <View style={[flexDirectionRow, alignItemsCenter, { gap: wp(2) }]}>
+                          {bid.hired ? (
+                            <View
+                              style={[styles.hireBtn, styles.hireBtnDone, alignJustifyCenter, flexDirectionRow]}>
+                              <Icon name="check" size={14} color={whiteColor} />
+                              <Text style={[styles.hireBtnText, style.fontWeightMedium]}>Hired</Text>
+                            </View>
+                          ) : null}
+                          <TouchableOpacity
+                            style={[styles.messageSellerBtn, alignJustifyCenter, flexDirectionRow]}
+                            onPress={() => handleMessageSeller(bid)}
+                            disabled={!bid.sellerId || Boolean(startingChatBidId)}
+                            activeOpacity={0.7}>
+                            {startingChatBidId === bid.id ? (
+                              <ActivityIndicator size="small" color={redColor} />
+                            ) : (
+                              <>
+                                <Icon name="message-circle" size={13} color={redColor} />
+                                <Text style={[styles.messageSellerBtnText, style.fontWeightMedium]}>
+                                  {MESSAGE_SELLER_BTN}
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        </View>
                       </View>
 
                       {bid.hired || bid.rejected ? null : (
@@ -742,6 +798,19 @@ const styles = StyleSheet.create({
   },
   counterBtnText: {
     color: purpleColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
+  },
+  messageSellerBtn: {
+    borderRadius: wp(2),
+    paddingVertical: hp(0.8),
+    paddingHorizontal: wp(2.5),
+    gap: wp(1),
+    borderWidth: 1,
+    borderColor: redColor,
+    backgroundColor: whiteColor,
+  },
+  messageSellerBtnText: {
+    color: redColor,
     fontSize: style.fontSizeSmall1x.fontSize,
   },
   statusBadge: {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, AppState } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useDispatch, useSelector } from 'react-redux';
@@ -9,6 +9,7 @@ import { SCREEN_NAMES, USER_ROLES } from '../constans/Constants';
 import { redColor, whiteColor } from '../constans/Color';
 import { hydrateSession, selectAuth } from '../redux/slices/authSlice';
 import { fetchUnreadNotificationsCount } from '../redux/slices/notificationsSlice';
+import { fetchChatUnreadCount } from '../redux/slices/chatSlice';
 import {
   getCurrentFcmToken,
   subscribeToForegroundMessages,
@@ -16,6 +17,7 @@ import {
 } from '../services/notificationService';
 import { registerBuyerFcmTokenApi } from '../services/buyerService';
 import { registerSellerFcmTokenApi } from '../services/sellerService';
+import { connectSocket, disconnectSocket, reconnectSocketIfNeeded, getSocket } from '../services/socketService';
 import ForegroundNotificationBanner from '../components/ForegroundNotificationBanner';
 
 const RootStack = createNativeStackNavigator();
@@ -54,6 +56,53 @@ const RootNavigator = () => {
   useEffect(() => {
     sessionRef.current = { token, role };
   }, [token, role]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (token) {
+      connectSocket(token);
+    } else {
+      disconnectSocket();
+    }
+  }, [hydrated, token]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') {
+        reconnectSocketIfNeeded();
+        const latest = sessionRef.current;
+        if (latest.token) dispatch(fetchChatUnreadCount({ token: latest.token }));
+      }
+    });
+    return () => subscription.remove();
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!hydrated || !token) return undefined;
+
+    dispatch(fetchChatUnreadCount({ token }));
+
+    const socket = getSocket();
+    if (!socket) return undefined;
+
+    const refreshChatUnread = () => {
+      const latest = sessionRef.current;
+      if (latest.token) dispatch(fetchChatUnreadCount({ token: latest.token }));
+    };
+
+    socket.on('receiveMessage', refreshChatUnread);
+    socket.on('messageRead', refreshChatUnread);
+    socket.on('conversationUpdated', refreshChatUnread);
+    // Fired on my OTHER devices when I read a chat elsewhere — reset the tab badge.
+    socket.on('conversationRead', refreshChatUnread);
+
+    return () => {
+      socket.off('receiveMessage', refreshChatUnread);
+      socket.off('messageRead', refreshChatUnread);
+      socket.off('conversationUpdated', refreshChatUnread);
+      socket.off('conversationRead', refreshChatUnread);
+    };
+  }, [dispatch, hydrated, token]);
 
   const dismissForegroundBanner = () => {
     if (bannerTimeoutRef.current) {

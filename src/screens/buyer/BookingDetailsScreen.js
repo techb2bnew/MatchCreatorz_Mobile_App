@@ -5,6 +5,8 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,6 +15,8 @@ import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
 import { selectAuth } from '../../redux/slices/authSlice';
 import { getBuyerBookingByIdApi } from '../../services/buyerService';
+import { createOrGetConversationApi } from '../../services/chatService';
+import { getApiErrorMessage } from '../../services/apiClient';
 import {
   blackColor,
   borderLightColor,
@@ -41,8 +45,11 @@ import {
   BOOKING_SUBTOTAL,
   BOOKING_TIMELINE,
   BOOKING_TOTAL,
+  BUYER_TABS,
+  ERROR_START_CHAT_FAILED,
   FEE_INCL_PREFIX,
   FEE_SUFFIX,
+  SCREEN_NAMES,
   SELLER_PREFIX,
 } from '../../constans/Constants';
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
@@ -104,6 +111,44 @@ const BookingDetailsScreen = ({ navigation, route }) => {
     confirmColor: redColor,
     iconName: 'alert-circle',
   });
+
+  const [isStartingChat, setIsStartingChat] = useState(false);
+
+  const handleMessageSeller = async () => {
+    if (!token || !booking?.sellerId || isStartingChat) return;
+
+    setIsStartingChat(true);
+    try {
+      const response = await createOrGetConversationApi(token, booking.sellerId);
+      const conversation = response?.data?.conversation || response?.data || response;
+      const conversationId = conversation?.id;
+      if (!conversationId) throw new Error('missing conversation id');
+
+      const tabNavigation = navigation.getParent();
+      // Prime the Chat tab's stack with its list screen first (in a separate tick so
+      // React Navigation commits it) so back navigation stays within the tab instead
+      // of jumping to the tab navigator's first route.
+      tabNavigation?.navigate(BUYER_TABS.CHAT_STACK, { screen: SCREEN_NAMES.CHAT });
+      setTimeout(() => {
+        tabNavigation?.navigate(BUYER_TABS.CHAT_STACK, {
+          screen: SCREEN_NAMES.CHAT_CONVERSATION,
+          params: {
+            conversationId,
+            otherUser: {
+              id: booking.sellerId,
+              name: booking.sellerName,
+              initials: booking.sellerInitials,
+              avatarColor: redColor,
+            },
+          },
+        });
+      }, 0);
+    } catch (error) {
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_START_CHAT_FAILED));
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -229,6 +274,17 @@ const BookingDetailsScreen = ({ navigation, route }) => {
                   <Text style={[styles.statusText, { color: statusStyle.text }]}>{booking.status}</Text>
                 </View>
               </View>
+              <TouchableOpacity
+                style={[styles.messageSellerIconBtn, alignJustifyCenter]}
+                onPress={handleMessageSeller}
+                disabled={!booking.sellerId || isStartingChat}
+                activeOpacity={0.7}>
+                {isStartingChat ? (
+                  <ActivityIndicator size="small" color={redColor} />
+                ) : (
+                  <Icon name="message-circle" size={16} color={redColor} />
+                )}
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -369,6 +425,15 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeSmall1x.fontSize,
   },
   summaryInfo: { flex: 1 },
+  messageSellerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: redColor,
+    backgroundColor: whiteColor,
+    flexShrink: 0,
+  },
   bookingTitle: {
     fontSize: style.fontSizeMedium1x.fontSize,
     color: blackColor,

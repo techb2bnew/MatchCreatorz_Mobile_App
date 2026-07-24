@@ -3,7 +3,9 @@ import { Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
+import { selectChatUnreadCount } from '../../redux/slices/chatSlice';
 import SellerDashboardStack from './dashboardStack';
 import SellerJobsStack from './jobsStack';
 import SellerWorkStack from './workStack';
@@ -88,12 +90,13 @@ const getTabBarStyle = (route, insets) => {
 const SellerTabNavigator = () => {
   const insets = useSafeAreaInsets();
   const defaultTabBarStyle = getDefaultTabBarStyle(insets);
+  const chatUnreadCount = useSelector(selectChatUnreadCount);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        unmountOnBlur: true,
+        popToTopOnBlur: true,
         tabBarActiveTintColor: redColor,
         tabBarInactiveTintColor: grayColor,
         tabBarStyle: defaultTabBarStyle,
@@ -130,6 +133,7 @@ const SellerTabNavigator = () => {
         options={({ route }) => ({
           tabBarLabel: TAB_LABELS[SELLER_TABS.CHAT_STACK],
           tabBarStyle: getTabBarStyle(route, insets),
+          tabBarBadge: chatUnreadCount > 0 ? chatUnreadCount : undefined,
         })}
         listeners={createTabListeners(SELLER_TABS.CHAT_STACK)}
       />

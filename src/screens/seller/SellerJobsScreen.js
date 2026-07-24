@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   FlatList,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -30,11 +31,13 @@ import {
   EMPTY_SELLER_JOBS_TITLE,
   EMPTY_SEARCH_MESSAGE,
   EMPTY_SEARCH_TITLE,
+  ERROR_START_CHAT_FAILED,
   SCREEN_NAMES,
   SELLER_JOB_CATEGORIES,
   SELLER_JOBS_SEARCH_PLACEHOLDER,
   SELLER_JOBS_TITLE,
   SELLER_PLACE_BID,
+  SELLER_TABS,
   SELLER_VIEW_JOB,
   SELLER_BID_PENDING,
   SELLER_BID_ACCEPTED,
@@ -50,6 +53,7 @@ import SuccessModal from '../../components/modal/SuccessModal';
 import { selectAuth } from '../../redux/slices/authSlice';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { getCategoriesApi, getSellerJobsApi, placeSellerJobBidApi } from '../../services/sellerService';
+import { createOrGetConversationApi } from '../../services/chatService';
 import { heightPercentageToDP as hp, widthPercentageToDP as wp } from '../../utils';
 import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
 
@@ -132,6 +136,7 @@ const mapApiJobToUi = job => {
     .toLowerCase();
   return {
     id: String(job.id),
+    buyerId: job?.buyer?.id ?? job?.buyer_id ?? job?.buyerId ?? null,
     title: capitalizeTitle(job.title),
     category: job.category || '—',
     budget: formatBudget(job.budget_min, job.budget_max),
@@ -234,10 +239,42 @@ const SellerJobsScreen = ({ navigation }) => {
     error: '',
   });
   const [bidSuccessVisible, setBidSuccessVisible] = useState(false);
+  const [startingChatJobId, setStartingChatJobId] = useState(null);
 
   const closePlaceBidModal = () => {
     if (placeBidModal.loading) return;
     setPlaceBidModal({ visible: false, loading: false, job: null, error: '' });
+  };
+
+  const handleMessageBuyer = async job => {
+    if (!token || !job.buyerId || startingChatJobId) return;
+
+    setStartingChatJobId(job.id);
+    try {
+      const response = await createOrGetConversationApi(token, job.buyerId);
+      const conversation = response?.data?.conversation || response?.data || response;
+      const conversationId = conversation?.id;
+      if (!conversationId) throw new Error('missing conversation id');
+
+      const tabNavigation = navigation.getParent();
+      // Prime the Chat tab's stack with its list screen first (in a separate tick so
+      // React Navigation commits it) so back navigation stays within the tab instead
+      // of jumping to the tab navigator's first route.
+      tabNavigation?.navigate(SELLER_TABS.CHAT_STACK, { screen: SCREEN_NAMES.CHAT });
+      setTimeout(() => {
+        tabNavigation?.navigate(SELLER_TABS.CHAT_STACK, {
+          screen: SCREEN_NAMES.CHAT_CONVERSATION,
+          params: {
+            conversationId,
+            otherUser: { id: job.buyerId, name: job.client, initials: job.clientInitials, avatarColor: redColor },
+          },
+        });
+      }, 0);
+    } catch (error) {
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_START_CHAT_FAILED));
+    } finally {
+      setStartingChatJobId(null);
+    }
   };
 
   const handleOpenPlaceBid = job => {
@@ -382,9 +419,11 @@ const SellerJobsScreen = ({ navigation }) => {
             <View style={[styles.clientAvatar, alignJustifyCenter]}>
               <Text style={[styles.clientInitials, style.fontWeightMedium]}>{job.clientInitials}</Text>
             </View>
-            <View>
-              <Text style={[styles.clientName, style.fontWeightMedium]}>{job.client}</Text>
-              <Text style={[styles.jobMeta, style.fontWeightThin]}>
+            <View style={styles.clientTextWrap}>
+              <Text style={[styles.clientName, style.fontWeightMedium]} numberOfLines={1}>
+                {job.client}
+              </Text>
+              <Text style={[styles.jobMeta, style.fontWeightThin]} numberOfLines={1}>
                 {job.posted} · {job.bids} {BIDS_SUFFIX}
               </Text>
               {bidMeta ? (
@@ -395,11 +434,23 @@ const SellerJobsScreen = ({ navigation }) => {
                     job.bidStatus === 'rejected' && styles.bidMetaRejected,
                     job.bidStatus === 'accepted' && styles.bidMetaAccepted,
                     job.bidStatus === 'pending' && styles.bidMetaPending,
-                  ]}>
+                  ]}
+                  numberOfLines={1}>
                   {bidMeta}
                 </Text>
               ) : null}
             </View>
+            <TouchableOpacity
+              style={[styles.messageIconBtn, alignJustifyCenter]}
+              onPress={() => handleMessageBuyer(job)}
+              disabled={!job.buyerId || Boolean(startingChatJobId)}
+              activeOpacity={0.7}>
+              {startingChatJobId === job.id ? (
+                <ActivityIndicator size="small" color={redColor} />
+              ) : (
+                <Icon name="message-circle" size={15} color={redColor} />
+              )}
+            </TouchableOpacity>
           </View>
           <View style={[styles.actionRow, flexDirectionRow, alignItemsCenter]}>
             <TouchableOpacity
@@ -591,6 +642,7 @@ const styles = StyleSheet.create({
   },
   jobFooter: { gap: spacings.normal },
   clientRow: { flex: 1, gap: spacings.normal },
+  clientTextWrap: { flex: 1, minWidth: 0 },
   clientAvatar: {
     width: 36,
     height: 36,
@@ -619,6 +671,15 @@ const styles = StyleSheet.create({
   bidMetaRejected: { color: redColor },
   actionRow: {
     gap: spacings.normal,
+    flexShrink: 0,
+  },
+  messageIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: redColor,
+    backgroundColor: whiteColor,
     flexShrink: 0,
   },
   viewBtn: {

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Image,
   Linking,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -27,19 +28,33 @@ import {
 import { style } from '../../constans/Fonts';
 import {
   BIDS_SUFFIX,
+  ERROR_START_CHAT_FAILED,
+  MESSAGE_BUYER_BTN,
   POST_JOB_LABELS,
+  SCREEN_NAMES,
   SELLER_JOB_DETAIL_MODAL,
   SELLER_BID_PENDING,
   SELLER_BID_ACCEPTED,
   SELLER_BID_REJECTED,
+  SELLER_TABS,
 } from '../../constans/Constants';
 import { selectAuth } from '../../redux/slices/authSlice';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { getSellerJobByIdApi } from '../../services/sellerService';
+import { createOrGetConversationApi } from '../../services/chatService';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import { formatAppPrice } from '../../utils/currency';
 
 const { flex, flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween, alignJustifyCenter } = BaseStyle;
+
+const getInitials = name =>
+  String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase())
+    .join('') || '?';
 
 const capitalizeTitle = value => {
   const text = String(value || '').trim();
@@ -122,6 +137,7 @@ const mapJobDetailForDisplay = job => {
   return {
     title: capitalizeTitle(job?.title),
     status: mapApiStatusToUi(job?.status),
+    buyerId: job?.buyer?.id ?? job?.buyer_id ?? job?.buyerId ?? null,
     buyerName: job?.buyer?.name || 'Buyer',
     category: job?.category || job?.job_category || '—',
     jobType: mapJobTypeToUi(job?.job_type || job?.jobType),
@@ -197,6 +213,38 @@ const SellerJobDetailsScreen = ({ navigation, route }) => {
   const [job, setJob] = useState(routeJob?.raw ? mapJobDetailForDisplay(routeJob.raw) : null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isStartingChat, setIsStartingChat] = useState(false);
+
+  const handleMessageBuyer = async () => {
+    if (!token || !job?.buyerId || isStartingChat) return;
+
+    setIsStartingChat(true);
+    try {
+      const response = await createOrGetConversationApi(token, job.buyerId);
+      const conversation = response?.data?.conversation || response?.data || response;
+      const conversationId = conversation?.id;
+      if (!conversationId) throw new Error('missing conversation id');
+
+      const tabNavigation = navigation.getParent();
+      // Prime the Chat tab's stack with its list screen first (in a separate tick so
+      // React Navigation commits it) so back navigation stays within the tab instead
+      // of jumping to the tab navigator's first route.
+      tabNavigation?.navigate(SELLER_TABS.CHAT_STACK, { screen: SCREEN_NAMES.CHAT });
+      setTimeout(() => {
+        tabNavigation?.navigate(SELLER_TABS.CHAT_STACK, {
+          screen: SCREEN_NAMES.CHAT_CONVERSATION,
+          params: {
+            conversationId,
+            otherUser: { id: job.buyerId, name: job.buyerName, initials: getInitials(job.buyerName), avatarColor: redColor },
+          },
+        });
+      }, 0);
+    } catch (err) {
+      Alert.alert('', getApiErrorMessage(err?.data, err?.message || ERROR_START_CHAT_FAILED));
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -282,6 +330,22 @@ const SellerJobDetailsScreen = ({ navigation, route }) => {
                       </View>
                     </View>
                   </View>
+                  <TouchableOpacity
+                    style={[styles.messageBuyerBtn, alignJustifyCenter, flexDirectionRow]}
+                    onPress={handleMessageBuyer}
+                    disabled={!job.buyerId || isStartingChat}
+                    activeOpacity={0.7}>
+                    {isStartingChat ? (
+                      <ActivityIndicator size="small" color={redColor} />
+                    ) : (
+                      <>
+                        <Icon name="message-circle" size={14} color={redColor} />
+                        <Text style={[styles.messageBuyerBtnText, style.fontWeightMedium]}>
+                          {MESSAGE_BUYER_BTN}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
                 </View>
 
                 <Text style={[styles.sectionTitle, style.fontWeightMedium]}>Job Details</Text>
@@ -448,6 +512,20 @@ const styles = StyleSheet.create({
     borderRadius: wp(3),
     padding: wp(4),
     marginBottom: hp(2),
+  },
+  messageBuyerBtn: {
+    marginTop: hp(1.5),
+    alignSelf: 'flex-start',
+    borderRadius: wp(2),
+    paddingVertical: hp(0.9),
+    paddingHorizontal: wp(3),
+    gap: wp(1.5),
+    borderWidth: 1,
+    borderColor: redColor,
+  },
+  messageBuyerBtnText: {
+    color: redColor,
+    fontSize: style.fontSizeSmall1x.fontSize,
   },
   jobIcon: {
     width: wp(12),

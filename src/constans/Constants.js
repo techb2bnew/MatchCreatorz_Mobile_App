@@ -284,11 +284,19 @@ export const CHAT_MESSAGES_TITLE = 'Messages';
 export const CHAT_SEARCH_PLACEHOLDER = 'Search conversations...';
 export const CHAT_UNREAD_LABEL = 'unread';
 export const CHAT_ONLINE = 'Online';
+export const CHAT_OFFLINE = 'Offline';
+export const CHAT_SEEN = 'Seen';
 export const CHAT_VIEW_ORDER = 'View Order';
 export const CHAT_TYPE_MESSAGE = 'Type a message...';
 export const CHAT_PRESS_ENTER = 'Tap send to deliver your message';
 export const CHAT_TODAY = 'Today';
 export const CHAT_EMPTY_CONVERSATION_MESSAGE = 'Send a message to start the conversation.';
+export const CHAT_SENDING_ERROR = 'Message could not be sent. Tap to retry.';
+export const ERROR_LOAD_CONVERSATIONS_FAILED = 'Could not load your conversations.';
+export const ERROR_LOAD_MESSAGES_FAILED = 'Could not load messages.';
+export const ERROR_START_CHAT_FAILED = 'Could not start chat. Please try again.';
+export const MESSAGE_SELLER_BTN = 'Message';
+export const MESSAGE_BUYER_BTN = 'Message Buyer';
 
 export const EMPTY_BIDS_TITLE = 'No bids yet';
 export const EMPTY_BIDS_MESSAGE = 'Creators will appear here once they bid on your job.';
@@ -974,6 +982,7 @@ export const HOURLY_RATE_PLACEHOLDER = 'e.g. 500';
 
 // API
 export const API_BASE_URL = 'https://adminbackend.matchcreatorz.com/api/v1';
+export const SOCKET_BASE_URL = 'https://adminbackend.matchcreatorz.com';
 
 // Firebase -> Project settings -> Your apps -> Web app -> Web client ID
 // Example: 559577074349-xxxxx.apps.googleusercontent.com
@@ -1012,4 +1021,7 @@ export const API_ENDPOINTS = {
   SELLER_PREFERENCES: '/seller/preferences',
   SELLER_CONNECTS: '/seller/connects',
   CATEGORIES: '/categories',
+  CHAT_CONVERSATIONS: '/chat/conversations',
+  CHAT_UNREAD_COUNT: '/chat/unread-count',
+  CHAT_UPLOAD: '/chat/upload',
 };
