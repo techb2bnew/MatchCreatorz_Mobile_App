@@ -955,6 +955,9 @@ export const ERROR_HOURLY_RATE_REQUIRED = 'Hourly rate is required';
 export const ERROR_HOURLY_RATE_INVALID = 'Enter a valid hourly rate';
 export const ERROR_REGISTER_FAILED = 'Registration failed. Please try again.';
 export const ERROR_GOOGLE_SIGNIN_FAILED = 'Google Sign-In failed. Please try again.';
+export const ACCOUNT_ACCESS_BLOCKED_TITLE = 'Account Access Restricted';
+export const GOOGLE_ROLE_MODAL_TITLE = 'One last step';
+export const GOOGLE_ROLE_MODAL_SUBTITLE = 'How do you want to use MatchCreatorz?';
 export const ERROR_UPLOAD_TOO_LARGE =
   'Upload is too large. Please use smaller files (max 5MB each, 8MB total).';
 export const ERROR_PROFILE_UPDATE_FAILED = 'Failed to update profile. Please try again.';
@@ -983,6 +986,7 @@ export const API_ENDPOINTS = {
   AUTH_FORGOT_PASSWORD: '/auth/forgot-password',
   AUTH_VERIFY_FORGOT_OTP: '/auth/verify-forgot-otp',
   AUTH_RESET_PASSWORD: '/auth/reset-password',
+  AUTH_GOOGLE: '/auth/google',
   BUYER_PROFILE: '/buyer/profile',
   BUYER_ACCOUNT: '/buyer/account',
   BUYER_STATS: '/buyer/stats',

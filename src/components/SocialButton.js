@@ -1,8 +1,8 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { BaseStyle } from '../constans/Style';
-import { blackColor, borderLightColor, whiteColor } from '../constans/Color';
+import { blackColor, borderLightColor, grayColor, whiteColor } from '../constans/Color';
 import { style, spacings } from '../constans/Fonts';
 import { heightPercentageToDP } from '../utils';
 
@@ -14,26 +14,40 @@ const SOCIAL_ICONS = {
   facebook: { name: 'facebook', color: '#1877F2' },
 };
 
-const SocialButton = ({ type = 'google', title, onPress, style: customStyle, disabled = false }) => {
+const SocialButton = ({
+  type = 'google',
+  title,
+  onPress,
+  style: customStyle,
+  disabled = false,
+  loading = false,
+}) => {
   const icon = SOCIAL_ICONS[type];
+  const isDisabled = disabled || loading;
 
   return (
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={onPress}
-      disabled={disabled}
+      disabled={isDisabled}
       style={[
         styles.button,
         flexDirectionRow,
         alignItemsCenter,
         alignJustifyCenter,
-        disabled && styles.buttonDisabled,
+        isDisabled && styles.buttonDisabled,
         customStyle,
       ]}>
-      <Icon name={icon.name} size={17} color={icon.color} />
-      <Text style={[styles.title, style.fontWeightThin]} numberOfLines={1}>
-        {title}
-      </Text>
+      {loading ? (
+        <ActivityIndicator size="small" color={grayColor} />
+      ) : (
+        <>
+          <Icon name={icon.name} size={17} color={icon.color} />
+          <Text style={[styles.title, style.fontWeightThin]} numberOfLines={1}>
+            {title}
+          </Text>
+        </>
+      )}
     </TouchableOpacity>
   );
 };

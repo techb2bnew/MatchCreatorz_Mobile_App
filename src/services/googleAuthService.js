@@ -32,6 +32,14 @@ export const signInWithGoogle = async (source = 'login') => {
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
   }
 
+  // Clear any cached Google session first so the account picker shows every
+  // time, instead of silently reusing whichever account was picked last.
+  try {
+    await GoogleSignin.signOut();
+  } catch (signOutError) {
+    console.warn('[GoogleSignIn] signOut before sign-in failed (ignored):', signOutError);
+  }
+
   const signInResult = await GoogleSignin.signIn();
 
   if (signInResult.type === 'cancelled') {

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
@@ -18,10 +19,13 @@ import CustomButton from '../components/CustomButton';
 import CustomTextInput from '../components/CustomTextInput';
 import FormLabel from '../components/FormLabel';
 import SocialButton from '../components/SocialButton';
+import GoogleRoleSelectModal from '../components/modal/GoogleRoleSelectModal';
+import SuccessModal from '../components/modal/SuccessModal';
 import { BaseStyle } from '../constans/Style';
 import { setAuthSession } from '../redux/slices/authSlice';
-import { loginUserApi } from '../services/authService';
+import { loginUserApi, googleAuthApi } from '../services/authService';
 import { getGoogleSignInErrorMessage, signInWithGoogle } from '../services/googleAuthService';
+import { getApiErrorMessage } from '../services/apiClient';
 import {
   blackColor,
   borderLightColor,
@@ -59,7 +63,11 @@ import {
   STAT_SATISFACTION_LABEL,
   STAT_SATISFACTION_VALUE,
   WELCOME_BACK,
+  ACCOUNT_ACCESS_BLOCKED_TITLE,
+  ACCOUNT_CREATED_TITLE,
+  ACCOUNT_CREATED_MESSAGE,
   INVALID_LOGIN_MESSAGE,
+  mapAppRoleToApiRole,
 } from '../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp, formatPhoneInput, validateEmail, validatePassword, validatePhone } from '../utils';
 import {
@@ -78,6 +86,8 @@ const {
   textAlign,
 } = BaseStyle;
 
+const isPendingApprovalMessage = message => /pending/i.test(String(message || ''));
+
 const STAT_ITEMS = [
   { icon: 'users', value: STAT_CREATORS_VALUE, label: STAT_CREATORS_LABEL },
   { icon: 'briefcase', value: STAT_PROJECTS_VALUE, label: STAT_PROJECTS_LABEL },
@@ -95,6 +105,8 @@ const LoginScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState({ phone: '', email: '', password: '', login: '' });
+  const [googleRoleModal, setGoogleRoleModal] = useState({ visible: false, credential: null, loading: false });
+  const [pendingApprovalModal, setPendingApprovalModal] = useState({ visible: false, message: '' });
 
   const handleInputFocus = event => {
     scrollInputAboveKeyboard(scrollRef, event, 140);
@@ -155,30 +167,105 @@ const LoginScreen = ({ navigation }) => {
         }),
       ).unwrap();
     } catch (error) {
-      setErrors(prev => ({
-        ...prev,
-        login: error?.message || INVALID_LOGIN_MESSAGE,
-      }));
+      const message = error?.message || INVALID_LOGIN_MESSAGE;
+      setErrors(prev => ({ ...prev, login: message }));
+      if (error?.status === 403 && isPendingApprovalMessage(message)) {
+        Alert.alert(ACCOUNT_ACCESS_BLOCKED_TITLE, message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
-    // setGoogleLoading(true);
-    // setErrors(prev => ({ ...prev, login: '' }));
+    setGoogleLoading(true);
+    setErrors(prev => ({ ...prev, login: '' }));
 
-    // try {
-    //   const result = await signInWithGoogle('login');
-    //   if (result?.cancelled) return;
-    // } catch (error) {
-    //   const message = getGoogleSignInErrorMessage(error);
-    //   if (message) {
-    //     setErrors(prev => ({ ...prev, login: message }));
-    //   }
-    // } finally {
-    //   setGoogleLoading(false);
-    // }
+    let googleResult;
+    try {
+      googleResult = await signInWithGoogle('login');
+    } catch (error) {
+      const message = getGoogleSignInErrorMessage(error);
+      if (message) {
+        setErrors(prev => ({ ...prev, login: message }));
+      }
+      setGoogleLoading(false);
+      return;
+    }
+
+    if (googleResult?.cancelled) {
+      setGoogleLoading(false);
+      return;
+    }
+
+    try {
+      const response = await googleAuthApi({ credential: googleResult.idToken });
+
+      if (response?.data?.isNew) {
+        setGoogleRoleModal({ visible: true, credential: googleResult.idToken, loading: false });
+        return;
+      }
+
+      const { token, user, role } = response.data;
+      await dispatch(
+        setAuthSession({
+          token,
+          user,
+          role: role || user?.role,
+        }),
+      ).unwrap();
+    } catch (error) {
+      const message = getApiErrorMessage(error?.data, error?.message || INVALID_LOGIN_MESSAGE);
+      setErrors(prev => ({ ...prev, login: message }));
+      if (error?.status === 403 && isPendingApprovalMessage(message)) {
+        Alert.alert(ACCOUNT_ACCESS_BLOCKED_TITLE, message);
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const closeGoogleRoleModal = () => {
+    if (googleRoleModal.loading) return;
+    setGoogleRoleModal({ visible: false, credential: null, loading: false });
+  };
+
+  const handleSelectGoogleRole = async roleId => {
+    setGoogleRoleModal(prev => ({ ...prev, loading: true }));
+
+    try {
+      const response = await googleAuthApi({
+        credential: googleRoleModal.credential,
+        role: mapAppRoleToApiRole(roleId),
+      });
+
+      // New SELLER accounts aren't logged in immediately — backend holds them
+      // for admin approval and returns no token, only a pendingApproval flag.
+      if (response?.data?.pendingApproval) {
+        setGoogleRoleModal({ visible: false, credential: null, loading: false });
+        setPendingApprovalModal({
+          visible: true,
+          message: response.data.message || ACCOUNT_CREATED_MESSAGE,
+        });
+        return;
+      }
+
+      const { token, user, role } = response.data;
+      setGoogleRoleModal({ visible: false, credential: null, loading: false });
+      await dispatch(
+        setAuthSession({
+          token,
+          user,
+          role: role || user?.role,
+        }),
+      ).unwrap();
+    } catch (error) {
+      setGoogleRoleModal({ visible: false, credential: null, loading: false });
+      setErrors(prev => ({
+        ...prev,
+        login: getApiErrorMessage(error?.data, error?.message || INVALID_LOGIN_MESSAGE),
+      }));
+    }
   };
 
   return (
@@ -216,7 +303,8 @@ const LoginScreen = ({ navigation }) => {
             type="google"
             title={CONTINUE_WITH_GOOGLE}
             onPress={handleGoogleSignIn}
-            disabled={googleLoading || loading}
+            disabled={loading}
+            loading={googleLoading}
             style={styles.socialBtn}
           />
           {Platform.OS === 'ios' ? (
@@ -332,6 +420,20 @@ const LoginScreen = ({ navigation }) => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <GoogleRoleSelectModal
+        visible={googleRoleModal.visible}
+        loading={googleRoleModal.loading}
+        onSelectRole={handleSelectGoogleRole}
+        onCancel={closeGoogleRoleModal}
+      />
+
+      <SuccessModal
+        visible={pendingApprovalModal.visible}
+        title={ACCOUNT_CREATED_TITLE}
+        message={pendingApprovalModal.message}
+        onPress={() => setPendingApprovalModal({ visible: false, message: '' })}
+      />
     </SafeAreaView>
   );
 };

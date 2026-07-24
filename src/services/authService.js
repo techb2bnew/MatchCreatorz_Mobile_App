@@ -215,6 +215,46 @@ export const loginUserApi = async ({ email, phone, password }) => {
 };
 
 /**
+ * POST /api/v1/auth/google
+ * Sign in / sign up with Google
+ * Body: { credential: <Google ID token>, role?: 'BUYER' | 'SELLER' }
+ * role is required only to complete a new signup — omit it for a plain login
+ * attempt. If the account already exists, role is ignored and the account's
+ * real stored role is returned (confirmed against the live API).
+ *
+ * Response shapes (confirmed against the live API):
+ *  - New account, no role sent: { data: { isNew: true, profile: { email, name, avatar } } }
+ *    (no account is created and no session token is issued in this case)
+ *  - Existing account, or role provided for a new signup:
+ *    { data: { token, role, user: { id, name, email, phone, role, is_verified } } }
+ */
+export const googleAuthApi = async ({ credential, role }) => {
+  const payload = { credential };
+  if (role) payload.role = role;
+
+  console.log('[GoogleAuth] Payload >>>', {
+    endpoint: API_ENDPOINTS.AUTH_GOOGLE,
+    hasRole: Boolean(role),
+  });
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.AUTH_GOOGLE, {
+      method: 'POST',
+      body: payload,
+    });
+    console.log('[GoogleAuth] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[GoogleAuth] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
  * POST /api/v1/auth/logout
  * Auth header: Bearer token (empty body)
  */

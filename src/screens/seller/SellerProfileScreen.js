@@ -200,9 +200,15 @@ const getFileNameFromUrl = url => {
 
 const isImageUrl = url => /\.(jpe?g|png|gif|webp)(\?|$)/i.test(String(url || ''));
 
+const capitalizeFirstLetter = value => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
 const mapSellerProfileToUi = data => {
   const sellerProfile = data?.seller_profile || {};
-  const fullName = data?.name || '';
+  const fullName = capitalizeFirstLetter(data?.name);
   const city = sellerProfile.city || '';
   const country = sellerProfile.country || DEFAULT_COUNTRY;
   const resumeUrl = sellerProfile.resume || null;
@@ -484,7 +490,7 @@ const SellerProfileScreen = ({ navigation }) => {
       const nextProfile = {
         ...profileForm,
         ...savedProfile,
-        fullName: fromApi?.fullName || name,
+        fullName: fromApi?.fullName || capitalizeFirstLetter(name),
         phone: fromApi?.phone || phone,
         bio: fromApi ? fromApi.bio : bio,
         location: fromApi ? fromApi.location : location,
@@ -758,13 +764,19 @@ const SellerProfileScreen = ({ navigation }) => {
       );
     }
 
+    const hasPhone = Boolean(String(savedProfile.phone || '').trim());
+
     return (
       <>
         {renderViewField(PROFILE_FULL_NAME, savedProfile.fullName)}
         {renderSectionDivider()}
         {renderViewField(PROFILE_EMAIL, savedProfile.email)}
-        {renderSectionDivider()}
-        {renderViewField(PROFILE_PHONE, savedProfile.phone)}
+        {hasPhone ? (
+          <>
+            {renderSectionDivider()}
+            {renderViewField(PROFILE_PHONE, savedProfile.phone)}
+          </>
+        ) : null}
       </>
     );
   };

@@ -10,9 +10,11 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import RNPhoneInput from 'react-native-phone-number-input';
 import { MATCH_CREATORZ_LOGO } from '../assests/images';
+import { setAuthSession } from '../redux/slices/authSlice';
 import CustomButton from '../components/CustomButton';
 import CustomTextInput from '../components/CustomTextInput';
 import FormLabel from '../components/FormLabel';
@@ -80,6 +82,7 @@ import {
   CATEGORY_OPTIONS,
   RESPONSE_TIME_OPTIONS,
   ERROR_REGISTER_FAILED,
+  mapAppRoleToApiRole,
 } from '../constans/Constants';
 import { getDefaultStateForCountry, DEFAULT_COUNTRY } from '../utils/locationData';
 import {
@@ -102,8 +105,9 @@ import {
   scrollInputAboveKeyboard,
   useKeyboardBottomInset,
 } from '../utils/keyboard';
-import { registerUserApi } from '../services/authService';
+import { registerUserApi, googleAuthApi } from '../services/authService';
 import { getGoogleSignInErrorMessage, signInWithGoogle } from '../services/googleAuthService';
+import { getApiErrorMessage } from '../services/apiClient';
 
 const {
   flex,
@@ -155,11 +159,13 @@ const EMPTY_ERRORS = {
 };
 
 const CreateAccountScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
   const scrollRef = useRef(null);
   const keyboardBottom = useKeyboardBottomInset(32);
   const [currentStep, setCurrentStep] = useState(SIGNUP_STEPS.ACCOUNT);
   const [selectedRole, setSelectedRole] = useState(USER_ROLES.BUYER);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(ACCOUNT_CREATED_MESSAGE);
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -245,6 +251,7 @@ const CreateAccountScreen = ({ navigation }) => {
         return;
       }
 
+      setSuccessMessage(ACCOUNT_CREATED_MESSAGE);
       setShowSuccess(true);
     } catch (error) {
       setApiError(error?.message || ERROR_REGISTER_FAILED);
@@ -254,17 +261,57 @@ const CreateAccountScreen = ({ navigation }) => {
   };
 
   const handleGoogleSignUp = async () => {
-    // setGoogleLoading(true);
-    // setApiError('');
+    setGoogleLoading(true);
+    setApiError('');
 
-    // try {
-    //   const result = await signInWithGoogle('register');
-    //   if (result?.cancelled) return;
-    // } catch (error) {
-    //   setApiError(getGoogleSignInErrorMessage(error) || ERROR_REGISTER_FAILED);
-    // } finally {
-    //   setGoogleLoading(false);
-    // }
+    let googleResult;
+    try {
+      googleResult = await signInWithGoogle('register');
+    } catch (error) {
+      setApiError(getGoogleSignInErrorMessage(error) || ERROR_REGISTER_FAILED);
+      setGoogleLoading(false);
+      return;
+    }
+
+    if (googleResult?.cancelled) {
+      setGoogleLoading(false);
+      return;
+    }
+
+    try {
+      const response = await googleAuthApi({
+        credential: googleResult.idToken,
+        role: mapAppRoleToApiRole(selectedRole),
+      });
+
+      // New SELLER accounts are NOT logged in immediately — backend holds them
+      // for admin approval and returns no token, only a pendingApproval flag.
+      if (response?.data?.pendingApproval) {
+        setSuccessMessage(response.data.message || ACCOUNT_CREATED_MESSAGE);
+        setShowSuccess(true);
+        return;
+      }
+
+      // Existing accounts log in normally regardless of the role sent above —
+      // confirmed against the live API (role is only used to complete a NEW signup).
+      const { token, user, role } = response.data;
+      await dispatch(
+        setAuthSession({
+          token,
+          user,
+          role: role || user?.role,
+        }),
+      ).unwrap();
+      // NOTE: for a brand-new SELLER, this account is created with just
+      // name/email/role — none of the skills/hourly_rate/city/country/portfolio
+      // fields our normal seller signup collects. There's currently no follow-up
+      // "complete your profile" redirect after Google signup — the seller lands
+      // in the app with an incomplete profile until this is confirmed/handled.
+    } catch (error) {
+      setApiError(getApiErrorMessage(error?.data, error?.message || ERROR_REGISTER_FAILED));
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   const handleAddPortfolioLink = () => {
@@ -415,7 +462,8 @@ const CreateAccountScreen = ({ navigation }) => {
                 type="google"
                 title={CONTINUE_WITH_GOOGLE}
                 onPress={handleGoogleSignUp}
-                disabled={googleLoading || submitting}
+                disabled={submitting}
+                loading={googleLoading}
                 style={styles.socialBtn}
               />
               {Platform.OS === 'ios' ? (
@@ -669,7 +717,7 @@ const CreateAccountScreen = ({ navigation }) => {
       <SuccessModal
         visible={showSuccess}
         title={ACCOUNT_CREATED_TITLE}
-        message={ACCOUNT_CREATED_MESSAGE}
+        message={successMessage}
         onPress={() => {
           setShowSuccess(false);
           navigation.navigate(SCREEN_NAMES.LOGIN);

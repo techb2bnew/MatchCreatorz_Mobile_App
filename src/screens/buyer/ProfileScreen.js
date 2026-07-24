@@ -152,8 +152,14 @@ const getInitials = name =>
     .slice(0, 2)
     .toUpperCase();
 
+const capitalizeFirstLetter = value => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
 const mapBuyerProfileToUi = data => {
-  const fullName = data?.name || '';
+  const fullName = capitalizeFirstLetter(data?.name);
   return {
     fullName,
     email: data?.email || '',
@@ -345,7 +351,7 @@ const ProfileScreen = ({ navigation }) => {
       const fromApi = response?.data ? mapBuyerProfileToUi(response.data) : null;
       const nextProfile = {
         ...savedProfile,
-        fullName: fromApi?.fullName || name,
+        fullName: fromApi?.fullName || capitalizeFirstLetter(name),
         phone: fromApi?.phone || phone,
         bio: fromApi ? fromApi.bio : bio,
         location: fromApi ? fromApi.location : location,
@@ -412,6 +418,7 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  const hasPhone = Boolean(String(savedProfile.phone || '').trim());
   const hasLocation = Boolean(String(savedProfile.location || '').trim());
   const hasBio = Boolean(String(savedProfile.bio || '').trim());
 
@@ -582,7 +589,7 @@ const ProfileScreen = ({ navigation }) => {
       <>
         {renderViewField(PROFILE_FULL_NAME, savedProfile.fullName)}
         {renderViewField(PROFILE_EMAIL, savedProfile.email)}
-        {renderViewField(PROFILE_PHONE, savedProfile.phone)}
+        {hasPhone ? renderViewField(PROFILE_PHONE, savedProfile.phone) : null}
         {hasLocation ? renderViewField(PROFILE_LOCATION, savedProfile.location) : null}
         {hasBio ? renderViewField(PROFILE_BIO, savedProfile.bio) : null}
       </>
