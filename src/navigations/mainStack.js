@@ -5,6 +5,7 @@ import BuyerTabNavigator from './buyer/buyerTabNavigator';
 import SellerTabNavigator from './seller/sellerTabNavigator';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import BookingDetailsScreen from '../screens/buyer/BookingDetailsScreen';
+import StripeCheckoutScreen from '../screens/StripeCheckoutScreen';
 import { SCREEN_NAMES, USER_ROLES } from '../constans/Constants';
 import { selectAppRole } from '../redux/slices/authSlice';
 
@@ -29,6 +30,11 @@ const MainStack = () => {
         name={SCREEN_NAMES.BOOKING_DETAILS}
         component={BookingDetailsScreen}
         options={{ statusBarStyle: 'dark' }}
+      />
+      <Stack.Screen
+        name={SCREEN_NAMES.STRIPE_CHECKOUT}
+        component={StripeCheckoutScreen}
+        options={{ statusBarStyle: 'dark', animation: 'slide_from_bottom' }}
       />
     </Stack.Navigator>
   );

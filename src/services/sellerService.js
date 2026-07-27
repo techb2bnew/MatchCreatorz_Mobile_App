@@ -1346,3 +1346,43 @@ export const getSellerConnectsHistoryApi = async (token, params = {}) => {
     throw error;
   }
 };
+
+/** GET /api/v1/seller/connects/plans → purchasable plans (id, name, price, connects, discount) */
+export const getSellerConnectsPlansApi = async token => {
+  try {
+    return await apiRequest(API_ENDPOINTS.SELLER_CONNECTS_PLANS, {
+      method: 'GET',
+      headers: { Accept: '*/*' },
+      token,
+    });
+  } catch (error) {
+    console.log('[SellerConnectsPlans] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/** POST /api/v1/seller/connects/purchase { plan_id, success_url?, cancel_url? } → { url, session_id } */
+export const purchaseSellerConnectsApi = async (token, { planId, successUrl, cancelUrl } = {}) => {
+  const body = { plan_id: planId };
+  if (successUrl) body.success_url = successUrl;
+  if (cancelUrl) body.cancel_url = cancelUrl;
+  try {
+    const response = await apiRequest(API_ENDPOINTS.SELLER_CONNECTS_PURCHASE, { method: 'POST', body, token });
+    console.log('[SellerConnectsPurchase] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SellerConnectsPurchase] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/** GET /api/v1/seller/connects/purchase/confirm?session_id= → confirm after Checkout */
+export const confirmSellerConnectsPurchaseApi = async (token, sessionId) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_CONNECTS_PURCHASE_CONFIRM}?session_id=${encodeURIComponent(sessionId)}`;
+  try {
+    return await apiRequest(endpoint, { method: 'GET', headers: { Accept: '*/*' }, token });
+  } catch (error) {
+    console.log('[SellerConnectsPurchaseConfirm] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};

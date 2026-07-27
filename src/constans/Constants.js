@@ -18,6 +18,7 @@ export const SCREEN_NAMES = {
   CHAT: 'Chat',
   CHAT_CONVERSATION: 'ChatConversation',
   SUPPORT_CHAT: 'SupportChat',
+  STRIPE_CHECKOUT: 'StripeCheckout',
   WALLET: 'Wallet',
   PROFILE: 'Profile',
   NOTIFICATIONS: 'Notifications',
@@ -362,6 +363,14 @@ export const WALLET_CURRENT_BALANCE = 'Current balance';
 export const WALLET_ADD_MONEY_BTN = 'Add Money';
 export const WALLET_TRANSACTION_HISTORY = 'Transaction History';
 export const WALLET_ADD_MONEY_TOAST = 'Stripe payment coming soon.';
+export const WALLET_QUICK_AMOUNTS_LABEL = 'Quick amounts';
+export const WALLET_CUSTOM_AMOUNT_LABEL = 'Custom amount';
+export const WALLET_PAY_VIA_STRIPE = 'Pay via Stripe';
+export const WALLET_STRIPE_REDIRECT_NOTE = "You'll be redirected to Stripe to pay securely, then back here.";
+export const WALLET_QUICK_AMOUNTS = [100, 250, 500, 1000];
+export const WALLET_TOPUP_SUCCESS = 'Money added to your wallet!';
+export const WALLET_TOPUP_CANCELLED = 'Payment cancelled.';
+export const WALLET_TOPUP_FAILED = 'Payment could not be completed. Please try again.';
 export const EMPTY_WALLET_TRANSACTIONS_TITLE = 'No transactions yet';
 export const EMPTY_WALLET_TRANSACTIONS_MESSAGE = 'Your wallet activity will show up here.';
 export const TAB_PROFILE = 'Profile';
@@ -739,6 +748,12 @@ export const SELLER_WALLET_WITHDRAW_TITLE = 'Request Withdrawal';
 export const SELLER_WALLET_WITHDRAW_DESC = 'Minimum withdrawal: $500 · Processed within 3-5 business days';
 export const SELLER_WALLET_WITHDRAW_BTN = 'Withdraw Funds';
 export const SELLER_WALLET_WITHDRAW_TOAST = 'Withdrawal request submitted successfully.';
+export const SELLER_WALLET_SETUP_PAYOUTS_BTN = 'Set Up Payouts';
+export const SELLER_WALLET_SETUP_TITLE = 'Set up payouts';
+export const SELLER_WALLET_SETUP_DESC = 'Connect your bank account via Stripe to receive withdrawals.';
+export const SELLER_WALLET_WITHDRAW_MODAL_TITLE = 'Withdraw Funds';
+export const SELLER_WALLET_WITHDRAW_REQUESTED = 'Withdrawal requested! It will be paid after admin approval.';
+export const SELLER_WALLET_PAYOUTS_READY = 'Payouts connected';
 export const SELLER_WALLET_HISTORY = 'Transaction History';
 
 export const SELLER_SERVICES_TITLE = 'My Services';
@@ -1071,4 +1086,21 @@ export const API_ENDPOINTS = {
   SUPPORT_TICKETS: '/support/tickets',
   SUPPORT_UNREAD_COUNT: '/support/unread-count',
   SUPPORT_UPLOAD: '/support/upload',
+  WALLET: '/wallet',
+  WALLET_CONFIG: '/wallet/config',
+  WALLET_TRANSACTIONS: '/wallet/transactions',
+  WALLET_TOPUP: '/wallet/topup',
+  WALLET_TOPUP_CONFIRM: '/wallet/topup/confirm',
+  WALLET_WITHDRAW: '/wallet/withdraw',
+  WALLET_WITHDRAWALS: '/wallet/withdrawals',
+  WALLET_CONNECT_ONBOARD: '/wallet/connect/onboard',
+  WALLET_CONNECT_STATUS: '/wallet/connect/status',
+  SELLER_CONNECTS_PLANS: '/seller/connects/plans',
+  SELLER_CONNECTS_PURCHASE: '/seller/connects/purchase',
+  SELLER_CONNECTS_PURCHASE_CONFIRM: '/seller/connects/purchase/confirm',
 };
+
+// Stripe Checkout return URLs — the in-app WebView watches for these to detect
+// success/cancel (Stripe redirects here after the hosted checkout finishes).
+export const STRIPE_SUCCESS_URL = 'https://matchcreatorz.com/app/payment-success';
+export const STRIPE_CANCEL_URL = 'https://matchcreatorz.com/app/payment-cancel';

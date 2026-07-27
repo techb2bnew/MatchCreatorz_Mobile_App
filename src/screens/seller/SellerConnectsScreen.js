@@ -31,7 +31,6 @@ import {
   SELLER_CONNECTS_BUY_CONFIRM_MESSAGE,
   SELLER_CONNECTS_BUY_CONFIRM_TITLE,
   SELLER_CONNECTS_BUY_TITLE,
-  SELLER_CONNECTS_BUY_UNAVAILABLE_TOAST,
   SELLER_CONNECTS_HISTORY,
   SELLER_CONNECTS_MOST_POPULAR,
   SELLER_CONNECTS_PURCHASED,
@@ -42,17 +41,39 @@ import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import EmptyState from '../../components/EmptyState';
 import { selectAuth } from '../../redux/slices/authSlice';
-import { getSellerConnectsBalanceApi, getSellerConnectsHistoryApi } from '../../services/sellerService';
+import { getApiErrorMessage } from '../../services/apiClient';
+import {
+  getSellerConnectsBalanceApi,
+  getSellerConnectsHistoryApi,
+  getSellerConnectsPlansApi,
+  purchaseSellerConnectsApi,
+  confirmSellerConnectsPurchaseApi,
+} from '../../services/sellerService';
+import { STRIPE_SUCCESS_URL, STRIPE_CANCEL_URL, SCREEN_NAMES } from '../../constans/Constants';
 import { heightPercentageToDP as hp } from '../../utils';
 
 const { flex, flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween } = BaseStyle;
 
-// No self-serve purchase endpoint exists yet — only Admin can credit connects to a seller.
-const PLANS = [
-  { id: '1', name: 'Starter', price: '$830', connects: 30, popular: false, discount: null },
-  { id: '2', name: 'Pro', price: '$1,660', connects: 80, popular: true, discount: '15% off' },
-  { id: '3', name: 'Business', price: '$3,320', connects: 200, popular: false, discount: '20% off' },
-];
+const formatPlanPrice = price => {
+  if (typeof price === 'string') return price.startsWith('$') ? price : `$${price}`;
+  const num = Number(price);
+  return `$${Number.isFinite(num) ? num.toLocaleString('en-US') : 0}`;
+};
+
+const extractPlansList = response => {
+  const data = response?.data;
+  const list = Array.isArray(data)
+    ? data
+    : data?.plans || data?.items || data?.rows || response?.plans || [];
+  return (Array.isArray(list) ? list : []).map((p, i) => ({
+    id: String(p?.id ?? p?.plan_id ?? p?.slug ?? i),
+    name: p?.name || p?.title || 'Plan',
+    price: formatPlanPrice(p?.price ?? p?.amount),
+    connects: Number(p?.connects ?? p?.credits ?? 0) || 0,
+    popular: Boolean(p?.popular ?? p?.is_popular ?? p?.recommended),
+    discount: p?.discount || p?.discount_label || null,
+  }));
+};
 
 const extractBalance = response => {
   const data = response?.data ?? response ?? {};
@@ -98,21 +119,25 @@ const SellerConnectsScreen = ({ navigation }) => {
   const { token } = useSelector(selectAuth);
   const [stats, setStats] = useState({ available: 0, purchased: 0, used: 0 });
   const [history, setHistory] = useState([]);
+  const [plans, setPlans] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [isBuying, setIsBuying] = useState(false);
 
   const fetchConnectsData = useCallback(async () => {
     if (!token) return;
 
     setIsLoading(true);
     try {
-      const [balanceResponse, historyResponse] = await Promise.all([
+      const [balanceResponse, historyResponse, plansResponse] = await Promise.all([
         getSellerConnectsBalanceApi(token),
         getSellerConnectsHistoryApi(token, { page: 1, limit: 20 }),
+        getSellerConnectsPlansApi(token).catch(() => null),
       ]);
       setStats(extractBalance(balanceResponse));
       setHistory(extractHistoryList(historyResponse).map(mapApiHistoryToUi));
+      if (plansResponse) setPlans(extractPlansList(plansResponse));
     } catch (error) {
       setStats({ available: 0, purchased: 0, used: 0 });
       setHistory([]);
@@ -132,10 +157,52 @@ const SellerConnectsScreen = ({ navigation }) => {
     setShowBuyModal(true);
   };
 
-  const handleConfirmBuy = () => {
+  const handlePurchaseResult = useCallback(
+    async (result, sessionId) => {
+      if (result === 'success') {
+        try {
+          if (sessionId) await confirmSellerConnectsPurchaseApi(token, sessionId);
+        } catch (error) {
+          // may settle via webhook — refresh regardless
+        }
+        await fetchConnectsData();
+        Alert.alert('', 'Connects added to your balance!');
+      } else {
+        fetchConnectsData();
+      }
+    },
+    [token, fetchConnectsData],
+  );
+
+  const handleConfirmBuy = async () => {
+    const plan = selectedPlan;
     setShowBuyModal(false);
-    setSelectedPlan(null);
-    Alert.alert(SELLER_CONNECTS_BUY_TITLE, SELLER_CONNECTS_BUY_UNAVAILABLE_TOAST);
+    if (!plan || !token || isBuying) return;
+    setIsBuying(true);
+    try {
+      const res = await purchaseSellerConnectsApi(token, {
+        planId: plan.id,
+        successUrl: STRIPE_SUCCESS_URL,
+        cancelUrl: STRIPE_CANCEL_URL,
+      });
+      const data = res?.data || res;
+      const url = data?.url;
+      const sessionId = data?.session_id || data?.sessionId;
+      if (url) {
+        navigation.navigate(SCREEN_NAMES.STRIPE_CHECKOUT, {
+          checkoutUrl: url,
+          title: SELLER_CONNECTS_BUY_TITLE,
+          onResult: r => handlePurchaseResult(r, sessionId),
+        });
+      } else {
+        Alert.alert('', 'Could not start purchase. Please try again.');
+      }
+    } catch (error) {
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Could not start purchase.'));
+    } finally {
+      setIsBuying(false);
+      setSelectedPlan(null);
+    }
   };
 
   return (
@@ -177,7 +244,7 @@ const SellerConnectsScreen = ({ navigation }) => {
             </View>
 
             <Text style={[styles.sectionTitle, style.fontWeightMedium]}>{SELLER_CONNECTS_BUY_TITLE}</Text>
-            {PLANS.map(plan => (
+            {plans.map(plan => (
               <View key={plan.id} style={[styles.planCard, plan.popular && styles.planCardPopular]}>
                 {plan.popular ? (
                   <View style={styles.popularBadge}>
