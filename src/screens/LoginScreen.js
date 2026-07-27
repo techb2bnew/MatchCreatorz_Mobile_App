@@ -25,6 +25,7 @@ import { BaseStyle } from '../constans/Style';
 import { setAuthSession } from '../redux/slices/authSlice';
 import { loginUserApi, googleAuthApi } from '../services/authService';
 import { getGoogleSignInErrorMessage, signInWithGoogle } from '../services/googleAuthService';
+import { signInWithApple } from '../services/appleAuthService';
 import { getApiErrorMessage } from '../services/apiClient';
 import {
   blackColor,
@@ -104,8 +105,10 @@ const LoginScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [errors, setErrors] = useState({ phone: '', email: '', password: '', login: '' });
   const [googleRoleModal, setGoogleRoleModal] = useState({ visible: false, credential: null, loading: false });
+  const [appleRoleModal, setAppleRoleModal] = useState({ visible: false, credential: null, loading: false });
   const [pendingApprovalModal, setPendingApprovalModal] = useState({ visible: false, message: '' });
 
   const handleInputFocus = event => {
@@ -175,6 +178,44 @@ const LoginScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // TEMP: Apple sign-in only logs the credential for now (backend /auth/apple pending).
+  // Mirrors Google: on success we ask a first-time user to pick a role, then log the
+  // credential + chosen role. Once the backend exists this becomes a real login call.
+  const handleAppleSignIn = async () => {
+    setAppleLoading(true);
+    setErrors(prev => ({ ...prev, login: '' }));
+    try {
+      const result = await signInWithApple();
+      // Ask the user to choose Buyer/Seller (same modal Google uses).
+      setAppleRoleModal({ visible: true, credential: result, loading: false });
+    } catch (error) {
+      if (error?.code !== '1001' && !/cancel/i.test(String(error?.message))) {
+        setErrors(prev => ({ ...prev, login: error?.message || 'Apple Sign-In failed.' }));
+      }
+    } finally {
+      setAppleLoading(false);
+    }
+  };
+
+  const closeAppleRoleModal = () => {
+    if (appleRoleModal.loading) return;
+    setAppleRoleModal({ visible: false, credential: null, loading: false });
+  };
+
+  const handleSelectAppleRole = roleId => {
+    const cred = appleRoleModal.credential || {};
+    console.log('[AppleSignIn] login payload (for backend /auth/apple) >>>', {
+      identityToken: cred.identityToken,
+      authorizationCode: cred.authorizationCode,
+      nonce: cred.nonce,
+      user: cred.user,
+      email: cred.email,
+      fullName: cred.fullName,
+      role: mapAppRoleToApiRole(roleId),
+    });
+    setAppleRoleModal({ visible: false, credential: null, loading: false });
   };
 
   const handleGoogleSignIn = async () => {
@@ -308,7 +349,14 @@ const LoginScreen = ({ navigation }) => {
             style={styles.socialBtn}
           />
           {Platform.OS === 'ios' ? (
-            <SocialButton type="apple" title={CONTINUE_WITH_APPLE} onPress={() => { }} style={styles.socialBtn} />
+            <SocialButton
+              type="apple"
+              title={CONTINUE_WITH_APPLE}
+              onPress={handleAppleSignIn}
+              disabled={loading}
+              loading={appleLoading}
+              style={styles.socialBtn}
+            />
           ) : null}
 
           <View style={[styles.dividerRow, flexDirectionRow, alignItemsCenter]}>
@@ -426,6 +474,13 @@ const LoginScreen = ({ navigation }) => {
         loading={googleRoleModal.loading}
         onSelectRole={handleSelectGoogleRole}
         onCancel={closeGoogleRoleModal}
+      />
+
+      <GoogleRoleSelectModal
+        visible={appleRoleModal.visible}
+        loading={appleRoleModal.loading}
+        onSelectRole={handleSelectAppleRole}
+        onCancel={closeAppleRoleModal}
       />
 
       <SuccessModal

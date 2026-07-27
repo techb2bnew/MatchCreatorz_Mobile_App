@@ -107,6 +107,7 @@ import {
 } from '../utils/keyboard';
 import { registerUserApi, googleAuthApi } from '../services/authService';
 import { getGoogleSignInErrorMessage, signInWithGoogle } from '../services/googleAuthService';
+import { signInWithApple } from '../services/appleAuthService';
 import { getApiErrorMessage } from '../services/apiClient';
 
 const {
@@ -168,6 +169,7 @@ const CreateAccountScreen = ({ navigation }) => {
   const [successMessage, setSuccessMessage] = useState(ACCOUNT_CREATED_MESSAGE);
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -257,6 +259,32 @@ const CreateAccountScreen = ({ navigation }) => {
       setApiError(error?.message || ERROR_REGISTER_FAILED);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // TEMP: Apple sign-up only logs the credential for now — backend /auth/apple
+  // wiring will replace the console.log once that endpoint is live.
+  const handleAppleSignUp = async () => {
+    setAppleLoading(true);
+    setApiError('');
+    try {
+      const result = await signInWithApple();
+      // Role is already chosen on this screen — send it with the Apple credential.
+      console.log('[AppleSignIn] signup payload (for backend /auth/apple) >>>', {
+        identityToken: result?.identityToken,
+        authorizationCode: result?.authorizationCode,
+        nonce: result?.nonce,
+        user: result?.user,
+        email: result?.email,
+        fullName: result?.fullName,
+        role: mapAppRoleToApiRole(selectedRole),
+      });
+    } catch (error) {
+      if (error?.code !== '1001' && !/cancel/i.test(String(error?.message))) {
+        setApiError(error?.message || 'Apple Sign-In failed.');
+      }
+    } finally {
+      setAppleLoading(false);
     }
   };
 
@@ -467,7 +495,14 @@ const CreateAccountScreen = ({ navigation }) => {
                 style={styles.socialBtn}
               />
               {Platform.OS === 'ios' ? (
-                <SocialButton type="apple" title={CONTINUE_WITH_APPLE} onPress={() => {}} style={styles.socialBtn} />
+                <SocialButton
+                  type="apple"
+                  title={CONTINUE_WITH_APPLE}
+                  onPress={handleAppleSignUp}
+                  disabled={submitting}
+                  loading={appleLoading}
+                  style={styles.socialBtn}
+                />
               ) : null}
 
               <View style={[styles.dividerRow, flexDirectionRow, alignItemsCenter]}>

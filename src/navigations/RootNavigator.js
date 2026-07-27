@@ -10,6 +10,7 @@ import { redColor, whiteColor } from '../constans/Color';
 import { hydrateSession, selectAuth } from '../redux/slices/authSlice';
 import { fetchUnreadNotificationsCount } from '../redux/slices/notificationsSlice';
 import { fetchChatUnreadCount } from '../redux/slices/chatSlice';
+import { fetchSupportUnreadCount } from '../redux/slices/supportSlice';
 import {
   getCurrentFcmToken,
   subscribeToForegroundMessages,
@@ -81,6 +82,7 @@ const RootNavigator = () => {
     if (!hydrated || !token) return undefined;
 
     dispatch(fetchChatUnreadCount({ token }));
+    dispatch(fetchSupportUnreadCount({ token }));
 
     const socket = getSocket();
     if (!socket) return undefined;
@@ -89,18 +91,26 @@ const RootNavigator = () => {
       const latest = sessionRef.current;
       if (latest.token) dispatch(fetchChatUnreadCount({ token: latest.token }));
     };
+    const refreshSupportUnread = () => {
+      const latest = sessionRef.current;
+      if (latest.token) dispatch(fetchSupportUnreadCount({ token: latest.token }));
+    };
 
     socket.on('receiveMessage', refreshChatUnread);
     socket.on('messageRead', refreshChatUnread);
     socket.on('conversationUpdated', refreshChatUnread);
     // Fired on my OTHER devices when I read a chat elsewhere — reset the tab badge.
     socket.on('conversationRead', refreshChatUnread);
+    socket.on('supportMessage', refreshSupportUnread);
+    socket.on('supportTicketUpdated', refreshSupportUnread);
 
     return () => {
       socket.off('receiveMessage', refreshChatUnread);
       socket.off('messageRead', refreshChatUnread);
       socket.off('conversationUpdated', refreshChatUnread);
       socket.off('conversationRead', refreshChatUnread);
+      socket.off('supportMessage', refreshSupportUnread);
+      socket.off('supportTicketUpdated', refreshSupportUnread);
     };
   }, [dispatch, hydrated, token]);
 

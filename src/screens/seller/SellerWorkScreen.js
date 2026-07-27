@@ -107,6 +107,7 @@ import EmptyState from '../../components/EmptyState';
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import CounterOfferModal from '../../components/modal/CounterOfferModal';
 import SellerBookingDetailModal from '../../components/modal/SellerBookingDetailModal';
+import SubmitWorkModal from '../../components/modal/SubmitWorkModal';
 import { selectAuth } from '../../redux/slices/authSlice';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { createOrGetConversationApi } from '../../services/chatService';
@@ -365,6 +366,22 @@ const SellerWorkScreen = ({ navigation, route }) => {
   });
   const [isConfirmingAction, setIsConfirmingAction] = useState(false);
   const [startingChatBookingId, setStartingChatBookingId] = useState(null);
+  const [submitWorkModal, setSubmitWorkModal] = useState({ visible: false, booking: null });
+
+  const openSubmitWorkModal = booking => setSubmitWorkModal({ visible: true, booking });
+  const closeSubmitWorkModal = () => setSubmitWorkModal({ visible: false, booking: null });
+
+  const handleSubmitWork = payload => {
+    // Backend not ready yet — just log the collected delivery details for now.
+    console.log('[SubmitWork] payload >>>', {
+      bookingId: payload.bookingId,
+      description: payload.description,
+      durationDays: payload.durationDays,
+      photoCount: payload.photos?.length || 0,
+      photos: payload.photos?.map(p => ({ uri: p.uri, name: p.name, type: p.type })),
+    });
+    closeSubmitWorkModal();
+  };
 
   const handleMessageBookingBuyer = useCallback(
     async booking => {
@@ -1118,7 +1135,7 @@ const SellerWorkScreen = ({ navigation, route }) => {
         {isOngoing ? (
           <TouchableOpacity
             style={[styles.sellerCompleteBtn, flexDirectionRow, alignItemsCenter]}
-            onPress={() => openConfirmModal('submitBooking', booking.id)}>
+            onPress={() => openSubmitWorkModal(booking)}>
             <Icon name="upload" size={14} color={whiteColor} />
             <Text style={[styles.sellerCompleteText, style.fontWeightMedium]}>
               {SELLER_BOOKINGS_SUBMIT}
@@ -1373,6 +1390,13 @@ const SellerWorkScreen = ({ navigation, route }) => {
         error={bookingDetailModal.error}
         booking={bookingDetailModal.booking}
         onClose={closeBookingDetailModal}
+      />
+
+      <SubmitWorkModal
+        visible={submitWorkModal.visible}
+        booking={submitWorkModal.booking}
+        onClose={closeSubmitWorkModal}
+        onSubmit={handleSubmitWork}
       />
 
       <CounterOfferModal

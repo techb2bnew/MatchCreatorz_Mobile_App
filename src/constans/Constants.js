@@ -17,6 +17,7 @@ export const SCREEN_NAMES = {
   BOOKING_DETAILS: 'BookingDetails',
   CHAT: 'Chat',
   CHAT_CONVERSATION: 'ChatConversation',
+  SUPPORT_CHAT: 'SupportChat',
   WALLET: 'Wallet',
   PROFILE: 'Profile',
   NOTIFICATIONS: 'Notifications',
@@ -297,6 +298,33 @@ export const ERROR_LOAD_MESSAGES_FAILED = 'Could not load messages.';
 export const ERROR_START_CHAT_FAILED = 'Could not start chat. Please try again.';
 export const MESSAGE_SELLER_BTN = 'Message';
 export const MESSAGE_BUYER_BTN = 'Message Buyer';
+
+// ---- Support chat (admin support tickets) ----
+export const CHAT_TAB_CHAT = 'Chat';
+export const CHAT_TAB_SUPPORT = 'Support';
+export const SUPPORT_TITLE = 'Support';
+export const SUPPORT_NEW_TICKET = 'New Ticket';
+export const SUPPORT_EMPTY_TITLE = 'No support tickets yet';
+export const SUPPORT_EMPTY_MESSAGE = 'Start a conversation with our support team — we usually reply fast.';
+export const SUPPORT_CLOSED_NOTICE = 'This ticket is closed. Open a new ticket to reach support again.';
+export const SUPPORT_TYPE_MESSAGE = 'Type your message…';
+export const SUPPORT_NEW_TICKET_TITLE = 'New Support Ticket';
+export const SUPPORT_NEW_TICKET_SUBJECT_LABEL = 'Subject (optional)';
+export const SUPPORT_NEW_TICKET_SUBJECT_PLACEHOLDER = 'e.g. Payment issue';
+export const SUPPORT_NEW_TICKET_BODY_LABEL = 'How can we help?';
+export const SUPPORT_NEW_TICKET_BODY_PLACEHOLDER = 'Describe your issue…';
+export const SUPPORT_NEW_TICKET_BODY_REQUIRED = 'Please describe your issue.';
+export const SUPPORT_NEW_TICKET_SUBMIT = 'Start Ticket';
+export const ERROR_LOAD_TICKETS_FAILED = 'Could not load support tickets.';
+export const ERROR_CREATE_TICKET_FAILED = 'Could not create ticket. Please try again.';
+
+// status -> { label, bg, text }
+export const SUPPORT_STATUS_META = {
+  OPEN: { label: 'Open', bg: '#FFF4E5', text: '#C27803' },
+  IN_PROGRESS: { label: 'In Progress', bg: '#E8F0F8', text: '#2563EB' },
+  RESOLVED: { label: 'Resolved', bg: '#E8F8EE', text: '#1B7A45' },
+  CLOSED: { label: 'Closed', bg: '#F3F4F6', text: '#6B7280' },
+};
 
 export const EMPTY_BIDS_TITLE = 'No bids yet';
 export const EMPTY_BIDS_MESSAGE = 'Creators will appear here once they bid on your job.';
@@ -676,7 +704,7 @@ export const SELLER_DASHBOARD_CONNECTS_REMAINING = 'Connects remaining';
 export const SELLER_DASHBOARD_BUY_CONNECTS = 'Buy More Connects';
 export const SELLER_DASHBOARD_ACTIVE_BOOKINGS = 'Active Bookings';
 export const SELLER_DASHBOARD_QUICK_ACTIONS = 'Quick Actions';
-export const SELLER_DASHBOARD_SEE_ALL = 'View all';
+export const SELLER_DASHBOARD_SEE_ALL = 'See all';
 
 export const SELLER_STAT_WALLET = 'Wallet Balance';
 export const SELLER_STAT_BOOKINGS = 'Active Bookings';
@@ -891,6 +919,22 @@ export const SELLER_BOOKING_SUBMIT_MESSAGE =
   'Confirm that you have delivered the work. The buyer will review and release payment.';
 export const SELLER_BOOKING_SUBMIT_CONFIRM = 'Yes, Submit';
 
+export const SUBMIT_WORK_MODAL = {
+  title: 'Submit Work',
+  subtitle: 'Share the delivery details with the buyer.',
+  descriptionLabel: 'Work Description',
+  descriptionPlaceholder: 'Describe the work you have completed…',
+  descriptionRequired: 'Please add a work description.',
+  durationLabel: 'Duration (days)',
+  durationPlaceholder: 'e.g. 3',
+  durationRequired: 'Please enter a valid number of days.',
+  photosLabel: 'Photos',
+  addPhoto: 'Add Photo',
+  maxPhotos: 'You can add up to 5 photos.',
+  cancel: 'Cancel',
+  submit: 'Submit Work',
+};
+
 export const SELLER_BOOKING_CANCEL_TITLE = 'Cancel Booking?';
 export const SELLER_BOOKING_CANCEL_MESSAGE =
   'Are you sure you want to cancel this pending booking? Please provide a reason.';
@@ -1024,4 +1068,7 @@ export const API_ENDPOINTS = {
   CHAT_CONVERSATIONS: '/chat/conversations',
   CHAT_UNREAD_COUNT: '/chat/unread-count',
   CHAT_UPLOAD: '/chat/upload',
+  SUPPORT_TICKETS: '/support/tickets',
+  SUPPORT_UNREAD_COUNT: '/support/unread-count',
+  SUPPORT_UPLOAD: '/support/upload',
 };

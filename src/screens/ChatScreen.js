@@ -7,10 +7,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../constans/Style';
 import {
@@ -34,12 +35,23 @@ import {
   EMPTY_SEARCH_MESSAGE,
   EMPTY_SEARCH_TITLE,
   SCREEN_NAMES,
+  CHAT_TAB_CHAT,
+  CHAT_TAB_SUPPORT,
+  SUPPORT_NEW_TICKET,
+  SUPPORT_EMPTY_TITLE,
+  SUPPORT_EMPTY_MESSAGE,
+  SUPPORT_STATUS_META,
+  ERROR_CREATE_TICKET_FAILED,
 } from '../constans/Constants';
 import SearchBar from '../components/SearchBar';
 import ScreenHeader, { screenContentStyles } from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
+import SupportNewTicketModal from '../components/modal/SupportNewTicketModal';
 import { selectAuth } from '../redux/slices/authSlice';
 import { getConversationsApi } from '../services/chatService';
+import { createSupportTicketApi, getSupportTicketsApi } from '../services/supportService';
+import { fetchSupportUnreadCount } from '../redux/slices/supportSlice';
+import { getApiErrorMessage } from '../services/apiClient';
 import { getSocket } from '../services/socketService';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../utils';
 
@@ -120,13 +132,50 @@ const mapApiConversationToUi = convo => {
   };
 };
 
+const extractTicketsList = response => {
+  const data = response?.data;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.tickets)) return data.tickets;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.rows)) return data.rows;
+  if (Array.isArray(response?.tickets)) return response.tickets;
+  return [];
+};
+
+const mapApiTicketToUi = ticket => {
+  const lastRaw = ticket?.last_message || ticket?.lastMessage || null;
+  const lastMessage =
+    typeof lastRaw === 'string' ? lastRaw : lastRaw?.body || lastRaw?.text || lastRaw?.message || '';
+  const statusKey = String(ticket?.status || 'OPEN').toUpperCase();
+  return {
+    id: String(ticket?.id),
+    subject: ticket?.subject || 'Support ticket',
+    status: statusKey,
+    lastMessage,
+    time: formatRelativeTime(
+      ticket?.last_message_at || ticket?.updated_at || ticket?.created_at,
+    ),
+    unreadCount: Number(ticket?.unread_count ?? ticket?.unreadCount ?? 0) || 0,
+  };
+};
+
 const ChatScreen = ({ navigation }) => {
   const { token } = useSelector(selectAuth);
+  const dispatch = useDispatch();
 
+  const [activeTab, setActiveTab] = useState('chat');
   const [searchQuery, setSearchQuery] = useState('');
   const [conversations, setConversations] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // ---- Support tickets state ----
+  const [tickets, setTickets] = useState([]);
+  const [isTicketsLoading, setIsTicketsLoading] = useState(false);
+  const [isTicketsRefreshing, setIsTicketsRefreshing] = useState(false);
+  const [newTicketModal, setNewTicketModal] = useState(false);
+  const [isCreatingTicket, setIsCreatingTicket] = useState(false);
 
   const fetchConversations = useCallback(
     async ({ isRefresh = false, silent = false } = {}) => {
@@ -193,9 +242,101 @@ const ChatScreen = ({ navigation }) => {
     };
   }, [token]);
 
+  // ---- Support: fetch tickets ----
+  const fetchTickets = useCallback(
+    async ({ isRefresh = false, silent = false } = {}) => {
+      if (!token) return;
+      if (silent) {
+        // background socket-triggered refresh
+      } else if (isRefresh) setIsTicketsRefreshing(true);
+      else setIsTicketsLoading(true);
+      try {
+        const response = await getSupportTicketsApi(token, { page: 1, limit: 30 });
+        setTickets(extractTicketsList(response).map(mapApiTicketToUi));
+      } catch (error) {
+        if (!isRefresh && !silent) setTickets([]);
+      } finally {
+        if (isRefresh) setIsTicketsRefreshing(false);
+        else if (!silent) setIsTicketsLoading(false);
+      }
+    },
+    [token],
+  );
+
+  // Load tickets the first time the Support tab is opened (and refresh on focus after).
+  useFocusEffect(
+    useCallback(() => {
+      if (activeTab === 'support') fetchTickets();
+    }, [activeTab, fetchTickets]),
+  );
+
+  const ticketsFetchRef = useRef(fetchTickets);
+  useEffect(() => {
+    ticketsFetchRef.current = fetchTickets;
+  }, [fetchTickets]);
+
+  // Live support updates → refresh ticket list + support badge.
+  const supportDebounceRef = useRef(null);
+  useEffect(() => {
+    if (!token) return undefined;
+    const socket = getSocket();
+    if (!socket) return undefined;
+
+    const refresh = () => {
+      dispatch(fetchSupportUnreadCount({ token }));
+      if (supportDebounceRef.current) return;
+      supportDebounceRef.current = setTimeout(() => {
+        supportDebounceRef.current = null;
+        ticketsFetchRef.current?.({ silent: true });
+      }, 1000);
+    };
+    socket.on('supportMessage', refresh);
+    socket.on('supportTicketUpdated', refresh);
+    return () => {
+      socket.off('supportMessage', refresh);
+      socket.off('supportTicketUpdated', refresh);
+      if (supportDebounceRef.current) clearTimeout(supportDebounceRef.current);
+    };
+  }, [token, dispatch]);
+
+  const openTicket = ticket => {
+    navigation.navigate(SCREEN_NAMES.SUPPORT_CHAT, {
+      ticketId: ticket.id,
+      subject: ticket.subject,
+      status: ticket.status,
+    });
+  };
+
+  const handleCreateTicket = async ({ subject, body }) => {
+    if (!token || isCreatingTicket) return;
+    setIsCreatingTicket(true);
+    try {
+      const response = await createSupportTicketApi(token, { subject, body });
+      const ticket = response?.data?.ticket || response?.data || response;
+      setNewTicketModal(false);
+      fetchTickets({ silent: true });
+      if (ticket?.id) {
+        navigation.navigate(SCREEN_NAMES.SUPPORT_CHAT, {
+          ticketId: String(ticket.id),
+          subject: ticket.subject || subject,
+          status: String(ticket.status || 'OPEN').toUpperCase(),
+        });
+      }
+    } catch (error) {
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_CREATE_TICKET_FAILED));
+    } finally {
+      setIsCreatingTicket(false);
+    }
+  };
+
   const totalUnread = useMemo(
     () => conversations.reduce((sum, c) => sum + c.unreadCount, 0),
     [conversations],
+  );
+
+  const supportUnread = useMemo(
+    () => tickets.reduce((sum, t) => sum + t.unreadCount, 0),
+    [tickets],
   );
 
   const filteredConversations = useMemo(() => {
@@ -271,6 +412,73 @@ const ChatScreen = ({ navigation }) => {
     );
   };
 
+  const renderTicket = ({ item }) => {
+    const hasUnread = item.unreadCount > 0;
+    const meta = SUPPORT_STATUS_META[item.status] || SUPPORT_STATUS_META.OPEN;
+    return (
+      <TouchableOpacity
+        style={[styles.conversationCard, flexDirectionRow, alignItemsCenter, hasUnread && styles.conversationCardUnread]}
+        activeOpacity={0.8}
+        onPress={() => openTicket(item)}>
+        <View style={[styles.ticketIcon, alignJustifyCenter]}>
+          <Icon name="life-buoy" size={20} color={redColor} />
+        </View>
+        <View style={styles.conversationInfo}>
+          <View style={[flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween]}>
+            <Text
+              style={[styles.name, hasUnread ? style.fontWeightBold : style.fontWeightMedium]}
+              numberOfLines={1}>
+              {item.subject}
+            </Text>
+            <Text style={[styles.time, hasUnread && styles.timeUnread]}>{item.time}</Text>
+          </View>
+          <View style={[flexDirectionRow, alignItemsCenter, styles.previewRow]}>
+            <Text
+              style={[styles.preview, hasUnread ? style.fontWeightMedium : style.fontWeightThin, hasUnread && styles.previewUnread]}
+              numberOfLines={1}>
+              {item.lastMessage}
+            </Text>
+            {hasUnread ? (
+              <View style={[styles.unreadBadge, alignJustifyCenter]}>
+                <Text style={styles.unreadText}>{item.unreadCount}</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={[styles.ticketStatusBadge, { backgroundColor: meta.bg }]}>
+            <Text style={[styles.ticketStatusText, { color: meta.text }]}>{meta.label}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderTabs = () => (
+    <View style={[styles.tabRow, flexDirectionRow]}>
+      {[
+        { key: 'chat', label: CHAT_TAB_CHAT, badge: totalUnread },
+        { key: 'support', label: CHAT_TAB_SUPPORT, badge: supportUnread },
+      ].map(tab => {
+        const active = activeTab === tab.key;
+        return (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tab, alignJustifyCenter, flexDirectionRow, active && styles.tabActive]}
+            activeOpacity={0.8}
+            onPress={() => setActiveTab(tab.key)}>
+            <Text style={[styles.tabText, style.fontWeightMedium, active && styles.tabTextActive]}>
+              {tab.label}
+            </Text>
+            {tab.badge > 0 ? (
+              <View style={[styles.tabBadge, alignJustifyCenter]}>
+                <Text style={styles.tabBadgeText}>{tab.badge}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
   return (
     <SafeAreaView style={[flex, screenContentStyles.safeArea]} edges={['top']}>
       <View style={styles.container}>
@@ -278,7 +486,7 @@ const ChatScreen = ({ navigation }) => {
           title={CHAT_MESSAGES_TITLE}
           navigation={navigation}
           leftAccessory={
-            totalUnread > 0 ? (
+            activeTab === 'chat' && totalUnread > 0 ? (
               <View style={[styles.unreadPill, flexDirectionRow, alignItemsCenter]}>
                 <Icon name="message-circle" size={12} color={redColor} />
                 <Text style={[styles.unreadPillText, style.fontWeightMedium]}>
@@ -289,41 +497,87 @@ const ChatScreen = ({ navigation }) => {
           }
         />
 
-        <SearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder={CHAT_SEARCH_PLACEHOLDER}
-        />
+        {renderTabs()}
 
-        {isLoading ? (
-          <View style={[flex, alignJustifyCenter]}>
-            <ActivityIndicator size="large" color={redColor} />
-          </View>
+        {activeTab === 'chat' ? (
+          <>
+            <SearchBar
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder={CHAT_SEARCH_PLACEHOLDER}
+            />
+            {isLoading ? (
+              <View style={[flex, alignJustifyCenter]}>
+                <ActivityIndicator size="large" color={redColor} />
+              </View>
+            ) : (
+              <FlatList
+                data={filteredConversations}
+                keyExtractor={item => item.id}
+                renderItem={renderConversation}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isRefreshing}
+                    onRefresh={() => fetchConversations({ isRefresh: true })}
+                    colors={[redColor]}
+                    tintColor={redColor}
+                  />
+                }
+                ListEmptyComponent={
+                  <EmptyState
+                    icon="message-circle"
+                    title={searchQuery.trim() ? EMPTY_SEARCH_TITLE : EMPTY_CHATS_TITLE}
+                    message={searchQuery.trim() ? EMPTY_SEARCH_MESSAGE : EMPTY_CHATS_MESSAGE}
+                  />
+                }
+              />
+            )}
+          </>
         ) : (
-          <FlatList
-            data={filteredConversations}
-            keyExtractor={item => item.id}
-            renderItem={renderConversation}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl
-                refreshing={isRefreshing}
-                onRefresh={() => fetchConversations({ isRefresh: true })}
-                colors={[redColor]}
-                tintColor={redColor}
+          <>
+            <TouchableOpacity
+              style={[styles.newTicketBtn, flexDirectionRow, alignJustifyCenter]}
+              activeOpacity={0.85}
+              onPress={() => setNewTicketModal(true)}>
+              <Icon name="plus" size={16} color={whiteColor} />
+              <Text style={[styles.newTicketText, style.fontWeightMedium]}>{SUPPORT_NEW_TICKET}</Text>
+            </TouchableOpacity>
+            {isTicketsLoading ? (
+              <View style={[flex, alignJustifyCenter]}>
+                <ActivityIndicator size="large" color={redColor} />
+              </View>
+            ) : (
+              <FlatList
+                data={tickets}
+                keyExtractor={item => item.id}
+                renderItem={renderTicket}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isTicketsRefreshing}
+                    onRefresh={() => fetchTickets({ isRefresh: true })}
+                    colors={[redColor]}
+                    tintColor={redColor}
+                  />
+                }
+                ListEmptyComponent={
+                  <EmptyState icon="life-buoy" title={SUPPORT_EMPTY_TITLE} message={SUPPORT_EMPTY_MESSAGE} />
+                }
               />
-            }
-            ListEmptyComponent={
-              <EmptyState
-                icon="message-circle"
-                title={searchQuery.trim() ? EMPTY_SEARCH_TITLE : EMPTY_CHATS_TITLE}
-                message={searchQuery.trim() ? EMPTY_SEARCH_MESSAGE : EMPTY_CHATS_MESSAGE}
-              />
-            }
-          />
+            )}
+          </>
         )}
       </View>
+
+      <SupportNewTicketModal
+        visible={newTicketModal}
+        loading={isCreatingTicket}
+        onClose={() => setNewTicketModal(false)}
+        onSubmit={handleCreateTicket}
+      />
     </SafeAreaView>
   );
 };
@@ -346,6 +600,75 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp(2.5),
     paddingVertical: hp(0.4),
     gap: wp(1),
+  },
+  tabRow: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: wp(3),
+    padding: wp(1),
+    marginBottom: hp(1.2),
+    gap: wp(1),
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: hp(1),
+    borderRadius: wp(2.4),
+    gap: wp(1.5),
+  },
+  tabActive: {
+    backgroundColor: whiteColor,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  tabText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: grayColor,
+  },
+  tabTextActive: {
+    color: redColor,
+  },
+  tabBadge: {
+    minWidth: wp(4.5),
+    height: wp(4.5),
+    borderRadius: wp(2.25),
+    backgroundColor: redColor,
+    paddingHorizontal: wp(1),
+  },
+  tabBadgeText: {
+    color: whiteColor,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  newTicketBtn: {
+    backgroundColor: redColor,
+    borderRadius: wp(3),
+    paddingVertical: hp(1.4),
+    gap: wp(1.5),
+    marginBottom: hp(1.2),
+  },
+  newTicketText: {
+    color: whiteColor,
+    fontSize: style.fontSizeNormal2x.fontSize,
+  },
+  ticketIcon: {
+    width: wp(13.5),
+    height: wp(13.5),
+    borderRadius: wp(6.75),
+    backgroundColor: lightPink,
+    flexShrink: 0,
+  },
+  ticketStatusBadge: {
+    alignSelf: 'flex-start',
+    marginTop: hp(0.6),
+    paddingHorizontal: wp(2.2),
+    paddingVertical: hp(0.3),
+    borderRadius: wp(4),
+  },
+  ticketStatusText: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    fontWeight: '600',
   },
   unreadPillText: {
     fontSize: style.fontSizeExtraSmall.fontSize,

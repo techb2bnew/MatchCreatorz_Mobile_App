@@ -2527,26 +2527,25 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={[styles.bookingMessageBtn, alignJustifyCenter, flexDirectionRow]}
-          onPress={() => handleMessageBookingSeller(booking)}
-          disabled={!booking.sellerId || Boolean(startingChatBookingId)}
-          activeOpacity={0.7}>
-          {startingChatBookingId === booking.id ? (
-            <ActivityIndicator size="small" color={redColor} />
-          ) : (
-            <>
-              <Icon name="message-circle" size={14} color={redColor} />
-              <Text style={[styles.bookingMessageBtnText, style.fontWeightMedium]}>{MESSAGE_SELLER_BTN}</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
         <View style={[styles.bookingFooter, flexDirectionRow, justifyContentSpaceBetween, alignItemsCenter]}>
-          <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+          <View style={[styles.statusBadge, styles.bookingStatusBadge, { backgroundColor: statusStyle.bg }]}>
             <Text style={[styles.statusText, { color: statusStyle.text }]}>{booking.status}</Text>
           </View>
           <View style={[flexDirectionRow, alignItemsCenter, styles.bookingActions]}>
+            <TouchableOpacity
+              style={[styles.bookingMessageBtn, alignJustifyCenter, flexDirectionRow]}
+              onPress={() => handleMessageBookingSeller(booking)}
+              disabled={!booking.sellerId || Boolean(startingChatBookingId)}
+              activeOpacity={0.7}>
+              {startingChatBookingId === booking.id ? (
+                <ActivityIndicator size="small" color={redColor} />
+              ) : (
+                <>
+                  <Icon name="message-circle" size={14} color={redColor} />
+                  <Text style={[styles.bookingMessageBtnText, style.fontWeightMedium]}>{MESSAGE_SELLER_BTN}</Text>
+                </>
+              )}
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.outlineBtn, flexDirectionRow, alignItemsCenter]}
               onPress={() => handleViewBooking(booking)}>
@@ -3327,8 +3326,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   bookingMessageBtn: {
-    alignSelf: 'flex-end',
-    marginTop: spacings.large,
     borderWidth: 1,
     borderColor: redColor,
     borderRadius: 8,
@@ -3342,12 +3339,16 @@ const styles = StyleSheet.create({
   },
   bookingFooter: {
     marginTop: spacings.large,
-    flexWrap: 'wrap',
     gap: spacings.normal,
   },
+  bookingStatusBadge: {
+    flexShrink: 0,
+  },
   bookingActions: {
-    gap: spacings.normal,
+    flex: 1,
+    gap: spacings.small,
     flexWrap: 'wrap',
+    justifyContent: 'flex-end',
   },
   bookingActionGroup: { gap: spacings.normal },
   cancelBtn: {

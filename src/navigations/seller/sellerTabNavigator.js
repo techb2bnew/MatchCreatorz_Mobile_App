@@ -52,8 +52,11 @@ const TAB_ROOT_SCREENS = {
 
 const createTabListeners = tabName => ({ navigation, route }) => ({
   tabPress: e => {
-    const nestedIndex = route.state?.index ?? 0;
-    if (nestedIndex > 0) {
+    // Reliably detect the currently-focused nested screen (route.state?.index can be
+    // stale/undefined after a cross-tab navigate). If the tab isn't already showing
+    // its root, reset it so tapping the bottom tab always opens its parent screen.
+    const focused = getFocusedRouteNameFromRoute(route) ?? TAB_ROOT_SCREENS[tabName];
+    if (focused !== TAB_ROOT_SCREENS[tabName]) {
       e.preventDefault();
       navigation.navigate(tabName, {
         screen: TAB_ROOT_SCREENS[tabName],
@@ -62,7 +65,7 @@ const createTabListeners = tabName => ({ navigation, route }) => ({
   },
 });
 
-const HIDE_TAB_BAR_SCREENS = [SCREEN_NAMES.CHAT_CONVERSATION];
+const HIDE_TAB_BAR_SCREENS = [SCREEN_NAMES.CHAT_CONVERSATION, SCREEN_NAMES.SUPPORT_CHAT];
 
 const getDefaultTabBarStyle = insets => {
   const bottomInset = Platform.OS === 'ios' ? insets.bottom : 0;

@@ -26,8 +26,10 @@ import {
 import { style, spacings } from '../../constans/Fonts';
 import {
   SELLER_ADD_SERVICE_MODAL as COPY,
+  PHOTO_LIBRARY,
+  TAKE_PHOTO,
+  CONFIRM_CANCEL,
 } from '../../constans/Constants';
-import UploadOptionsModal from './UploadOptionsModal';
 import { pickImageFromCamera, pickImagesFromGallery } from '../../utils/filePicker';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 
@@ -75,7 +77,6 @@ const AddServiceModal = ({
   const [revisions, setRevisions] = useState('');
   const [tags, setTags] = useState('');
   const [fieldError, setFieldError] = useState('');
-  const [showUploadOptions, setShowUploadOptions] = useState(false);
 
   const categoryOptions = (Array.isArray(categories) ? categories : [])
     .map(normalizeCategory)
@@ -121,7 +122,6 @@ const AddServiceModal = ({
         : String(initialValues?.tags || ''),
     );
     setFieldError('');
-    setShowUploadOptions(false);
   }, [visible, mode, initialValues?.id]);
 
   const appendImages = files => {
@@ -163,6 +163,16 @@ const AddServiceModal = ({
     if (option === 'camera') {
       appendImages(await pickImageFromCamera());
     }
+  };
+
+  // Use a native Alert action sheet instead of a nested <Modal> — a Modal rendered
+  // over this modal doesn't reliably present on iOS, which was blocking image upload.
+  const openImagePicker = () => {
+    Alert.alert(COPY.imagesLabel, undefined, [
+      { text: PHOTO_LIBRARY, onPress: () => handleUploadOption('gallery') },
+      { text: TAKE_PHOTO, onPress: () => handleUploadOption('camera') },
+      { text: CONFIRM_CANCEL, style: 'cancel' },
+    ]);
   };
 
   const removeExistingImage = index => {
@@ -342,7 +352,7 @@ const AddServiceModal = ({
                     {totalImageCount < MAX_IMAGES ? (
                       <TouchableOpacity
                         style={[styles.addPhotoBox, alignJustifyCenter]}
-                        onPress={() => setShowUploadOptions(true)}
+                        onPress={openImagePicker}
                         disabled={loading}
                         activeOpacity={0.85}>
                         <Icon name="plus" size={22} color={grayColor} />
@@ -502,13 +512,6 @@ const AddServiceModal = ({
           </View>
         </KeyboardAvoidingView>
       </Modal>
-
-      <UploadOptionsModal
-        visible={showUploadOptions}
-        photoOnly
-        onClose={() => setShowUploadOptions(false)}
-        onSelect={handleUploadOption}
-      />
     </>
   );
 };

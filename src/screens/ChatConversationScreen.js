@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../constans/Style';
@@ -28,7 +28,7 @@ import {
   redColor,
   whiteColor,
 } from '../constans/Color';
-import { style } from '../constans/Fonts';
+import { spacings, style } from '../constans/Fonts';
 import {
   CHAT_EMPTY_CONVERSATION_MESSAGE,
   CHAT_OFFLINE,
@@ -111,6 +111,19 @@ const ChatConversationScreen = ({ navigation, route }) => {
   const [showUploadOptions, setShowUploadOptions] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const insets = useSafeAreaInsets();
+  const androidKbPad = Platform.OS === 'android' && keyboardHeight > 0
+    ? Math.max(keyboardHeight - insets.bottom, 0)
+    : 0;
+
+  // Android's scrollToEnd on first load often lands halfway because row heights
+  // aren't measured yet — fire it a few times as layout settles.
+  const scrollToBottom = useCallback((animated = false) => {
+    const run = () => listRef.current?.scrollToEnd({ animated });
+    run();
+    [80, 250, 500].forEach(ms => setTimeout(run, ms));
+  }, []);
 
   const fetchMessages = useCallback(async () => {
     if (!token || !conversationId) return;
@@ -122,13 +135,13 @@ const ChatConversationScreen = ({ navigation, route }) => {
       const list = extractMessagesList(response);
       // API returns newest-first; reverse to oldest-first for normal top-to-bottom rendering.
       setMessages([...list].reverse().map(m => mapApiMessageToUi(m, user?.id)));
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 60);
+      scrollToBottom(false);
     } catch (error) {
       setLoadError(getApiErrorMessage(error?.data, error?.message || ERROR_LOAD_MESSAGES_FAILED));
     } finally {
       setIsLoading(false);
     }
-  }, [token, conversationId, user?.id]);
+  }, [token, conversationId, user?.id, scrollToBottom]);
 
   useEffect(() => {
     fetchMessages();
@@ -136,16 +149,21 @@ const ChatConversationScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     const scrollDown = () => listRef.current?.scrollToEnd({ animated: true });
-    // On iOS, nudge while the keyboard is animating in (keyboardWillShow) so it
-    // moves together with the keyboard, then scroll AGAIN on keyboardDidShow once
-    // the layout has actually resized — otherwise the last message stays hidden
-    // behind the input. Android's adjustPan handles positioning natively.
     const subs = [];
     if (Platform.OS === 'ios') {
       subs.push(Keyboard.addListener('keyboardWillShow', scrollDown));
       subs.push(Keyboard.addListener('keyboardDidShow', () => setTimeout(scrollDown, 30)));
     } else {
-      subs.push(Keyboard.addListener('keyboardDidShow', () => setTimeout(scrollDown, 50)));
+      // Android (RN 0.86 + Android 15 edge-to-edge): adjustResize does NOT resize the
+      // window, so the keyboard overlays the input. Manually lift the composer by the
+      // keyboard height and scroll to the latest message.
+      subs.push(
+        Keyboard.addListener('keyboardDidShow', e => {
+          setKeyboardHeight(e?.endCoordinates?.height || 0);
+          setTimeout(scrollDown, 50);
+        }),
+      );
+      subs.push(Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0)));
     }
     return () => subs.forEach(s => s.remove());
   }, []);
@@ -154,7 +172,7 @@ const ChatConversationScreen = ({ navigation, route }) => {
     if (!token || !conversationId) return;
     markConversationReadApi(token, conversationId)
       .then(() => dispatch(fetchChatUnreadCount({ token })))
-      .catch(() => {});
+      .catch(() => { });
     getSocket()?.emit('messageRead', { conversationId });
   }, [token, conversationId, dispatch]);
 
@@ -173,7 +191,7 @@ const ChatConversationScreen = ({ navigation, route }) => {
       if (!uiMsg.isMine) {
         markConversationReadApi(token, conversationId)
           .then(() => dispatch(fetchChatUnreadCount({ token })))
-          .catch(() => {});
+          .catch(() => { });
         socket.emit('messageRead', { conversationId });
       }
     };
@@ -330,13 +348,13 @@ const ChatConversationScreen = ({ navigation, route }) => {
       const uiMsg = sentMessage
         ? mapApiMessageToUi(sentMessage, user?.id)
         : {
-            id: `local-${Date.now()}`,
-            text: body,
-            isMine: true,
-            time: formatMessageTime(new Date().toISOString()),
-            read: false,
-            attachment: attachmentPayload,
-          };
+          id: `local-${Date.now()}`,
+          text: body,
+          isMine: true,
+          time: formatMessageTime(new Date().toISOString()),
+          read: false,
+          attachment: attachmentPayload,
+        };
 
       setMessages(prev => (prev.some(m => m.id === uiMsg.id) ? prev : [...prev, uiMsg]));
       setMessageText('');
@@ -468,7 +486,7 @@ const ChatConversationScreen = ({ navigation, route }) => {
       </View>
 
       <KeyboardAvoidingView
-        style={flex}
+        style={[flex, { paddingBottom: androidKbPad }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}>
         {isLoading ? (
@@ -478,13 +496,17 @@ const ChatConversationScreen = ({ navigation, route }) => {
         ) : (
           <FlatList
             ref={listRef}
+            style={flex}
             data={messages}
             keyExtractor={item => item.id}
             renderItem={renderMessage}
             contentContainerStyle={styles.messagesList}
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="interactive"
+            initialNumToRender={50}
+            removeClippedSubviews={false}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            onLayout={() => scrollToBottom(false)}
             ListHeaderComponent={
               messages.length > 0 ? (
                 <View style={[styles.dateSeparator, flexDirectionRow, alignItemsCenter]}>
@@ -573,11 +595,6 @@ const styles = StyleSheet.create({
     borderBottomColor: borderLightColor,
     backgroundColor: whiteColor,
     gap: wp(1.5),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
     zIndex: 1,
   },
   backBtn: {
@@ -766,13 +783,8 @@ const styles = StyleSheet.create({
     borderTopColor: borderLightColor,
     paddingHorizontal: wp(4),
     paddingTop: hp(1.2),
-    paddingBottom: hp(1.2),
+    paddingBottom: Platform.OS === "ios" ? hp(1.2) : hp(3),
     backgroundColor: whiteColor,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 3,
   },
   pendingAttachmentRow: {
     backgroundColor: inputBgColor,
@@ -809,7 +821,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     color: blackColor,
     maxHeight: hp(12),
-    paddingVertical: hp(0.7),
+    paddingVertical: spacings.large,
     lineHeight: 20,
   },
   sendBtn: {
