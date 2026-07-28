@@ -124,7 +124,7 @@ import {
 import { heightPercentageToDP as hp, widthPercentageToDP as wp } from '../../utils';
 import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
 
-const { flex, flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween, alignJustifyCenter } = BaseStyle;
+const { flex, flexDirectionRow, alignItemsCenter, alignJustifyCenter } = BaseStyle;
 
 const BIDS_PAGE_LIMIT = 20;
 const BOOKINGS_PAGE_LIMIT = 20;
@@ -367,20 +367,49 @@ const SellerWorkScreen = ({ navigation, route }) => {
   const [isConfirmingAction, setIsConfirmingAction] = useState(false);
   const [startingChatBookingId, setStartingChatBookingId] = useState(null);
   const [submitWorkModal, setSubmitWorkModal] = useState({ visible: false, booking: null });
+  const [isSubmittingWork, setIsSubmittingWork] = useState(false);
 
   const openSubmitWorkModal = booking => setSubmitWorkModal({ visible: true, booking });
-  const closeSubmitWorkModal = () => setSubmitWorkModal({ visible: false, booking: null });
+  const closeSubmitWorkModal = () => {
+    if (isSubmittingWork) return;
+    setSubmitWorkModal({ visible: false, booking: null });
+  };
 
-  const handleSubmitWork = payload => {
-    // Backend not ready yet — just log the collected delivery details for now.
-    console.log('[SubmitWork] payload >>>', {
-      bookingId: payload.bookingId,
+  const handleSubmitWork = async payload => {
+    const bookingId = payload?.bookingId;
+    if (!bookingId || isSubmittingWork) return;
+
+    // NOTE: swagger `PATCH /seller/bookings/{id}/submit` takes NO request body —
+    // it is a pure status transition (ongoing -> amidst_completion). The
+    // description / duration / photos are collected for the seller's own record
+    // only and are intentionally NOT sent to the backend.
+    console.log('[SubmitWork] collected (not sent to API) >>>', {
+      bookingId,
       description: payload.description,
       durationDays: payload.durationDays,
       photoCount: payload.photos?.length || 0,
-      photos: payload.photos?.map(p => ({ uri: p.uri, name: p.name, type: p.type })),
     });
-    closeSubmitWorkModal();
+
+    if (!token) {
+      Alert.alert(SELLER_BOOKING_SUBMIT_TITLE, ERROR_BOOKING_ACTION_FAILED);
+      return;
+    }
+
+    setIsSubmittingWork(true);
+    try {
+      await submitSellerBookingApi(token, bookingId);
+      setSubmitWorkModal({ visible: false, booking: null });
+      hasMoreBookingsRef.current = true;
+      bookingsPageRef.current = 1;
+      await fetchSellerBookings(1, { isLoadMore: false });
+    } catch (error) {
+      Alert.alert(
+        SELLER_BOOKING_SUBMIT_TITLE,
+        getApiErrorMessage(error?.data, error?.message || ERROR_BOOKING_ACTION_FAILED),
+      );
+    } finally {
+      setIsSubmittingWork(false);
+    }
   };
 
   const handleMessageBookingBuyer = useCallback(
@@ -1103,9 +1132,9 @@ const SellerWorkScreen = ({ navigation, route }) => {
     const isOngoing = status === 'Ongoing';
 
     return (
-      <View style={[flexDirectionRow, styles.sellerBookingActionGroup]}>
+      <>
         <TouchableOpacity
-          style={[styles.sellerDetailsBtn, flexDirectionRow, alignItemsCenter]}
+          style={[styles.sellerDetailsBtn, styles.sellerActionCell, flexDirectionRow, alignJustifyCenter]}
           onPress={() => handleViewBooking(booking)}>
           <Icon name="eye" size={14} color={blackColor} />
           <Text style={[styles.sellerDetailsText, style.fontWeightMedium]}>{SELLER_BOOKINGS_VIEW}</Text>
@@ -1114,7 +1143,7 @@ const SellerWorkScreen = ({ navigation, route }) => {
         {isPending ? (
           <>
             <TouchableOpacity
-              style={[styles.sellerCompleteBtn, flexDirectionRow, alignItemsCenter]}
+              style={[styles.sellerCompleteBtn, styles.sellerActionCell, flexDirectionRow, alignJustifyCenter]}
               onPress={() => openConfirmModal('acceptBooking', booking.id)}>
               <Icon name="check" size={14} color={whiteColor} />
               <Text style={[styles.sellerCompleteText, style.fontWeightMedium]}>
@@ -1122,7 +1151,7 @@ const SellerWorkScreen = ({ navigation, route }) => {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.sellerDisputeBtn, flexDirectionRow, alignItemsCenter]}
+              style={[styles.sellerDisputeBtn, styles.sellerActionCell, flexDirectionRow, alignJustifyCenter]}
               onPress={() => openConfirmModal('cancelBooking', booking.id)}>
               <Icon name="x" size={14} color="#C27803" />
               <Text style={[styles.sellerDisputeText, style.fontWeightMedium]}>
@@ -1134,7 +1163,7 @@ const SellerWorkScreen = ({ navigation, route }) => {
 
         {isOngoing ? (
           <TouchableOpacity
-            style={[styles.sellerCompleteBtn, flexDirectionRow, alignItemsCenter]}
+            style={[styles.sellerCompleteBtn, styles.sellerActionCell, flexDirectionRow, alignJustifyCenter]}
             onPress={() => openSubmitWorkModal(booking)}>
             <Icon name="upload" size={14} color={whiteColor} />
             <Text style={[styles.sellerCompleteText, style.fontWeightMedium]}>
@@ -1142,7 +1171,7 @@ const SellerWorkScreen = ({ navigation, route }) => {
             </Text>
           </TouchableOpacity>
         ) : null}
-      </View>
+      </>
     );
   };
 
@@ -1176,26 +1205,25 @@ const SellerWorkScreen = ({ navigation, route }) => {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.bookingMessageBtn, alignJustifyCenter, flexDirectionRow]}
-          onPress={() => handleMessageBookingBuyer(booking)}
-          disabled={!booking.buyerId || Boolean(startingChatBookingId)}
-          activeOpacity={0.7}>
-          {startingChatBookingId === booking.id ? (
-            <ActivityIndicator size="small" color={redColor} />
-          ) : (
-            <>
-              <Icon name="message-circle" size={14} color={redColor} />
-              <Text style={[styles.bookingMessageBtnText, style.fontWeightMedium]}>{MESSAGE_BUYER_BTN}</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        <View style={[styles.sellerBookingFooter, flexDirectionRow, justifyContentSpaceBetween, alignItemsCenter]}>
-          <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+        <View style={styles.sellerBookingFooter}>
+          <View style={[styles.statusBadge, styles.sellerBookingStatusBadge, { backgroundColor: statusStyle.bg }]}>
             <Text style={[styles.statusBadgeText, { color: statusStyle.text }]}>{booking.status}</Text>
           </View>
-          <View style={[flexDirectionRow, alignItemsCenter, styles.sellerBookingActions]}>
+          <View style={styles.sellerBookingActions}>
+            <TouchableOpacity
+              style={[styles.bookingMessageBtn, styles.sellerActionCell, alignJustifyCenter, flexDirectionRow]}
+              onPress={() => handleMessageBookingBuyer(booking)}
+              disabled={!booking.buyerId || Boolean(startingChatBookingId)}
+              activeOpacity={0.7}>
+              {startingChatBookingId === booking.id ? (
+                <ActivityIndicator size="small" color={redColor} />
+              ) : (
+                <>
+                  <Icon name="message-circle" size={14} color={redColor} />
+                  <Text style={[styles.bookingMessageBtnText, style.fontWeightMedium]}>{MESSAGE_BUYER_BTN}</Text>
+                </>
+              )}
+            </TouchableOpacity>
             {renderSellerBookingActions(booking)}
           </View>
         </View>
@@ -1397,6 +1425,7 @@ const SellerWorkScreen = ({ navigation, route }) => {
         booking={submitWorkModal.booking}
         onClose={closeSubmitWorkModal}
         onSubmit={handleSubmitWork}
+        loading={isSubmittingWork}
       />
 
       <CounterOfferModal
@@ -1684,8 +1713,6 @@ const styles = StyleSheet.create({
   },
   sellerBookingInfo: { flex: 1 },
   bookingMessageBtn: {
-    alignSelf: 'flex-end',
-    marginTop: spacings.large,
     borderWidth: 1,
     borderColor: redColor,
     borderRadius: 8,
@@ -1723,7 +1750,6 @@ const styles = StyleSheet.create({
   },
   sellerBookingFooter: {
     marginTop: spacings.large,
-    flexWrap: 'wrap',
     gap: spacings.normal,
   },
   statusBadge: {
@@ -1731,18 +1757,25 @@ const styles = StyleSheet.create({
     paddingVertical: spacings.xsmall,
     borderRadius: 20,
   },
+  sellerBookingStatusBadge: {
+    alignSelf: 'flex-start',
+  },
   statusBadgeText: {
     fontSize: style.fontSizeSmall1x.fontSize,
     fontWeight: '600',
   },
   sellerBookingActions: {
-    gap: spacings.normal,
+    width: '100%',
+    flexDirection: 'row',
     flexWrap: 'wrap',
-  },
-  sellerBookingActionGroup: {
     gap: spacings.small,
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
+  },
+  sellerActionCell: {
+    flexGrow: 1,
+    flexBasis: '46%',
+    minHeight: 32,
+    paddingVertical: spacings.xsmall,
+    paddingHorizontal: spacings.small,
   },
   sellerDetailsBtn: {
     borderWidth: 1,

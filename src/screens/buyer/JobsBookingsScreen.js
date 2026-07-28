@@ -2444,7 +2444,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     if (booking.apiStatus === 'pending' || booking.apiStatus === 'ongoing') {
       return (
         <TouchableOpacity
-          style={[styles.cancelBtn, flexDirectionRow, alignItemsCenter]}
+          style={[styles.cancelBtn, styles.bookingActionCell, flexDirectionRow, alignJustifyCenter]}
           onPress={() => openConfirmModal('cancel', booking.id)}
           disabled={isConfirmingBooking}>
           <Icon name="alert-circle" size={14} color="#C27803" />
@@ -2459,28 +2459,28 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       booking.apiStatus === 'awaiting_acceptance'
     ) {
       return (
-        <View style={[flexDirectionRow, styles.bookingActionGroup]}>
+        <>
           <TouchableOpacity
-            style={[styles.acceptBtn, flexDirectionRow, alignItemsCenter]}
+            style={[styles.acceptBtn, styles.bookingActionCell, flexDirectionRow, alignJustifyCenter]}
             onPress={() => openConfirmModal('accept', booking.id)}
             disabled={isConfirmingBooking}>
             <Icon name="check" size={14} color={whiteColor} />
             <Text style={[styles.acceptBtnText, style.fontWeightMedium]}>{BOOKING_ACTIONS.ACCEPT}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.rejectBtn, flexDirectionRow, alignItemsCenter]}
+            style={[styles.rejectBtn, styles.bookingActionCell, flexDirectionRow, alignJustifyCenter]}
             onPress={() => openConfirmModal('reject', booking.id)}
             disabled={isConfirmingBooking}>
             <Icon name="x" size={14} color={whiteColor} />
             <Text style={[styles.rejectBtnText, style.fontWeightMedium]}>{BOOKING_ACTIONS.REJECT}</Text>
           </TouchableOpacity>
-        </View>
+        </>
       );
     }
     if (booking.apiStatus === 'completed') {
       if (isReviewed) {
         return (
-          <View style={[styles.reviewedBadge, flexDirectionRow, alignItemsCenter]}>
+          <View style={[styles.reviewedBadge, styles.bookingActionCell, flexDirectionRow, alignJustifyCenter]}>
             <Icon name="check-circle" size={14} color={greenColor} />
             <Text style={[styles.reviewedBadgeText, style.fontWeightMedium]}>
               {BOOKING_ACTIONS.REVIEWED}
@@ -2490,7 +2490,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       }
       return (
         <TouchableOpacity
-          style={[styles.reviewBtn, flexDirectionRow, alignItemsCenter]}
+          style={[styles.reviewBtn, styles.bookingActionCell, flexDirectionRow, alignJustifyCenter]}
           onPress={() => openReviewModal(booking)}
           disabled={isSubmittingReview}>
           <Icon name="star" size={14} color={whiteColor} />
@@ -2527,13 +2527,13 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        <View style={[styles.bookingFooter, flexDirectionRow, justifyContentSpaceBetween, alignItemsCenter]}>
+        <View style={styles.bookingFooter}>
           <View style={[styles.statusBadge, styles.bookingStatusBadge, { backgroundColor: statusStyle.bg }]}>
             <Text style={[styles.statusText, { color: statusStyle.text }]}>{booking.status}</Text>
           </View>
-          <View style={[flexDirectionRow, alignItemsCenter, styles.bookingActions]}>
+          <View style={styles.bookingActions}>
             <TouchableOpacity
-              style={[styles.bookingMessageBtn, alignJustifyCenter, flexDirectionRow]}
+              style={[styles.bookingMessageBtn, styles.bookingActionCell, alignJustifyCenter, flexDirectionRow]}
               onPress={() => handleMessageBookingSeller(booking)}
               disabled={!booking.sellerId || Boolean(startingChatBookingId)}
               activeOpacity={0.7}>
@@ -2547,7 +2547,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
               )}
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.outlineBtn, flexDirectionRow, alignItemsCenter]}
+              style={[styles.outlineBtn, styles.bookingActionCell, flexDirectionRow, alignJustifyCenter]}
               onPress={() => handleViewBooking(booking)}>
               <Icon name="eye" size={14} color={blackColor} />
               <Text style={[styles.outlineBtnText, style.fontWeightMedium]}>{BOOKING_ACTIONS.DETAILS}</Text>
@@ -3342,15 +3342,21 @@ const styles = StyleSheet.create({
     gap: spacings.normal,
   },
   bookingStatusBadge: {
-    flexShrink: 0,
+    alignSelf: 'flex-start',
   },
   bookingActions: {
-    flex: 1,
-    gap: spacings.small,
+    width: '100%',
+    flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-end',
+    gap: spacings.small,
   },
-  bookingActionGroup: { gap: spacings.normal },
+  bookingActionCell: {
+    flexGrow: 1,
+    flexBasis: '46%',
+    minHeight: 32,
+    paddingVertical: spacings.xsmall,
+    paddingHorizontal: spacings.small,
+  },
   cancelBtn: {
     borderWidth: 1,
     borderColor: '#C27803',

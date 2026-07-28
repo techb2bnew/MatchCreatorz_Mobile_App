@@ -42,7 +42,6 @@ import {
   DASHBOARD_POST_JOB,
   DASHBOARD_QUICK_ACTIONS,
   DASHBOARD_RECENT_BOOKINGS,
-  DASHBOARD_SEARCH_PLACEHOLDER,
   DASHBOARD_SEE_ALL,
   DASHBOARD_TITLE,
   DASHBOARD_TOP_CREATORS,
@@ -55,9 +54,9 @@ import {
   MY_JOBS_SUB_TABS,
   SCREEN_NAMES,
 } from '../../constans/Constants';
-import SearchBar from '../../components/SearchBar';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
+import AnimatedCountUp from '../../components/AnimatedCountUp';
 import { heightPercentageToDP as hp } from '../../utils';
 
 const {
@@ -234,7 +233,6 @@ const mapBuyerStatsToCards = stats =>
 
 const DashboardScreen = ({ navigation }) => {
   const { token, user } = useSelector(selectAuth);
-  const [searchQuery, setSearchQuery] = useState('');
   const [countCards, setCountCards] = useState(INITIAL_COUNT_CARDS);
   const [recentBookings, setRecentBookings] = useState([]);
   const [topCreators, setTopCreators] = useState([]);
@@ -371,12 +369,6 @@ const DashboardScreen = ({ navigation }) => {
         bounces={false}>
         <ScreenHeader title={DASHBOARD_TITLE} navigation={navigation} />
 
-        <SearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder={DASHBOARD_SEARCH_PLACEHOLDER}
-        />
-
         {/* Welcome banner */}
         <View style={styles.welcomeCard}>
           <Text style={[styles.welcomeText, style.fontWeightMedium]}>
@@ -392,7 +384,7 @@ const DashboardScreen = ({ navigation }) => {
           <View style={[styles.promoStatsRow, flexDirectionRow]}>
             {promoStats.map(item => (
               <View key={item.id} style={[styles.promoStat, alignItemsCenter]}>
-                <Text style={[styles.promoValue, style.fontWeightMedium]}>{item.value}</Text>
+                <AnimatedCountUp value={item.value} style={[styles.promoValue, style.fontWeightMedium]} />
                 <Text style={[styles.promoLabel, style.fontWeightThin]}>{item.label}</Text>
               </View>
             ))}

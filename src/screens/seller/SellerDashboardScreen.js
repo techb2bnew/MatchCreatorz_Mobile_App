@@ -37,7 +37,6 @@ import {
   SELLER_DASHBOARD_CONNECTS_REMAINING,
   SELLER_DASHBOARD_MY_SERVICES,
   SELLER_DASHBOARD_QUICK_ACTIONS,
-  SELLER_DASHBOARD_SEARCH_PLACEHOLDER,
   SELLER_DASHBOARD_SEE_ALL,
   SELLER_DASHBOARD_TITLE,
   SELLER_DASHBOARD_WELCOME_PREFIX,
@@ -48,7 +47,6 @@ import {
   SELLER_TABS,
   SELLER_WORK_TABS,
 } from '../../constans/Constants';
-import SearchBar from '../../components/SearchBar';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
 import { getSellerConnectsBalanceApi, getSellerStatsApi } from '../../services/sellerService';
@@ -201,7 +199,6 @@ const extractConnectsBalance = response => {
 const SellerDashboardScreen = ({ navigation }) => {
   const { user, token } = useSelector(selectAuth);
   const welcomeName = user?.name || user?.fullName || 'there';
-  const [searchQuery, setSearchQuery] = useState('');
   const [connects, setConnects] = useState({ remaining: 0, total: 1 });
   const [statCards, setStatCards] = useState(INITIAL_STAT_CARDS);
   const [activeBookings, setActiveBookings] = useState([]);
@@ -306,12 +303,6 @@ const SellerDashboardScreen = ({ navigation }) => {
         <ScreenHeader
           title={SELLER_DASHBOARD_TITLE}
           navigation={navigation}
-        />
-
-        <SearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder={SELLER_DASHBOARD_SEARCH_PLACEHOLDER}
         />
 
         <View style={styles.welcomeCard}>

@@ -129,7 +129,10 @@ const SubmitWorkModal = ({ visible, booking, onClose, onSubmit, loading = false 
             bounces={false}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag">
-            <Text style={[styles.label, style.fontWeightMedium]}>{COPY.descriptionLabel}</Text>
+            <Text style={[styles.label, style.fontWeightMedium]}>
+              {COPY.descriptionLabel}
+              <Text style={styles.requiredStar}> *</Text>
+            </Text>
             <TextInput
               style={[styles.descriptionInput, style.fontWeightThin]}
               value={description}
@@ -138,10 +141,16 @@ const SubmitWorkModal = ({ visible, booking, onClose, onSubmit, loading = false 
               placeholderTextColor={grayColor}
               multiline
               textAlignVertical="top"
+              returnKeyType="done"
+              blurOnSubmit
+              onSubmitEditing={Keyboard.dismiss}
               editable={!loading}
             />
 
-            <Text style={[styles.label, style.fontWeightMedium]}>{COPY.durationLabel}</Text>
+            <Text style={[styles.label, style.fontWeightMedium]}>
+              {COPY.durationLabel}
+              <Text style={styles.requiredStar}> *</Text>
+            </Text>
             <TextInput
               style={[styles.durationInput, style.fontWeightThin]}
               value={durationDays}
@@ -251,6 +260,9 @@ const styles = StyleSheet.create({
     color: grayColor,
     letterSpacing: 0.4,
     marginBottom: spacings.small,
+  },
+  requiredStar: {
+    color: redColor,
   },
   descriptionInput: {
     minHeight: 96,
