@@ -25,6 +25,8 @@ import { style, spacings } from '../../constans/Fonts';
 import { BUYER_SERVICE_DETAIL_MODAL as COPY } from '../../constans/Constants';
 import { formatAppPrice } from '../../utils/currency';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import RichTextViewer from '../RichTextViewer';
+import RichTextInline from '../RichTextInline';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -45,14 +47,18 @@ const toText = value => {
 
 const formatPrice = value => formatAppPrice(value);
 
-const DetailRow = ({ label, value, multiline = false, last = false }) => (
+const DetailRow = ({ label, value, multiline = false, last = false, html = false }) => (
   <View style={[styles.detailRow, last && styles.detailRowLast]}>
     <Text style={[styles.detailLabel, style.fontWeightMedium]}>{label}</Text>
-    <Text
-      style={[styles.detailValue, style.fontWeightThin, multiline && styles.detailValueMultiline]}
-      numberOfLines={multiline ? undefined : 4}>
-      {toText(value) || '—'}
-    </Text>
+    {html && toText(value) ? (
+      <RichTextViewer html={toText(value)} fontSize={style.fontSizeSmall1x.fontSize} color={blackColor} />
+    ) : (
+      <Text
+        style={[styles.detailValue, style.fontWeightThin, multiline && styles.detailValueMultiline]}
+        numberOfLines={multiline ? undefined : 4}>
+        {toText(value) || '—'}
+      </Text>
+    )}
   </View>
 );
 
@@ -180,6 +186,7 @@ const BuyerServiceDetailModal = ({
                     label={COPY?.description || 'Description'}
                     value={service.description}
                     multiline
+                    html
                     last
                   />
                 </View>
@@ -215,9 +222,10 @@ const BuyerServiceDetailModal = ({
                           </View>
                         </View>
                         {review.comment ? (
-                          <Text style={[styles.reviewComment, style.fontWeightThin]}>
-                            {review.comment}
-                          </Text>
+                          <RichTextInline
+                            html={review.comment}
+                            style={[styles.reviewComment, style.fontWeightThin]}
+                          />
                         ) : null}
                         {review.date ? (
                           <Text style={[styles.reviewDate, style.fontWeightThin]}>

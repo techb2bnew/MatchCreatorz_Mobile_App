@@ -35,6 +35,7 @@ import {
   SELLER_BOOKING_DETAIL_MODAL,
 } from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import MilestonesSection from '../MilestonesSection';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -72,7 +73,16 @@ const DetailRow = ({ label, value, multiline = false }) => (
   </View>
 );
 
-const SellerBookingDetailModal = ({ visible, onClose, loading, error, booking }) => {
+const SellerBookingDetailModal = ({
+  visible,
+  onClose,
+  loading,
+  error,
+  booking,
+  milestones = [],
+  milestoneBusyId,
+  onSubmitMilestone,
+}) => {
   const statusStyle = getBookingStatusStyle(booking?.status);
 
   return (
@@ -191,6 +201,13 @@ const SellerBookingDetailModal = ({ visible, onClose, loading, error, booking })
                       multiline
                     />
                   ) : null}
+
+                  <MilestonesSection
+                    milestones={milestones}
+                    role="seller"
+                    busyId={milestoneBusyId}
+                    onSubmit={onSubmitMilestone}
+                  />
                 </>
               ) : null}
             </ScrollView>

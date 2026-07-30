@@ -27,6 +27,7 @@ import {
 import { style, spacings } from '../../constans/Fonts';
 import { COUNTER_OFFER_MODAL } from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import RichTextEditor from '../RichTextEditor';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -143,15 +144,11 @@ const CounterOfferModal = ({
 
               <View style={styles.fieldWrap}>
                 <FieldLabel icon="edit-2" iconColor={redColor} label={COUNTER_OFFER_MODAL.noteLabel} />
-                <TextInput
-                  style={[styles.input, styles.noteInput, style.fontWeightThin]}
+                <RichTextEditor
                   value={note}
-                  onChangeText={setNote}
+                  onChange={setNote}
                   placeholder={COUNTER_OFFER_MODAL.notePlaceholder}
-                  placeholderTextColor={grayColor}
-                  multiline
-                  textAlignVertical="top"
-                  editable={!loading}
+                  disabled={loading}
                 />
               </View>
 

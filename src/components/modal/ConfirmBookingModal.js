@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Keyboard,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../../constans/Style';
@@ -143,6 +144,9 @@ const ConfirmBookingModal = ({
               placeholderTextColor={grayColor}
               multiline
               textAlignVertical="top"
+              returnKeyType="done"
+              blurOnSubmit
+              onSubmitEditing={() => Keyboard.dismiss()}
               editable={!loading}
             />
           </ScrollView>

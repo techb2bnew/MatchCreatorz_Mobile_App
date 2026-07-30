@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform, Keyboard } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { BaseStyle } from '../constans/Style';
 import { blackColor, grayColor, inputBgColor, redColor } from '../constans/Color';
@@ -62,6 +62,15 @@ const CustomTextInput = ({
           onBlur={onBlur}
           multiline={multiline}
           textAlignVertical={multiline ? 'top' : 'center'}
+          {...(multiline
+            ? {
+                // Multiline: show "Done" and dismiss the keyboard on return
+                // (return no longer inserts a newline).
+                returnKeyType: 'done',
+                blurOnSubmit: true,
+                onSubmitEditing: () => Keyboard.dismiss(),
+              }
+            : null)}
           style={[
             styles.input,
             style.fontSizeNormal2x,

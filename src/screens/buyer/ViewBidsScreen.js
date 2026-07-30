@@ -63,6 +63,7 @@ import {
 } from '../../constans/Constants';
 import SearchBar from '../../components/SearchBar';
 import EmptyState from '../../components/EmptyState';
+import RichTextInline from '../../components/RichTextInline';
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import CounterOfferModal from '../../components/modal/CounterOfferModal';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
@@ -496,9 +497,11 @@ const ViewBidsScreen = ({ navigation, route }) => {
                     </View>
 
                     {bid.proposal ? (
-                      <Text style={[styles.proposal, style.fontWeightThin]} numberOfLines={4}>
-                        {bid.proposal}
-                      </Text>
+                      <RichTextInline
+                        html={bid.proposal}
+                        style={[styles.proposal, style.fontWeightThin]}
+                        numberOfLines={4}
+                      />
                     ) : null}
 
                     {bid.isCountered && bid.counterNote ? (
@@ -506,9 +509,11 @@ const ViewBidsScreen = ({ navigation, route }) => {
                         <Text style={[styles.counterNoteLabel, style.fontWeightMedium]}>
                           {COUNTERED_BY_LABEL}
                         </Text>
-                        <Text style={[styles.counterNoteText, style.fontWeightThin]} numberOfLines={3}>
-                          {bid.counterNote}
-                        </Text>
+                        <RichTextInline
+                          html={bid.counterNote}
+                          style={[styles.counterNoteText, style.fontWeightThin]}
+                          numberOfLines={3}
+                        />
                       </View>
                     ) : null}
 

@@ -10,6 +10,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/Feather';
 import CustomTextInput from './CustomTextInput';
+import RichTextEditor from './RichTextEditor';
 import FormLabel from './FormLabel';
 import CustomDropdown from './CustomDropdown';
 import { BaseStyle } from '../constans/Style';
@@ -266,14 +267,11 @@ const ProfileDetailsStep = ({
         </View>
         {errors.skills ? <Text style={styles.errorText}>{errors.skills}</Text> : null}
 
-        <CustomTextInput
-          value={form.bio}
-          onChangeText={val => setField('bio', val)}
+        <RichTextEditor
           label={BIO}
+          value={form.bio}
+          onChange={val => setField('bio', val)}
           placeholder={BIO_PLACEHOLDER}
-          multiline
-          style={styles.bioInput}
-          inputStyle={styles.bioTextInput}
         />
 
         {renderResumeField()}
@@ -452,14 +450,11 @@ const ProfileDetailsStep = ({
         style={styles.fieldGap}
       />
 
-      <CustomTextInput
-        value={form.bio}
-        onChangeText={val => setField('bio', val)}
+      <RichTextEditor
         label={BIO}
+        value={form.bio}
+        onChange={val => setField('bio', val)}
         placeholder={BIO_PLACEHOLDER}
-        multiline
-        style={styles.bioInput}
-        inputStyle={styles.bioTextInput}
       />
 
       <View style={[styles.bottomRow, flexDirectionRow, alignItemsFlexStart]}>

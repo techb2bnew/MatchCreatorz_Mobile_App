@@ -30,9 +30,8 @@ import {
   SUBMIT_WORK_MODAL as COPY,
   PHOTO_LIBRARY,
   TAKE_PHOTO,
-  CONFIRM_CANCEL,
 } from '../../constans/Constants';
-import { pickImageFromCamera, pickImagesFromGallery } from '../../utils/filePicker';
+import { pickImageFromCamera, pickImagesFromGallery, pickDocuments } from '../../utils/filePicker';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
@@ -40,16 +39,14 @@ const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSp
 
 const MAX_PHOTOS = 5;
 
-const SubmitWorkModal = ({ visible, booking, onClose, onSubmit, loading = false }) => {
+const SubmitWorkModal = ({ visible, booking, onClose, onSubmit, onSplitMilestones, loading = false }) => {
   const [description, setDescription] = useState('');
-  const [durationDays, setDurationDays] = useState('');
   const [photos, setPhotos] = useState([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (visible) {
       setDescription('');
-      setDurationDays('');
       setPhotos([]);
       setError('');
     }
@@ -69,11 +66,15 @@ const SubmitWorkModal = ({ visible, booking, onClose, onSubmit, loading = false 
 
   const openPhotoPicker = () => {
     if (loading) return;
-    Alert.alert(COPY.photosLabel, undefined, [
+    // Android's native Alert supports max 3 buttons — drop Close there (back /
+    // tap-outside dismisses it); iOS keeps the Close button.
+    const buttons = [
       { text: PHOTO_LIBRARY, onPress: async () => appendPhotos(await pickImagesFromGallery(true)) },
       { text: TAKE_PHOTO, onPress: async () => appendPhotos(await pickImageFromCamera()) },
-      { text: CONFIRM_CANCEL, style: 'cancel' },
-    ]);
+      { text: 'Choose File', onPress: async () => appendPhotos(await pickDocuments(true)) },
+    ];
+    if (Platform.OS === 'ios') buttons.push({ text: 'Close', style: 'cancel' });
+    Alert.alert(COPY.photosLabel, undefined, buttons);
   };
 
   const removePhoto = index => setPhotos(prev => prev.filter((_, i) => i !== index));
@@ -84,16 +85,10 @@ const SubmitWorkModal = ({ visible, booking, onClose, onSubmit, loading = false 
       setError(COPY.descriptionRequired);
       return;
     }
-    const days = Number(durationDays);
-    if (!durationDays.trim() || Number.isNaN(days) || days <= 0 || !Number.isInteger(days)) {
-      setError(COPY.durationRequired);
-      return;
-    }
     setError('');
     onSubmit?.({
       bookingId: booking?.id,
       description: description.trim(),
-      durationDays: days,
       photos,
     });
   };
@@ -147,39 +142,35 @@ const SubmitWorkModal = ({ visible, booking, onClose, onSubmit, loading = false 
               editable={!loading}
             />
 
-            <Text style={[styles.label, style.fontWeightMedium]}>
-              {COPY.durationLabel}
-              <Text style={styles.requiredStar}> *</Text>
-            </Text>
-            <TextInput
-              style={[styles.durationInput, style.fontWeightThin]}
-              value={durationDays}
-              onChangeText={text => setDurationDays(text.replace(/[^0-9]/g, ''))}
-              placeholder={COPY.durationPlaceholder}
-              placeholderTextColor={grayColor}
-              keyboardType="number-pad"
-              maxLength={4}
-              editable={!loading}
-            />
-
             <Text style={[styles.label, style.fontWeightMedium]}>{COPY.photosLabel}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.photosRow}
               keyboardShouldPersistTaps="handled">
-              {photos.map((file, index) => (
-                <View key={`${file.uri}-${index}`} style={styles.photoWrap}>
-                  <Image source={{ uri: file.uri }} style={styles.photo} />
-                  <TouchableOpacity
-                    style={styles.removePhotoBtn}
-                    onPress={() => removePhoto(index)}
-                    disabled={loading}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                    <Icon name="x" size={12} color={whiteColor} />
-                  </TouchableOpacity>
-                </View>
-              ))}
+              {photos.map((file, index) => {
+                const isImage = /^image\//i.test(String(file.type || '')) ||
+                  /\.(png|jpe?g|gif|webp|heic)$/i.test(String(file.uri || file.name || ''));
+                return (
+                  <View key={`${file.uri}-${index}`} style={styles.photoWrap}>
+                    {isImage ? (
+                      <Image source={{ uri: file.uri }} style={styles.photo} />
+                    ) : (
+                      <View style={[styles.photo, styles.docBox, alignJustifyCenter]}>
+                        <Icon name="file-text" size={22} color={grayColor} />
+                        <Text style={styles.docName} numberOfLines={1}>{file.name || 'file'}</Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={styles.removePhotoBtn}
+                      onPress={() => removePhoto(index)}
+                      disabled={loading}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                      <Icon name="x" size={12} color={whiteColor} />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
               {photos.length < MAX_PHOTOS ? (
                 <TouchableOpacity
                   style={[styles.addPhotoBox, alignJustifyCenter]}
@@ -215,6 +206,19 @@ const SubmitWorkModal = ({ visible, booking, onClose, onSubmit, loading = false 
               )}
             </TouchableOpacity>
           </View>
+
+          {onSplitMilestones ? (
+            <TouchableOpacity
+              style={[styles.splitLink, alignJustifyCenter, flexDirectionRow]}
+              onPress={onSplitMilestones}
+              disabled={loading}
+              activeOpacity={0.7}>
+              <Icon name="flag" size={15} color={redColor} />
+              <Text style={[styles.splitLinkText, style.fontWeightMedium]}>
+                Split into milestones instead
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -300,6 +304,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: inputBgColor,
   },
+  docBox: { borderWidth: 1, borderColor: borderLightColor, padding: 4, gap: 2 },
+  docName: { fontSize: 9, color: grayColor, textAlign: 'center' },
   removePhotoBtn: {
     position: 'absolute',
     top: -6,
@@ -356,5 +362,17 @@ const styles = StyleSheet.create({
   submitText: {
     fontSize: style.fontSizeNormal2x.fontSize,
     color: whiteColor,
+  },
+  splitLink: {
+    marginTop: spacings.large,
+    paddingTop: spacings.large,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: borderLightColor,
+    gap: spacings.small,
+  },
+  splitLinkText: {
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: redColor,
+    textDecorationLine: 'underline',
   },
 });

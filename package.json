@@ -27,6 +27,7 @@
     "react-native": "0.86.0",
     "react-native-image-picker": "^8.2.1",
     "react-native-otp-textinput": "^1.1.7",
+    "react-native-pell-rich-editor": "^1.10.0",
     "react-native-phone-number-input": "^2.1.0",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-screens": "^4.25.2",

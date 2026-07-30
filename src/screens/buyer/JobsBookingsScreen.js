@@ -27,6 +27,9 @@ import {
   getBuyerBookingByIdApi,
   getBuyerServicesApi,
   acceptBuyerBookingApi,
+  acceptBuyerMilestoneApi,
+  payBuyerMilestoneApi,
+  rejectBuyerMilestoneApi,
   rejectBuyerBookingApi,
   cancelBuyerBookingApi,
   createBuyerBookingApi,
@@ -133,6 +136,9 @@ import {
   UPLOAD_FILES,
 } from '../../constans/Constants';
 import CustomTextInput from '../../components/CustomTextInput';
+import RichTextEditor from '../../components/RichTextEditor';
+import RichTextInline from '../../components/RichTextInline';
+import { extractMilestones, extractSubmittedWork } from '../../utils/milestones';
 import CustomButton from '../../components/CustomButton';
 import CustomDropdown from '../../components/CustomDropdown';
 import FormLabel from '../../components/FormLabel';
@@ -398,7 +404,8 @@ const mapApiJobToUi = job => {
     date: formatJobDate(job.created_at || job.createdAt || job.date),
     status: mapApiStatusToUi(job.status),
     apiStatus,
-    description: job.description || '',
+    // TEMP debug: what does the LIST endpoint send for description (HTML vs plain)?
+    description: (console.log('[BuyerJobs][LIST desc] >>>', JSON.stringify(job.description)), job.description || ''),
     budgetRange: formatBudgetRange(job),
     bidCount: Number(job.bid_count ?? job.bidCount ?? job.bids_count ?? 0) || 0,
     hiredSellerId,
@@ -658,6 +665,7 @@ const mapApiServiceToUi = service => {
     service?.creator_id ??
     null;
 
+  console.log('[BuyerServices][LIST desc] >>>', JSON.stringify(service?.description));
   return {
     id: String(service?.id ?? ''),
     title,
@@ -749,8 +757,11 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     visible: false,
     loading: false,
     booking: null,
+    bookingId: null,
+    milestones: [],
     error: '',
   });
+  const [milestoneBusyId, setMilestoneBusyId] = useState(null);
   const [serviceDetailModal, setServiceDetailModal] = useState({
     visible: false,
     service: null,
@@ -1401,31 +1412,103 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   };
 
   const closeBookingDetailModal = () => {
-    setBookingDetailModal({ visible: false, loading: false, booking: null, error: '' });
+    setBookingDetailModal({ visible: false, loading: false, booking: null, bookingId: null, milestones: [], error: '' });
   };
 
-  const handleViewBooking = async booking => {
-    if (!token || !booking?.id || bookingDetailModal.loading) return;
-
-    setBookingDetailModal({ visible: true, loading: true, booking: null, error: '' });
-
+  // Loads booking detail + real milestones; reused after accept/pay/reject to sync.
+  const loadBuyerBookingDetail = async (bookingId, { showLoader = true } = {}) => {
+    if (!token || !bookingId) return;
+    if (showLoader) setBookingDetailModal(prev => ({ ...prev, visible: true, loading: true, error: '' }));
     try {
-      const response = await getBuyerBookingByIdApi(token, booking.id);
+      const response = await getBuyerBookingByIdApi(token, bookingId);
       const detail = response?.data || response;
+      const milestones = extractMilestones(detail);
+      const submittedWork = extractSubmittedWork(detail);
+      const bookingUi = mapBookingDetailForDisplay(detail);
       setBookingDetailModal({
         visible: true,
         loading: false,
-        booking: mapBookingDetailForDisplay(detail),
+        booking: bookingUi,
+        bookingId,
+        milestones,
+        submittedWork,
         error: '',
       });
+      return { milestones, booking: bookingUi };
     } catch (error) {
-      const fallback = booking.raw || booking;
-      setBookingDetailModal({
+      setBookingDetailModal(prev => ({
+        ...prev,
         visible: true,
         loading: false,
-        booking: mapBookingDetailForDisplay(fallback),
         error: getApiErrorMessage(error?.data, error?.message || BOOKING_DETAIL_MODAL.loadError),
-      });
+      }));
+      return null;
+    }
+  };
+
+  const handleViewBooking = booking => {
+    if (!token || !booking?.id || bookingDetailModal.loading) return;
+    loadBuyerBookingDetail(booking.id);
+  };
+
+  // Accept & Pay = one tap (after a confirmation). If the wallet charge is still
+  // pending, fund it first, then accept (release the stage to the seller). When
+  // EVERY milestone is paid, open the review modal for the whole booking.
+  const runAcceptPayMilestone = async milestone => {
+    const bookingId = bookingDetailModal.bookingId;
+    const booking = bookingDetailModal.booking;
+    if (!token || !bookingId || milestone?.id == null || milestoneBusyId != null) return;
+    setMilestoneBusyId(milestone.id);
+    try {
+      if (milestone.needsPay) {
+        await payBuyerMilestoneApi(token, bookingId, milestone.id);
+      }
+      await acceptBuyerMilestoneApi(token, bookingId, milestone.id);
+      const result = await loadBuyerBookingDetail(bookingId, { showLoader: false });
+      const ms = result?.milestones || [];
+      if (ms.length && ms.every(m => m.status === 'paid')) {
+        // All stages done → review the whole booking. iOS can't stack Modals,
+        // so close the detail sheet first, then open the review modal.
+        const reviewBooking = {
+          ...(result?.booking || booking || {}),
+          id: String(bookingId),
+          status: 'Completed',
+          apiStatus: 'completed',
+        };
+        setBookingDetailModal(prev => ({ ...prev, visible: false }));
+        setTimeout(() => openReviewModal(reviewBooking), 400);
+      }
+    } catch (error) {
+      await loadBuyerBookingDetail(bookingId, { showLoader: false }).catch(() => {});
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Action failed. Please try again.'));
+    } finally {
+      setMilestoneBusyId(null);
+    }
+  };
+
+  const handleAcceptPayMilestone = milestone => {
+    if (milestoneBusyId != null) return;
+    Alert.alert(
+      'Accept & Pay',
+      `Accept "${milestone?.title}" and release ${formatCurrency(milestone?.amount)} to the seller?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Accept & Pay', onPress: () => runAcceptPayMilestone(milestone) },
+      ],
+    );
+  };
+
+  const handleRejectMilestone = async milestone => {
+    const bookingId = bookingDetailModal.bookingId;
+    if (!token || !bookingId || milestone?.id == null || milestoneBusyId != null) return;
+    setMilestoneBusyId(milestone.id);
+    try {
+      await rejectBuyerMilestoneApi(token, bookingId, milestone.id);
+      await loadBuyerBookingDetail(bookingId, { showLoader: false });
+    } catch (error) {
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Action failed. Please try again.'));
+    } finally {
+      setMilestoneBusyId(null);
     }
   };
 
@@ -1549,11 +1632,11 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   const openConfirmModal = (actionType, bookingId) => {
     const configs = {
       accept: {
-        title: BOOKING_ACCEPT_TITLE,
-        message: BOOKING_ACCEPT_MESSAGE,
+        title: 'Accept & Pay',
+        message: 'Accepting will release the payment to the seller. Continue?',
         confirmColor: greenColor,
         iconName: 'check-circle',
-        confirmText: BOOKING_ACCEPT_CONFIRM_BTN,
+        confirmText: 'Accept & Pay',
         showReasonInput: false,
       },
       reject: {
@@ -1811,9 +1894,11 @@ const JobsBookingsScreen = ({ navigation, route }) => {
             <Text style={styles.jobMetaText}>{job.date}</Text>
           </View>
 
-          <Text style={[styles.jobDesc, style.fontWeightThin]} numberOfLines={2}>
-            {job.description}
-          </Text>
+          <RichTextInline
+            html={job.description}
+            numberOfLines={2}
+            style={[styles.jobDesc, style.fontWeightThin]}
+          />
         </TouchableOpacity>
 
         <View style={[styles.jobFooter, flexDirectionRow, justifyContentSpaceBetween, alignItemsCenter]}>
@@ -1953,9 +2038,11 @@ const JobsBookingsScreen = ({ navigation, route }) => {
             {service.category}
           </Text>
           {service.description ? (
-            <Text style={[styles.serviceDescription, style.fontWeightThin]} numberOfLines={2}>
-              {service.description}
-            </Text>
+            <RichTextInline
+              html={service.description}
+              numberOfLines={2}
+              style={[styles.serviceDescription, style.fontWeightThin]}
+            />
           ) : null}
 
           <View style={[styles.serviceMetaRow, flexDirectionRow, alignItemsCenter]}>
@@ -2161,15 +2248,15 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           error={postJobFieldErrors.title}
         />
 
-        <CustomTextInput
-          label={POST_JOB_LABELS.description}
-          value={postJobForm.description}
-          onChangeText={v => updateForm('description', v)}
-          placeholder={POST_JOB_PLACEHOLDERS.description}
-          leftIcon="file-text"
-          onFocus={handleInputFocus}
-          style={styles.formField}
-        />
+        <View style={styles.formField}>
+          <RichTextEditor
+            label={POST_JOB_LABELS.description}
+            value={postJobForm.description}
+            onChange={v => updateForm('description', v)}
+            placeholder={POST_JOB_PLACEHOLDERS.description}
+            error={postJobFieldErrors.description}
+          />
+        </View>
 
         <CustomDropdown
           label={POST_JOB_LABELS.category}
@@ -2393,6 +2480,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         </View>
       ))}
 
+      {/* Platform stats + Buyer protection blocks hidden for now.
       {renderInfoCard(PLATFORM_STATS_TITLE, 'bar-chart-2', blueColor, (
         <View style={styles.platformStats}>
           {PLATFORM_STATS.map(stat => (
@@ -2413,6 +2501,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         </View>
         <Text style={[styles.protectionText, style.fontWeightThin]}>{BUYER_PROTECTION.text}</Text>
       </View>
+      */}
     </View>
     );
   };
@@ -2465,7 +2554,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
             onPress={() => openConfirmModal('accept', booking.id)}
             disabled={isConfirmingBooking}>
             <Icon name="check" size={14} color={whiteColor} />
-            <Text style={[styles.acceptBtnText, style.fontWeightMedium]}>{BOOKING_ACTIONS.ACCEPT}</Text>
+            <Text style={[styles.acceptBtnText, style.fontWeightMedium]}>Accept &amp; Pay</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.rejectBtn, styles.bookingActionCell, flexDirectionRow, alignJustifyCenter]}
@@ -2662,6 +2751,11 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         loading={bookingDetailModal.loading}
         error={bookingDetailModal.error}
         booking={bookingDetailModal.booking}
+        milestones={bookingDetailModal.milestones}
+        submittedWork={bookingDetailModal.submittedWork}
+        milestoneBusyId={milestoneBusyId}
+        onAcceptPayMilestone={handleAcceptPayMilestone}
+        onRejectMilestone={handleRejectMilestone}
         onClose={closeBookingDetailModal}
       />
 

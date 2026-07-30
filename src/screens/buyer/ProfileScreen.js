@@ -5,7 +5,6 @@ import {
   Image,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   StyleSheet,
   KeyboardAvoidingView,
   Alert,
@@ -93,6 +92,8 @@ import {
   ERROR_UPDATE_PREFERENCE_FAILED,
 } from '../../constans/Constants';
 import CustomTextInput from '../../components/CustomTextInput';
+import RichTextEditor from '../../components/RichTextEditor';
+import RichTextViewer from '../../components/RichTextViewer';
 import CustomButton from '../../components/CustomButton';
 import FormLabel from '../../components/FormLabel';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
@@ -571,14 +572,9 @@ const ProfileScreen = ({ navigation }) => {
           />
           <View style={styles.fieldGap}>
             <FormLabel label={PROFILE_BIO} />
-            <TextInput
+            <RichTextEditor
               value={profileForm.bio}
-              onChangeText={value => updateProfileField('bio', value)}
-              multiline
-              textAlignVertical="top"
-              placeholderTextColor={grayColor}
-              onFocus={handleInputFocus}
-              style={[styles.bioInput, style.fontSizeNormal2x]}
+              onChange={value => updateProfileField('bio', value)}
             />
           </View>
         </>
@@ -591,7 +587,12 @@ const ProfileScreen = ({ navigation }) => {
         {renderViewField(PROFILE_EMAIL, savedProfile.email)}
         {hasPhone ? renderViewField(PROFILE_PHONE, savedProfile.phone) : null}
         {hasLocation ? renderViewField(PROFILE_LOCATION, savedProfile.location) : null}
-        {hasBio ? renderViewField(PROFILE_BIO, savedProfile.bio) : null}
+        {hasBio ? (
+          <View style={styles.fieldGap}>
+            <FormLabel label={PROFILE_BIO} />
+            <RichTextViewer html={savedProfile.bio} />
+          </View>
+        ) : null}
       </>
     );
   };

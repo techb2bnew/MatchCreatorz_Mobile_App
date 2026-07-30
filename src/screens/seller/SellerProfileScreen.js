@@ -111,6 +111,7 @@ import {
   ERROR_UPDATE_PREFERENCE_FAILED,
 } from '../../constans/Constants';
 import CustomTextInput from '../../components/CustomTextInput';
+import RichTextViewer from '../../components/RichTextViewer';
 import CustomButton from '../../components/CustomButton';
 import FormLabel from '../../components/FormLabel';
 import ProfileDetailsStep from '../../components/ProfileDetailsStep';
@@ -830,7 +831,10 @@ const SellerProfileScreen = ({ navigation }) => {
         ) : null}
         {hasBio ? (
           <>
-            {renderViewField(BIO, profile.bio)}
+            <View style={styles.detailBlock}>
+              <FormLabel label={BIO} style={styles.compactLabel} />
+              <RichTextViewer html={profile.bio} />
+            </View>
             {hasResume ? renderSectionDivider() : null}
           </>
         ) : null}

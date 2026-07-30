@@ -3,7 +3,6 @@ import {
   Modal,
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -25,6 +24,7 @@ import {
 import { style, spacings } from '../../constans/Fonts';
 import { SUBMIT_REVIEW_MODAL as COPY } from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import RichTextEditor from '../RichTextEditor';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -128,15 +128,11 @@ const SubmitReviewModal = ({
             ) : null}
 
             <Text style={[styles.label, style.fontWeightMedium]}>{COPY.commentLabel}</Text>
-            <TextInput
-              style={[styles.commentInput, style.fontWeightThin]}
+            <RichTextEditor
               value={comment}
-              onChangeText={setComment}
+              onChange={setComment}
               placeholder={COPY.commentPlaceholder}
-              placeholderTextColor={grayColor}
-              multiline
-              textAlignVertical="top"
-              editable={!loading}
+              disabled={loading}
             />
           </ScrollView>
 

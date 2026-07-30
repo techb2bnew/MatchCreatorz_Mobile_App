@@ -769,6 +769,76 @@ export const acceptBuyerBookingApi = async (token, bookingId) => {
 };
 
 /**
+ * PATCH /api/v1/buyer/bookings/{id}/pay
+ * Pay Now — retry the wallet charge for a whole booking stuck unpaid. No body.
+ */
+export const payBuyerBookingApi = async (token, bookingId) => {
+  const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/pay`;
+  console.log('[BuyerBookingPay] Payload >>>', { endpoint, bookingId });
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', headers: { Accept: '*/*' }, token });
+    console.log('[BuyerBookingPay] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerBookingPay] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/buyer/bookings/{id}/milestones/{milestoneId}/accept
+ * Accept a submitted milestone — releases that stage's payout. No body.
+ */
+export const acceptBuyerMilestoneApi = async (token, bookingId, milestoneId) => {
+  const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/milestones/${milestoneId}/accept`;
+  console.log('[BuyerMilestoneAccept] Payload >>>', { endpoint, bookingId, milestoneId });
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', headers: { Accept: '*/*' }, token });
+    console.log('[BuyerMilestoneAccept] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerMilestoneAccept] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/buyer/bookings/{id}/milestones/{milestoneId}/reject
+ * Reject a submitted milestone (seller can resubmit). Body: { dispute_reason? }
+ */
+export const rejectBuyerMilestoneApi = async (token, bookingId, milestoneId, disputeReason = '') => {
+  const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/milestones/${milestoneId}/reject`;
+  const body = {};
+  if (String(disputeReason || '').trim()) body.dispute_reason = String(disputeReason).trim();
+  console.log('[BuyerMilestoneReject] Payload >>>', JSON.stringify({ endpoint, ...body }));
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', body, token });
+    console.log('[BuyerMilestoneReject] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerMilestoneReject] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/buyer/bookings/{id}/milestones/{milestoneId}/pay
+ * Pay Now — retry the charge for a single pending milestone. No body.
+ */
+export const payBuyerMilestoneApi = async (token, bookingId, milestoneId) => {
+  const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/milestones/${milestoneId}/pay`;
+  console.log('[BuyerMilestonePay] Payload >>>', { endpoint, bookingId, milestoneId });
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', headers: { Accept: '*/*' }, token });
+    console.log('[BuyerMilestonePay] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerMilestonePay] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
  * PATCH /api/v1/buyer/bookings/:id/reject
  * Body: { dispute_reason } — optional in API schema (example field); we send when provided
  * Reject submitted work (amidst_completion -> in_dispute)

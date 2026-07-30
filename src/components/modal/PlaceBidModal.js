@@ -27,6 +27,7 @@ import {
 import { style, spacings } from '../../constans/Fonts';
 import { SELLER_PLACE_BID_MODAL } from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import RichTextEditor from '../RichTextEditor';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -162,15 +163,11 @@ const PlaceBidModal = ({
                   iconColor={redColor}
                   label={SELLER_PLACE_BID_MODAL.proposalLabel}
                 />
-                <TextInput
-                  style={[styles.input, styles.proposalInput, style.fontWeightThin]}
+                <RichTextEditor
                   value={proposal}
-                  onChangeText={setProposal}
+                  onChange={setProposal}
                   placeholder={SELLER_PLACE_BID_MODAL.proposalPlaceholder}
-                  placeholderTextColor={grayColor}
-                  multiline
-                  textAlignVertical="top"
-                  editable={!loading}
+                  disabled={loading}
                 />
               </View>
 

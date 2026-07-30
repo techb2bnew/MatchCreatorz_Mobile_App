@@ -212,6 +212,7 @@ const ChatConversationScreen = ({ navigation, route }) => {
     };
 
     const handlePresence = payload => {
+      console.log('[ChatPresence] "presence" event payload >>>', JSON.stringify(payload));
       if (matchesOtherUser(payload?.userId ?? payload?.user_id)) {
         setIsOtherOnline(Boolean(payload?.online));
       }
@@ -227,6 +228,12 @@ const ChatConversationScreen = ({ navigation, route }) => {
       setMessages(prev => prev.map(m => (m.isMine ? { ...m, read: true } : m)));
     };
 
+    // TEMP debug: log every event the server emits so we can spot the real
+    // presence event name / shape (remove once the online/offline issue is fixed).
+    const logAnyEvent = (event, ...args) =>
+      console.log('[ChatSocket] event <<<', event, JSON.stringify(args));
+    socket.onAny(logAnyEvent);
+
     socket.on('receiveMessage', handleReceive);
     socket.on('typing', handleTyping);
     socket.on('stopTyping', handleStopTyping);
@@ -236,9 +243,16 @@ const ChatConversationScreen = ({ navigation, route }) => {
     // Ask the server for the other user's current online status right away, and again
     // on (re)connect, so the header shows Online/Offline without waiting for a change.
     const queryPresence = () => {
+      console.log('[ChatPresence] querying >>>', {
+        otherUserId: otherUser?.id,
+        otherUserIdType: typeof otherUser?.id,
+        socketConnected: socket?.connected,
+        socketId: socket?.id,
+      });
       if (otherUser?.id == null) return;
       // Server signature: socket.emit('isOnline', userId, ack) → ack = { userId, online }.
       socket.emit('isOnline', otherUser.id, res => {
+        console.log('[ChatPresence] "isOnline" ack <<<', JSON.stringify(res));
         if (res && typeof res === 'object' && 'online' in res) setIsOtherOnline(Boolean(res.online));
       });
     };
@@ -252,6 +266,7 @@ const ChatConversationScreen = ({ navigation, route }) => {
       socket.off('presence', handlePresence);
       socket.off('messageRead', handleMessageRead);
       socket.off('connect', queryPresence);
+      socket.offAny(logAnyEvent);
     };
   }, [conversationId, otherUser?.id, token, user?.id, dispatch]);
 

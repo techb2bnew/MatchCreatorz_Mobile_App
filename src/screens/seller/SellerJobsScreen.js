@@ -55,6 +55,7 @@ import { getApiErrorMessage } from '../../services/apiClient';
 import { getCategoriesApi, getSellerJobsApi, placeSellerJobBidApi } from '../../services/sellerService';
 import { createOrGetConversationApi } from '../../services/chatService';
 import { heightPercentageToDP as hp, widthPercentageToDP as wp } from '../../utils';
+import RichTextInline from '../../components/RichTextInline';
 import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
 
 const { flex, flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween, alignJustifyCenter } = BaseStyle;
@@ -134,6 +135,7 @@ const mapApiJobToUi = job => {
   const bidStatus = String(job?.my_bid?.status || '')
     .trim()
     .toLowerCase();
+  console.log('[SellerJobs][LIST desc] >>>', JSON.stringify(job.description));
   return {
     id: String(job.id),
     buyerId: job?.buyer?.id ?? job?.buyer_id ?? job?.buyerId ?? null,
@@ -411,9 +413,11 @@ const SellerJobsScreen = ({ navigation }) => {
             <Text style={[styles.jobCategoryText, style.fontWeightMedium]}>{job.category}</Text>
           </View>
         ) : null}
-        <Text style={[styles.jobDesc, style.fontWeightThin]} numberOfLines={3}>
-          {job.description}
-        </Text>
+        <RichTextInline
+          html={job.description}
+          numberOfLines={3}
+          style={[styles.jobDesc, style.fontWeightThin]}
+        />
         <View style={[styles.jobFooter, flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween]}>
           <View style={[flexDirectionRow, alignItemsCenter, styles.clientRow]}>
             <View style={[styles.clientAvatar, alignJustifyCenter]}>

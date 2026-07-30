@@ -23,7 +23,7 @@ import GoogleRoleSelectModal from '../components/modal/GoogleRoleSelectModal';
 import SuccessModal from '../components/modal/SuccessModal';
 import { BaseStyle } from '../constans/Style';
 import { setAuthSession } from '../redux/slices/authSlice';
-import { loginUserApi, googleAuthApi } from '../services/authService';
+import { loginUserApi, googleAuthApi, appleAuthApi } from '../services/authService';
 import { getGoogleSignInErrorMessage, signInWithGoogle } from '../services/googleAuthService';
 import { signInWithApple } from '../services/appleAuthService';
 import { getApiErrorMessage } from '../services/apiClient';
@@ -39,6 +39,8 @@ import { style, spacings } from '../constans/Fonts';
 import {
   CONTINUE_WITH_APPLE,
   CONTINUE_WITH_GOOGLE,
+  APPLE_SIGN_IN_ERROR_TITLE,
+  APPLE_SIGN_IN_FAILED,
   DONT_HAVE_ACCOUNT,
   EMAIL,
   EMAIL_ADDRESS,
@@ -180,20 +182,47 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
-  // TEMP: Apple sign-in only logs the credential for now (backend /auth/apple pending).
-  // Mirrors Google: on success we ask a first-time user to pick a role, then log the
-  // credential + chosen role. Once the backend exists this becomes a real login call.
+  // Apple sign-in — mirror of the Google flow. Plain login attempt first (no
+  // role); if the account is new the backend returns isNew and we ask for a
+  // role, then complete the signup with that role.
   const handleAppleSignIn = async () => {
     setAppleLoading(true);
     setErrors(prev => ({ ...prev, login: '' }));
+
+    let result;
     try {
-      const result = await signInWithApple();
-      // Ask the user to choose Buyer/Seller (same modal Google uses).
-      setAppleRoleModal({ visible: true, credential: result, loading: false });
+      result = await signInWithApple();
     } catch (error) {
       if (error?.code !== '1001' && !/cancel/i.test(String(error?.message))) {
-        setErrors(prev => ({ ...prev, login: error?.message || 'Apple Sign-In failed.' }));
+        Alert.alert(APPLE_SIGN_IN_ERROR_TITLE, error?.message || APPLE_SIGN_IN_FAILED);
       }
+      setAppleLoading(false);
+      return;
+    }
+
+    try {
+      const response = await appleAuthApi({ credential: result });
+
+      if (response?.data?.isNew) {
+        setAppleRoleModal({ visible: true, credential: result, loading: false });
+        return;
+      }
+
+      const { token, user, role } = response.data;
+      await dispatch(
+        setAuthSession({
+          token,
+          user,
+          role: role || user?.role,
+        }),
+      ).unwrap();
+    } catch (error) {
+      const message = getApiErrorMessage(error?.data, error?.message || INVALID_LOGIN_MESSAGE);
+      const title =
+        error?.status === 403 && isPendingApprovalMessage(message)
+          ? ACCOUNT_ACCESS_BLOCKED_TITLE
+          : APPLE_SIGN_IN_ERROR_TITLE;
+      Alert.alert(title, message);
     } finally {
       setAppleLoading(false);
     }
@@ -204,18 +233,41 @@ const LoginScreen = ({ navigation }) => {
     setAppleRoleModal({ visible: false, credential: null, loading: false });
   };
 
-  const handleSelectAppleRole = roleId => {
-    const cred = appleRoleModal.credential || {};
-    console.log('[AppleSignIn] login payload (for backend /auth/apple) >>>', {
-      identityToken: cred.identityToken,
-      authorizationCode: cred.authorizationCode,
-      nonce: cred.nonce,
-      user: cred.user,
-      email: cred.email,
-      fullName: cred.fullName,
-      role: mapAppRoleToApiRole(roleId),
-    });
-    setAppleRoleModal({ visible: false, credential: null, loading: false });
+  const handleSelectAppleRole = async roleId => {
+    setAppleRoleModal(prev => ({ ...prev, loading: true }));
+
+    try {
+      const response = await appleAuthApi({
+        credential: appleRoleModal.credential,
+        role: mapAppRoleToApiRole(roleId),
+      });
+
+      // New SELLER accounts wait for admin approval — no token, only a flag.
+      if (response?.data?.pendingApproval) {
+        setAppleRoleModal({ visible: false, credential: null, loading: false });
+        setPendingApprovalModal({
+          visible: true,
+          message: response.data.message || ACCOUNT_CREATED_MESSAGE,
+        });
+        return;
+      }
+
+      const { token, user, role } = response.data;
+      setAppleRoleModal({ visible: false, credential: null, loading: false });
+      await dispatch(
+        setAuthSession({
+          token,
+          user,
+          role: role || user?.role,
+        }),
+      ).unwrap();
+    } catch (error) {
+      setAppleRoleModal({ visible: false, credential: null, loading: false });
+      Alert.alert(
+        APPLE_SIGN_IN_ERROR_TITLE,
+        getApiErrorMessage(error?.data, error?.message || INVALID_LOGIN_MESSAGE),
+      );
+    }
   };
 
   const handleGoogleSignIn = async () => {

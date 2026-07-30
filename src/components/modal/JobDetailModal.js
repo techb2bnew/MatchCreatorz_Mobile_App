@@ -28,6 +28,7 @@ import {
   POST_JOB_LABELS,
 } from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import RichTextViewer from '../RichTextViewer';
 
 const isImageUrl = url => /\.(png|jpe?g|gif|webp|bmp)(\?.*)?$/i.test(String(url || ''));
 
@@ -40,14 +41,18 @@ const getJobStatusStyle = status => {
   return { bg: '#F3F4F6', text: grayColor };
 };
 
-const DetailRow = ({ label, value, multiline = false }) => (
+const DetailRow = ({ label, value, multiline = false, html = false }) => (
   <View style={styles.detailRow}>
     <Text style={[styles.detailLabel, style.fontWeightMedium]}>{label}</Text>
-    <Text
-      style={[styles.detailValue, style.fontWeightThin, multiline && styles.detailValueMultiline]}
-      numberOfLines={multiline ? undefined : 3}>
-      {value || '—'}
-    </Text>
+    {html && value ? (
+      <RichTextViewer html={value} fontSize={style.fontSizeSmall1x.fontSize} color={blackColor} />
+    ) : (
+      <Text
+        style={[styles.detailValue, style.fontWeightThin, multiline && styles.detailValueMultiline]}
+        numberOfLines={multiline ? undefined : 3}>
+        {value || '—'}
+      </Text>
+    )}
   </View>
 );
 
@@ -113,7 +118,7 @@ const JobDetailModal = ({ visible, onClose, loading, error, job }) => {
                   <DetailRow label={POST_JOB_LABELS.deadline} value={job.deadline} />
                   <DetailRow label={POST_JOB_LABELS.experienceLevel} value={job.experienceLevel} />
                   <DetailRow label={JOB_DETAIL_MODAL.postedOn} value={job.date} />
-                  <DetailRow label={POST_JOB_LABELS.description} value={job.description} multiline />
+                  <DetailRow label={POST_JOB_LABELS.description} value={job.description} multiline html />
                   <DetailRow
                     label={POST_JOB_LABELS.skills}
                     value={job.skills || JOB_DETAIL_MODAL.noSkills}

@@ -49,7 +49,11 @@ import {
 } from '../../constans/Constants';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
-import { getSellerConnectsBalanceApi, getSellerStatsApi } from '../../services/sellerService';
+import {
+  getSellerConnectsBalanceApi,
+  getSellerConnectsHistoryApi,
+  getSellerStatsApi,
+} from '../../services/sellerService';
 import { heightPercentageToDP as hp } from '../../utils';
 import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
 
@@ -188,12 +192,28 @@ const mapSellerStatsToDashboardCards = stats =>
     }
   });
 
-const extractConnectsBalance = response => {
+const extractConnectsAvailable = response => {
   const data = response?.data ?? response ?? {};
-  const available =
-    Number(data.available ?? data.available_connects ?? data.connects_balance ?? data.balance ?? 0) || 0;
-  const purchased = Number(data.total_purchased ?? data.purchased ?? 0) || 0;
-  return { remaining: available, total: purchased > 0 ? purchased : Math.max(available, 1) };
+  return (
+    Number(data.available ?? data.available_connects ?? data.connects_balance ?? data.balance ?? 0) || 0
+  );
+};
+
+// Balance API only returns the current balance (no total/used), so we derive
+// "used" by summing the debit rows in the connects history, then treat
+// total = available + used as the acquired amount the progress bar fills against.
+const extractConnectsUsed = response => {
+  const data = response?.data;
+  const list = Array.isArray(data)
+    ? data
+    : data?.history || data?.transactions || data?.items || data?.rows || [];
+  if (!Array.isArray(list)) return 0;
+  return list.reduce((sum, item) => {
+    const amount = Number(item?.amount ?? item?.connects ?? 0) || 0;
+    const typeRaw = String(item?.type || '').trim().toLowerCase();
+    const isDebit = typeRaw ? typeRaw === 'debit' || typeRaw === 'used' : amount < 0;
+    return isDebit ? sum + Math.abs(amount) : sum;
+  }, 0);
 };
 
 const SellerDashboardScreen = ({ navigation }) => {
@@ -225,14 +245,18 @@ const SellerDashboardScreen = ({ navigation }) => {
 
         setIsBookingsLoading(true);
         try {
-          const [statsResponse, connectsResponse] = await Promise.all([
+          const [statsResponse, connectsResponse, connectsHistoryResponse] = await Promise.all([
             getSellerStatsApi(token),
             getSellerConnectsBalanceApi(token).catch(() => null),
+            getSellerConnectsHistoryApi(token, { page: 1, limit: 100 }).catch(() => null),
           ]);
           if (cancelled) return;
 
           if (connectsResponse) {
-            setConnects(extractConnectsBalance(connectsResponse));
+            const available = extractConnectsAvailable(connectsResponse);
+            const used = connectsHistoryResponse ? extractConnectsUsed(connectsHistoryResponse) : 0;
+            const total = available + used;
+            setConnects({ remaining: available, total: total > 0 ? total : 1 });
           }
 
           console.log(
@@ -360,6 +384,8 @@ const SellerDashboardScreen = ({ navigation }) => {
           </View>
         </View>
 
+        {/* My Connects card hidden for now — bar not meaningful until backend
+            sends total/used. Re-enable when connects data is ready.
         <View style={styles.connectsCard}>
           <View style={[flexDirectionRow, alignItemsCenter, justifyContentSpaceBetween]}>
             <View>
@@ -377,6 +403,7 @@ const SellerDashboardScreen = ({ navigation }) => {
             <Text style={[styles.buyConnectsText, style.fontWeightMedium]}>{SELLER_DASHBOARD_BUY_CONNECTS}</Text>
           </TouchableOpacity>
         </View>
+        */}
 
         <Text style={[styles.sectionTitle, style.fontWeightMedium]}>{SELLER_DASHBOARD_QUICK_ACTIONS}</Text>
         <View style={styles.quickActionsCard}>

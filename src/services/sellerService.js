@@ -182,22 +182,40 @@ export const acceptSellerBookingApi = async (token, bookingId) => {
 };
 
 /**
- * PATCH /api/v1/seller/bookings/{id}/submit
- * Submit work for review (ongoing -> amidst_completion)
+ * POST /api/v1/seller/bookings/upload  (multipart/form-data, field: file)
+ * Upload a proof-of-work attachment (image / document). Response: { url, name, type, size }
  */
-export const submitSellerBookingApi = async (token, bookingId) => {
-  const endpoint = `${API_ENDPOINTS.SELLER_BOOKINGS}/${bookingId}/submit`;
-  console.log('[SellerBookingSubmit] Payload >>>', {
-    endpoint,
-    method: 'PATCH',
-    bookingId,
-    hasToken: Boolean(token),
+export const uploadBookingAttachmentApi = async (token, file) => {
+  const formData = new FormData();
+  formData.append('file', {
+    uri: file.uri,
+    name: file.name || `proof_${Date.now()}`,
+    type: file.type || 'application/octet-stream',
   });
+  return apiRequest(`${API_ENDPOINTS.SELLER_BOOKINGS}/upload`, {
+    method: 'POST',
+    headers: { Accept: '*/*' },
+    body: formData,
+    token,
+  });
+};
+
+/**
+ * PATCH /api/v1/seller/bookings/{id}/submit
+ * Submit work for review — charges the buyer (whole booking).
+ * Body: { notes?, attachments?: [{ url, name, type, size }] }
+ */
+export const submitSellerBookingApi = async (token, bookingId, { notes, attachments } = {}) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_BOOKINGS}/${bookingId}/submit`;
+  const payload = {};
+  if (notes != null && String(notes).trim()) payload.notes = String(notes).trim();
+  if (Array.isArray(attachments) && attachments.length) payload.attachments = attachments;
+  console.log('[SellerBookingSubmit] Payload >>>', JSON.stringify({ endpoint, payload }));
 
   try {
     const response = await apiRequest(endpoint, {
       method: 'PATCH',
-      headers: { Accept: '*/*' },
+      body: payload,
       token,
     });
     console.log('[SellerBookingSubmit] Response <<<', JSON.stringify(response, null, 2));
@@ -211,6 +229,54 @@ export const submitSellerBookingApi = async (token, bookingId) => {
         2,
       ),
     );
+    throw error;
+  }
+};
+
+/**
+ * POST /api/v1/seller/bookings/{id}/milestones
+ * Split a booking's total into milestones (min 2; amounts must sum to total).
+ * Body: { milestones: [{ title, amount, duration_days? }] }
+ */
+export const createBookingMilestonesApi = async (token, bookingId, milestones) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_BOOKINGS}/${bookingId}/milestones`;
+  const payload = { milestones };
+  console.log('[MilestonesCreate] Payload >>>', JSON.stringify({ endpoint, payload }));
+  try {
+    const response = await apiRequest(endpoint, { method: 'POST', body: payload, token });
+    console.log('[MilestonesCreate] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[MilestonesCreate] Error <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/seller/bookings/{id}/milestones/{milestoneId}/submit
+ * Submit one milestone for review — charges the buyer that stage's amount.
+ * Body: { attachments?: [{ url, name, type, size }], notes? }
+ */
+export const submitBookingMilestoneApi = async (token, bookingId, milestoneId, { attachments, notes } = {}) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_BOOKINGS}/${bookingId}/milestones/${milestoneId}/submit`;
+  const payload = {};
+  if (Array.isArray(attachments) && attachments.length) payload.attachments = attachments;
+  if (notes != null && String(notes).trim()) payload.notes = String(notes).trim();
+  console.log('[MilestoneSubmit] Payload >>>', JSON.stringify({ endpoint, payload }));
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', body: payload, token });
+    console.log('[MilestoneSubmit] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[MilestoneSubmit] Error <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
     throw error;
   }
 };

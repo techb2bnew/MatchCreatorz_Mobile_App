@@ -38,6 +38,7 @@ import {
   SELLER_BID_REJECTED,
   SELLER_TABS,
 } from '../../constans/Constants';
+import RichTextViewer from '../../components/RichTextViewer';
 import { selectAuth } from '../../redux/slices/authSlice';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { getSellerJobByIdApi } from '../../services/sellerService';
@@ -361,9 +362,11 @@ const SellerJobDetailsScreen = ({ navigation, route }) => {
 
                 <Text style={[styles.sectionTitle, style.fontWeightMedium]}>{POST_JOB_LABELS.description}</Text>
                 <View style={styles.sectionCard}>
-                  <Text style={[styles.descriptionText, style.fontWeightThin]}>
-                    {job.description || '—'}
-                  </Text>
+                  {job.description ? (
+                    <RichTextViewer html={job.description} />
+                  ) : (
+                    <Text style={[styles.descriptionText, style.fontWeightThin]}>—</Text>
+                  )}
                 </View>
 
                 <Text style={[styles.sectionTitle, style.fontWeightMedium]}>{POST_JOB_LABELS.skills}</Text>
@@ -440,9 +443,7 @@ const SellerJobDetailsScreen = ({ navigation, route }) => {
                         <Text style={[styles.infoLabel, style.fontWeightThin]}>
                           {SELLER_JOB_DETAIL_MODAL.proposal}
                         </Text>
-                        <Text style={[styles.descriptionText, style.fontWeightThin, styles.proposalText]}>
-                          {job.myBid.proposal}
-                        </Text>
+                        <RichTextViewer html={job.myBid.proposal} />
                       </View>
                     </>
                   ) : (

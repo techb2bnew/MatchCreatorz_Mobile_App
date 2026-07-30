@@ -32,6 +32,7 @@ import {
 } from '../../constans/Constants';
 import { pickImageFromCamera, pickImagesFromGallery } from '../../utils/filePicker';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import RichTextEditor from '../RichTextEditor';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -307,15 +308,11 @@ const AddServiceModal = ({
 
                 <View style={styles.fieldWrap}>
                   <FieldLabel label={COPY.descriptionLabel} />
-                  <TextInput
-                    style={[styles.input, styles.descriptionInput, style.fontWeightThin]}
+                  <RichTextEditor
                     value={description}
-                    onChangeText={setDescription}
+                    onChange={setDescription}
                     placeholder={COPY.descriptionPlaceholder}
-                    placeholderTextColor={grayColor}
-                    multiline
-                    textAlignVertical="top"
-                    editable={!loading}
+                    disabled={loading}
                   />
                 </View>
 

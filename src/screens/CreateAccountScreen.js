@@ -8,6 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
@@ -45,6 +46,8 @@ import {
   CONNECT_CREATE,
   CONTINUE_WITH_APPLE,
   CONTINUE_WITH_GOOGLE,
+  APPLE_SIGN_IN_ERROR_TITLE,
+  APPLE_SIGN_IN_FAILED,
   CREATE_ACCOUNT,
   CREATOR_SELLER,
   CREATOR_SUBTITLE,
@@ -105,7 +108,7 @@ import {
   scrollInputAboveKeyboard,
   useKeyboardBottomInset,
 } from '../utils/keyboard';
-import { registerUserApi, googleAuthApi } from '../services/authService';
+import { registerUserApi, googleAuthApi, appleAuthApi } from '../services/authService';
 import { getGoogleSignInErrorMessage, signInWithGoogle } from '../services/googleAuthService';
 import { signInWithApple } from '../services/appleAuthService';
 import { getApiErrorMessage } from '../services/apiClient';
@@ -262,27 +265,49 @@ const CreateAccountScreen = ({ navigation }) => {
     }
   };
 
-  // TEMP: Apple sign-up only logs the credential for now — backend /auth/apple
-  // wiring will replace the console.log once that endpoint is live.
+  // Apple sign-up — mirror of handleGoogleSignUp. Role is already chosen on this
+  // screen, so we send it with the Apple credential to complete the signup.
   const handleAppleSignUp = async () => {
     setAppleLoading(true);
     setApiError('');
+
+    let result;
     try {
-      const result = await signInWithApple();
-      // Role is already chosen on this screen — send it with the Apple credential.
-      console.log('[AppleSignIn] signup payload (for backend /auth/apple) >>>', {
-        identityToken: result?.identityToken,
-        authorizationCode: result?.authorizationCode,
-        nonce: result?.nonce,
-        user: result?.user,
-        email: result?.email,
-        fullName: result?.fullName,
-        role: mapAppRoleToApiRole(selectedRole),
-      });
+      result = await signInWithApple();
     } catch (error) {
       if (error?.code !== '1001' && !/cancel/i.test(String(error?.message))) {
-        setApiError(error?.message || 'Apple Sign-In failed.');
+        Alert.alert(APPLE_SIGN_IN_ERROR_TITLE, error?.message || APPLE_SIGN_IN_FAILED);
       }
+      setAppleLoading(false);
+      return;
+    }
+
+    try {
+      const response = await appleAuthApi({
+        credential: result,
+        role: mapAppRoleToApiRole(selectedRole),
+      });
+
+      // New SELLER accounts wait for admin approval — no token, only a flag.
+      if (response?.data?.pendingApproval) {
+        setSuccessMessage(response.data.message || ACCOUNT_CREATED_MESSAGE);
+        setShowSuccess(true);
+        return;
+      }
+
+      const { token, user, role } = response.data;
+      await dispatch(
+        setAuthSession({
+          token,
+          user,
+          role: role || user?.role,
+        }),
+      ).unwrap();
+    } catch (error) {
+      Alert.alert(
+        APPLE_SIGN_IN_ERROR_TITLE,
+        getApiErrorMessage(error?.data, error?.message || ERROR_REGISTER_FAILED),
+      );
     } finally {
       setAppleLoading(false);
     }

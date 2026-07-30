@@ -255,6 +255,66 @@ export const googleAuthApi = async ({ credential, role }) => {
 };
 
 /**
+ * Build the backend `user` object from the native Apple credential.
+ * Apple only returns email / fullName on the FIRST-EVER authorization, so this
+ * is often undefined on subsequent logins — which is exactly what the backend
+ * expects (forward it only when present).
+ */
+const buildAppleUserPayload = cred => {
+  if (!cred) return undefined;
+  const fn = cred.fullName || {};
+  const hasName = Boolean(fn.givenName || fn.familyName);
+  const hasEmail = Boolean(cred.email);
+  if (!hasEmail && !hasName) return undefined;
+  return {
+    email: cred.email || undefined,
+    name: hasName
+      ? { firstName: fn.givenName || undefined, lastName: fn.familyName || undefined }
+      : undefined,
+  };
+};
+
+/**
+ * POST /api/v1/auth/apple
+ * Sign in / sign up with Apple — mirror of googleAuthApi.
+ * Body: { identity_token, user?, role? }
+ *  - identity_token: Apple identity token (JWT)
+ *  - user: only present on the first-ever authorization ({ email, name:{firstName,lastName} })
+ *  - role: 'BUYER' | 'SELLER' — required only to complete a new signup
+ * Response shapes match Google (isNew / token+user / pendingApproval).
+ */
+export const appleAuthApi = async ({ credential, role }) => {
+  const cred = credential || {};
+  const payload = { identity_token: cred.identityToken };
+  const userPayload = buildAppleUserPayload(cred);
+  if (userPayload) payload.user = userPayload;
+  if (role) payload.role = role;
+
+  console.log('[AppleAuth] Payload >>>', {
+    endpoint: API_ENDPOINTS.AUTH_APPLE,
+    hasIdentityToken: Boolean(cred.identityToken),
+    hasUser: Boolean(userPayload),
+    hasRole: Boolean(role),
+  });
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.AUTH_APPLE, {
+      method: 'POST',
+      body: payload,
+    });
+    console.log('[AppleAuth] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[AppleAuth] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
  * POST /api/v1/auth/logout
  * Auth header: Bearer token (empty body)
  */

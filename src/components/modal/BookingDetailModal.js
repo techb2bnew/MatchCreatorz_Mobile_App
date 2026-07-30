@@ -34,6 +34,7 @@ import {
   SELLER_PREFIX,
 } from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import MilestonesSection, { openAttachment } from '../MilestonesSection';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -71,7 +72,18 @@ const DetailRow = ({ label, value, multiline = false }) => (
   </View>
 );
 
-const BookingDetailModal = ({ visible, onClose, loading, error, booking }) => {
+const BookingDetailModal = ({
+  visible,
+  onClose,
+  loading,
+  error,
+  booking,
+  milestones = [],
+  submittedWork,
+  milestoneBusyId,
+  onAcceptPayMilestone,
+  onRejectMilestone,
+}) => {
   const statusStyle = getBookingStatusStyle(booking?.status);
 
   return (
@@ -195,6 +207,59 @@ const BookingDetailModal = ({ visible, onClose, loading, error, booking }) => {
                       multiline
                     />
                   ) : null}
+
+                  {submittedWork ? (
+                    <View style={styles.deliveredWrap}>
+                      <Text style={[styles.deliveredTitle, style.fontWeightMedium]}>DELIVERED WORK</Text>
+                      {submittedWork.notes ? (
+                        <View style={styles.deliveredNote}>
+                          <Text style={[styles.deliveredNoteText, style.fontWeightThin]}>
+                            {submittedWork.notes}
+                          </Text>
+                        </View>
+                      ) : null}
+                      {Array.isArray(submittedWork.attachments) && submittedWork.attachments.length ? (
+                        <View style={[styles.deliveredFiles, flexDirectionRow]}>
+                          {submittedWork.attachments.map((f, i) => {
+                            const url = f?.url || f?.uri;
+                            const isImg =
+                              /^image\//i.test(String(f?.type || '')) ||
+                              /\.(png|jpe?g|gif|webp|heic)$/i.test(String(url || ''));
+                            if (url && isImg) {
+                              return (
+                                <TouchableOpacity
+                                  key={`dw-${i}`}
+                                  activeOpacity={0.8}
+                                  onPress={() => openAttachment(url)}>
+                                  <Image source={{ uri: url }} style={styles.deliveredThumb} />
+                                </TouchableOpacity>
+                              );
+                            }
+                            return (
+                              <TouchableOpacity
+                                key={`dw-${i}`}
+                                style={[styles.deliveredFileChip, flexDirectionRow, alignItemsCenter]}
+                                activeOpacity={0.7}
+                                onPress={() => openAttachment(url)}>
+                                <Icon name="paperclip" size={12} color={redColor} />
+                                <Text style={[styles.deliveredFileName, style.fontWeightThin]} numberOfLines={1}>
+                                  {f?.name || `file ${i + 1}`}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  <MilestonesSection
+                    milestones={milestones}
+                    role="buyer"
+                    busyId={milestoneBusyId}
+                    onAcceptPay={onAcceptPayMilestone}
+                    onReject={onRejectMilestone}
+                  />
                 </>
               ) : null}
             </ScrollView>
@@ -352,6 +417,29 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: borderLightColor,
   },
+  deliveredWrap: { marginTop: spacings.large, gap: spacings.small },
+  deliveredTitle: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: grayColor,
+    letterSpacing: 0.5,
+  },
+  deliveredNote: {
+    backgroundColor: inputBgColor,
+    borderRadius: 10,
+    padding: spacings.normal,
+  },
+  deliveredNoteText: { fontSize: style.fontSizeSmall1x.fontSize, color: blackColor },
+  deliveredFiles: { gap: spacings.small, flexWrap: 'wrap' },
+  deliveredThumb: { width: 60, height: 60, borderRadius: 8, backgroundColor: inputBgColor },
+  deliveredFileChip: {
+    backgroundColor: inputBgColor,
+    borderRadius: 8,
+    paddingHorizontal: spacings.normal,
+    paddingVertical: spacings.small,
+    gap: spacings.xsmall,
+    alignSelf: 'flex-start',
+  },
+  deliveredFileName: { fontSize: style.fontSizeExtraSmall.fontSize, color: blackColor },
   detailLabel: {
     fontSize: style.fontSizeSmall1x.fontSize,
     color: grayColor,

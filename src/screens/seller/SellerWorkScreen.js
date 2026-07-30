@@ -108,6 +108,10 @@ import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import CounterOfferModal from '../../components/modal/CounterOfferModal';
 import SellerBookingDetailModal from '../../components/modal/SellerBookingDetailModal';
 import SubmitWorkModal from '../../components/modal/SubmitWorkModal';
+import SplitMilestonesModal from '../../components/modal/SplitMilestonesModal';
+import SubmitMilestoneModal from '../../components/modal/SubmitMilestoneModal';
+import RichTextInline from '../../components/RichTextInline';
+import { extractMilestones } from '../../utils/milestones';
 import { selectAuth } from '../../redux/slices/authSlice';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { createOrGetConversationApi } from '../../services/chatService';
@@ -117,6 +121,9 @@ import {
   getSellerBookingByIdApi,
   acceptSellerBookingApi,
   submitSellerBookingApi,
+  createBookingMilestonesApi,
+  submitBookingMilestoneApi,
+  uploadBookingAttachmentApi,
   cancelSellerBookingApi,
   acceptSellerJobBidApi,
   counterSellerJobBidApi,
@@ -369,7 +376,121 @@ const SellerWorkScreen = ({ navigation, route }) => {
   const [submitWorkModal, setSubmitWorkModal] = useState({ visible: false, booking: null });
   const [isSubmittingWork, setIsSubmittingWork] = useState(false);
 
-  const openSubmitWorkModal = booking => setSubmitWorkModal({ visible: true, booking });
+  // Milestones — driven by the real booking-detail response (see loadSellerBookingDetail).
+  const [splitModal, setSplitModal] = useState({ visible: false, booking: null });
+  const [submitMilestoneModal, setSubmitMilestoneModal] = useState({
+    visible: false,
+    bookingId: null,
+    milestone: null,
+  });
+
+  const bookingTotal = booking =>
+    Number(booking?.total ?? booking?.amount ?? 0) || 0;
+
+  const openSplitFromSubmit = () => {
+    const b = submitWorkModal.booking;
+    setSubmitWorkModal({ visible: false, booking: null });
+    setSplitModal({ visible: true, booking: b });
+  };
+
+  const [isCreatingMilestones, setIsCreatingMilestones] = useState(false);
+  const [isSubmittingMilestone, setIsSubmittingMilestone] = useState(false);
+
+  const handleCreateMilestones = async list => {
+    const b = splitModal.booking;
+    if (!b?.id || !token || isCreatingMilestones) return;
+
+    setIsCreatingMilestones(true);
+    try {
+      const payload = list.map(m => ({ title: m.title, amount: m.amount }));
+      await createBookingMilestonesApi(token, b.id, payload);
+      setSplitModal({ visible: false, booking: null });
+      // Show the real milestones straight from the backend.
+      await loadSellerBookingDetail(b.id);
+    } catch (error) {
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Could not create milestones.'));
+    } finally {
+      setIsCreatingMilestones(false);
+    }
+  };
+
+  const openSubmitMilestone = (bookingId, milestone) => {
+    // iOS cannot stack two RN Modals — close the detail sheet before opening this.
+    setBookingDetailModal(prev => ({ ...prev, visible: false }));
+    setSubmitMilestoneModal({ visible: true, bookingId, milestone });
+  };
+
+  const closeSubmitMilestone = () => {
+    setSubmitMilestoneModal({ visible: false, bookingId: null, milestone: null });
+    // Re-open the detail sheet (data is still in state) so context isn't lost.
+    setBookingDetailModal(prev => (prev.bookingId ? { ...prev, visible: true } : prev));
+  };
+
+  const handleSubmitMilestoneWork = async ({ milestoneId, message, files }) => {
+    const { bookingId } = submitMilestoneModal;
+    if (!token || !bookingId || milestoneId == null || isSubmittingMilestone) return;
+
+    setIsSubmittingMilestone(true);
+    setMilestoneBusyId(milestoneId);
+    try {
+      // Upload each file first → milestone submit wants attachment URLs.
+      let attachments = [];
+      if (Array.isArray(files) && files.length) {
+        const uploaded = await Promise.all(
+          files.map(f => uploadBookingAttachmentApi(token, f).catch(() => null)),
+        );
+        attachments = uploaded.filter(Boolean).map(r => {
+          const d = r?.data || r;
+          return { url: d?.url, name: d?.name, type: d?.type, size: d?.size };
+        }).filter(a => a.url);
+      }
+      await submitBookingMilestoneApi(token, bookingId, milestoneId, { notes: message, attachments });
+      setSubmitMilestoneModal({ visible: false, bookingId: null, milestone: null });
+      await loadSellerBookingDetail(bookingId, { showLoader: false });
+    } catch (error) {
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Could not submit milestone.'));
+    } finally {
+      setIsSubmittingMilestone(false);
+      setMilestoneBusyId(null);
+    }
+  };
+
+  const openSubmitWorkModal = async booking => {
+    if (!token || !booking?.id) return;
+    // If this booking is already split into milestones, don't allow a whole-work
+    // submit — guide the seller to submit each milestone from the detail sheet.
+    try {
+      const response = await getSellerBookingByIdApi(token, booking.id);
+      const detail = response?.data || response;
+      const ms = extractMilestones(detail);
+      if (ms.length) {
+        // Show the notice first; open the detail sheet only after the user taps
+        // OK, so the alert and modal don't fight each other on screen.
+        Alert.alert(
+          'Already split into milestones',
+          'This task is split into milestones — submit each one from the booking details.',
+          [
+            {
+              text: 'OK',
+              onPress: () =>
+                setBookingDetailModal({
+                  visible: true,
+                  loading: false,
+                  booking: mapApiBookingToUi(detail),
+                  bookingId: booking.id,
+                  milestones: ms,
+                  error: '',
+                }),
+            },
+          ],
+        );
+        return;
+      }
+    } catch (error) {
+      // Ignore — fall through to the normal submit flow.
+    }
+    setSubmitWorkModal({ visible: true, booking });
+  };
   const closeSubmitWorkModal = () => {
     if (isSubmittingWork) return;
     setSubmitWorkModal({ visible: false, booking: null });
@@ -379,25 +500,29 @@ const SellerWorkScreen = ({ navigation, route }) => {
     const bookingId = payload?.bookingId;
     if (!bookingId || isSubmittingWork) return;
 
-    // NOTE: swagger `PATCH /seller/bookings/{id}/submit` takes NO request body —
-    // it is a pure status transition (ongoing -> amidst_completion). The
-    // description / duration / photos are collected for the seller's own record
-    // only and are intentionally NOT sent to the backend.
-    console.log('[SubmitWork] collected (not sent to API) >>>', {
-      bookingId,
-      description: payload.description,
-      durationDays: payload.durationDays,
-      photoCount: payload.photos?.length || 0,
-    });
-
     if (!token) {
       Alert.alert(SELLER_BOOKING_SUBMIT_TITLE, ERROR_BOOKING_ACTION_FAILED);
       return;
     }
 
+    // API accepts { notes, attachments } — NOT duration (duration is UI-only).
     setIsSubmittingWork(true);
     try {
-      await submitSellerBookingApi(token, bookingId);
+      let attachments = [];
+      const files = payload.photos || [];
+      if (files.length) {
+        const uploaded = await Promise.all(
+          files.map(f => uploadBookingAttachmentApi(token, f).catch(() => null)),
+        );
+        attachments = uploaded
+          .filter(Boolean)
+          .map(r => {
+            const d = r?.data || r;
+            return { url: d?.url, name: d?.name, type: d?.type, size: d?.size };
+          })
+          .filter(a => a.url);
+      }
+      await submitSellerBookingApi(token, bookingId, { notes: payload.description, attachments });
       setSubmitWorkModal({ visible: false, booking: null });
       hasMoreBookingsRef.current = true;
       bookingsPageRef.current = 1;
@@ -454,8 +579,11 @@ const SellerWorkScreen = ({ navigation, route }) => {
     visible: false,
     loading: false,
     booking: null,
+    bookingId: null,
+    milestones: [],
     error: '',
   });
+  const [milestoneBusyId, setMilestoneBusyId] = useState(null);
   const [counterModal, setCounterModal] = useState({ visible: false, bid: null, loading: false, error: '' });
 
   const [bids, setBids] = useState([]);
@@ -757,32 +885,41 @@ const SellerWorkScreen = ({ navigation, route }) => {
     setBookingDetailModal({ visible: false, loading: false, booking: null, error: '' });
   };
 
-  const handleViewBooking = async booking => {
-    if (!token || !booking?.id || bookingDetailModal.loading) return;
-
-    setBookingDetailModal({ visible: true, loading: true, booking: null, error: '' });
-
+  // Loads booking detail + its real milestones. Reused after create/submit so
+  // both sides stay in sync with the backend.
+  const loadSellerBookingDetail = async (bookingId, { showLoader = true } = {}) => {
+    if (!token || !bookingId) return;
+    if (showLoader) {
+      setBookingDetailModal(prev => ({ ...prev, visible: true, loading: true, error: '' }));
+    }
     try {
-      const response = await getSellerBookingByIdApi(token, booking.id);
+      const response = await getSellerBookingByIdApi(token, bookingId);
       const detail = response?.data || response;
+      console.log('[BookingDetail][seller] milestones/payment >>>', JSON.stringify({
+        payment_status: detail?.payment_status,
+        milestones: detail?.milestones,
+      }));
       setBookingDetailModal({
         visible: true,
         loading: false,
         booking: mapApiBookingToUi(detail),
+        bookingId,
+        milestones: extractMilestones(detail),
         error: '',
       });
     } catch (error) {
-      const fallback = booking.raw || booking;
-      setBookingDetailModal({
+      setBookingDetailModal(prev => ({
+        ...prev,
         visible: true,
         loading: false,
-        booking: mapApiBookingToUi(fallback),
-        error: getApiErrorMessage(
-          error?.data,
-          error?.message || SELLER_BOOKING_DETAIL_MODAL.loadError,
-        ),
-      });
+        error: getApiErrorMessage(error?.data, error?.message || SELLER_BOOKING_DETAIL_MODAL.loadError),
+      }));
     }
+  };
+
+  const handleViewBooking = booking => {
+    if (!token || !booking?.id || bookingDetailModal.loading) return;
+    loadSellerBookingDetail(booking.id);
   };
 
   const handleConfirmAction = async () => {
@@ -992,11 +1129,11 @@ const SellerWorkScreen = ({ navigation, route }) => {
             activeOpacity={0.7}
             onPress={() => toggleProposalExpand(bid.id)}>
             <Text style={[styles.proposalLabel, style.fontWeightMedium]}>Proposal</Text>
-            <Text
+            <RichTextInline
+              html={bid.proposal}
               style={[styles.proposal, style.fontWeightThin]}
-              numberOfLines={expandedProposalIds[bid.id] ? undefined : 2}>
-              {bid.proposal}
-            </Text>
+              numberOfLines={expandedProposalIds[bid.id] ? undefined : 2}
+            />
             {String(bid.proposal).length > 80 || expandedProposalIds[bid.id] ? (
               <Text style={[styles.proposalToggle, style.fontWeightMedium]}>
                 {expandedProposalIds[bid.id] ? 'See less' : 'See more'}
@@ -1010,9 +1147,11 @@ const SellerWorkScreen = ({ navigation, route }) => {
             {bid.counterNote ? (
               <View style={styles.counterNoteWrap}>
                 <Text style={[styles.counterNoteLabel, style.fontWeightMedium]}>{COUNTERED_BY_LABEL}</Text>
-                <Text style={[styles.counterNoteText, style.fontWeightThin]} numberOfLines={3}>
-                  {bid.counterNote}
-                </Text>
+                <RichTextInline
+                  html={bid.counterNote}
+                  style={[styles.counterNoteText, style.fontWeightThin]}
+                  numberOfLines={3}
+                />
               </View>
             ) : null}
             <View style={[styles.bidActionsRow, flexDirectionRow, alignItemsCenter]}>
@@ -1130,6 +1269,9 @@ const SellerWorkScreen = ({ navigation, route }) => {
     const status = booking.status;
     const isPending = status === 'Pending';
     const isOngoing = status === 'Ongoing';
+    // Buyer rejected the work → booking goes In-dispute; seller can resubmit
+    // (backend: submit endpoint allows in_dispute -> amidst_completion).
+    const isInDispute = status === 'In-dispute';
 
     return (
       <>
@@ -1161,13 +1303,13 @@ const SellerWorkScreen = ({ navigation, route }) => {
           </>
         ) : null}
 
-        {isOngoing ? (
+        {isOngoing || isInDispute ? (
           <TouchableOpacity
             style={[styles.sellerCompleteBtn, styles.sellerActionCell, flexDirectionRow, alignJustifyCenter]}
             onPress={() => openSubmitWorkModal(booking)}>
             <Icon name="upload" size={14} color={whiteColor} />
             <Text style={[styles.sellerCompleteText, style.fontWeightMedium]}>
-              {SELLER_BOOKINGS_SUBMIT}
+              {isInDispute ? 'Resubmit Work' : SELLER_BOOKINGS_SUBMIT}
             </Text>
           </TouchableOpacity>
         ) : null}
@@ -1417,6 +1559,9 @@ const SellerWorkScreen = ({ navigation, route }) => {
         loading={bookingDetailModal.loading}
         error={bookingDetailModal.error}
         booking={bookingDetailModal.booking}
+        milestones={bookingDetailModal.milestones}
+        milestoneBusyId={milestoneBusyId}
+        onSubmitMilestone={m => openSubmitMilestone(bookingDetailModal.bookingId, m)}
         onClose={closeBookingDetailModal}
       />
 
@@ -1425,7 +1570,24 @@ const SellerWorkScreen = ({ navigation, route }) => {
         booking={submitWorkModal.booking}
         onClose={closeSubmitWorkModal}
         onSubmit={handleSubmitWork}
+        onSplitMilestones={openSplitFromSubmit}
         loading={isSubmittingWork}
+      />
+
+      <SplitMilestonesModal
+        visible={splitModal.visible}
+        total={bookingTotal(splitModal.booking)}
+        loading={isCreatingMilestones}
+        onClose={() => setSplitModal({ visible: false, booking: null })}
+        onCreate={handleCreateMilestones}
+      />
+
+      <SubmitMilestoneModal
+        visible={submitMilestoneModal.visible}
+        milestone={submitMilestoneModal.milestone}
+        loading={isSubmittingMilestone}
+        onClose={closeSubmitMilestone}
+        onSubmit={handleSubmitMilestoneWork}
       />
 
       <CounterOfferModal

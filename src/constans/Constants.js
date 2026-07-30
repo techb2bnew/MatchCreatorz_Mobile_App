@@ -87,6 +87,8 @@ export const OR_SIGN_IN_WITH = 'Or sign in with';
 export const CONTINUE_WITH_GOOGLE = 'Continue with Google';
 export const CONTINUE_WITH_APPLE = 'Continue with Apple';
 export const CONTINUE_WITH_FACEBOOK = 'Continue with Facebook';
+export const APPLE_SIGN_IN_ERROR_TITLE = 'Apple Sign-In';
+export const APPLE_SIGN_IN_FAILED = 'Apple Sign-In failed. Please try again.';
 export const PHONE = 'Phone';
 export const EMAIL = 'Email';
 export const PHONE_NUMBER = 'Phone number';
@@ -1055,6 +1057,7 @@ export const API_ENDPOINTS = {
   AUTH_VERIFY_FORGOT_OTP: '/auth/verify-forgot-otp',
   AUTH_RESET_PASSWORD: '/auth/reset-password',
   AUTH_GOOGLE: '/auth/google',
+  AUTH_APPLE: '/auth/apple',
   BUYER_PROFILE: '/buyer/profile',
   BUYER_ACCOUNT: '/buyer/account',
   BUYER_STATS: '/buyer/stats',

@@ -46,6 +46,7 @@ import {
 } from '../constans/Constants';
 import EmptyState from '../components/EmptyState';
 import ConfirmationModal from '../components/modal/ConfirmationModal';
+import SwipeToDelete from '../components/SwipeToDelete';
 import { getApiErrorMessage } from '../services/apiClient';
 import { selectAuth, selectAppRole } from '../redux/slices/authSlice';
 import { fetchUnreadNotificationsCount } from '../redux/slices/notificationsSlice';
@@ -272,6 +273,19 @@ const NotificationsScreen = ({ navigation }) => {
     routeToNotificationTarget(item);
   };
 
+  // Left-to-right swipe → mark as read only (no navigation).
+  const markNotificationRead = async item => {
+    if (!item || item.read || !token) return;
+    setNotifications(prev => prev.map(n => (n.id === item.id ? { ...n, read: true } : n)));
+    refreshUnreadBadge();
+    try {
+      const markReadApi = isSeller ? markSellerNotificationReadApi : markBuyerNotificationReadApi;
+      await markReadApi(token, item.id);
+    } catch (error) {
+      // Best-effort — UI already reflects read state optimistically.
+    }
+  };
+
   const openDeleteConfirm = item => {
     setDeleteModal({ visible: true, item, loading: false, error: '' });
   };
@@ -385,8 +399,11 @@ const NotificationsScreen = ({ navigation }) => {
               />
             ) : (
               filteredNotifications.map(item => (
-                <TouchableOpacity
+                <SwipeToDelete
                   key={item.id}
+                  onSwipeDelete={() => openDeleteConfirm(item)}
+                  onSwipeRead={!item.read ? () => markNotificationRead(item) : undefined}>
+                <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={() => handleNotificationPress(item)}
                   style={[
@@ -418,6 +435,7 @@ const NotificationsScreen = ({ navigation }) => {
                     </Text>
                   </View>
                 </TouchableOpacity>
+                </SwipeToDelete>
               ))
             )}
           </ScrollView>
