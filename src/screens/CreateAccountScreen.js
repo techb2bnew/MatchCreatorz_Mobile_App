@@ -17,6 +17,7 @@ import RNPhoneInput from 'react-native-phone-number-input';
 import { MATCH_CREATORZ_LOGO } from '../assests/images';
 import { setAuthSession } from '../redux/slices/authSlice';
 import CustomButton from '../components/CustomButton';
+import AuthLegalLinks from '../components/AuthLegalLinks';
 import CustomTextInput from '../components/CustomTextInput';
 import FormLabel from '../components/FormLabel';
 import SocialButton from '../components/SocialButton';
@@ -771,6 +772,8 @@ const CreateAccountScreen = ({ navigation }) => {
               </Text>
             </View>
           ) : null}
+
+          <AuthLegalLinks navigation={navigation} />
         </ScrollView>
       </KeyboardAvoidingView>
 

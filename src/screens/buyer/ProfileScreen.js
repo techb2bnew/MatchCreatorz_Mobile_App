@@ -56,6 +56,7 @@ import {
   PROFILE_BUYER_ROLE,
   PROFILE_CANCEL,
   PROFILE_DELETE_ACCOUNT,
+  PROFILE_DELETE_ACCOUNT_DESC,
   PROFILE_DELETE_CONFIRM,
   PROFILE_DELETE_REASON_PLACEHOLDER,
   ERROR_DELETE_REASON_REQUIRED,
@@ -69,6 +70,9 @@ import {
   PROFILE_FULL_NAME,
   PROFILE_LOCATION,
   PROFILE_LOGOUT,
+  PROFILE_LOGOUT_DESC,
+  STATIC_PAGES,
+  SCREEN_NAMES,
   PROFILE_LOGOUT_CONFIRM,
   PROFILE_LOGOUT_MESSAGE,
   PROFILE_LOGOUT_TITLE,
@@ -100,6 +104,7 @@ import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import SuccessModal from '../../components/modal/SuccessModal';
 import NotificationSettingsModal from '../../components/modal/NotificationSettingsModal';
+import ContactUsModal from '../../components/modal/ContactUsModal';
 import UploadOptionsModal from '../../components/modal/UploadOptionsModal';
 import { pickImageFromCamera, pickImagesFromGallery, isImageFile } from '../../utils/filePicker';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
@@ -188,6 +193,7 @@ const ProfileScreen = ({ navigation }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
 
   const [savedProfile, setSavedProfile] = useState(EMPTY_PROFILE);
   const [profileForm, setProfileForm] = useState(EMPTY_PROFILE);
@@ -502,9 +508,22 @@ const ProfileScreen = ({ navigation }) => {
       iconColor: redColor,
       onPress: () => setShowNotificationModal(true),
     },
+    ...STATIC_PAGES.map(p => ({
+      id: p.slug,
+      title: p.title,
+      desc: p.desc,
+      icon: p.icon,
+      iconBg: '#E8F0F8',
+      iconColor: blueColor,
+      onPress:
+        p.slug === 'contact'
+          ? () => setShowContactModal(true)
+          : () => navigation.navigate(SCREEN_NAMES.STATIC_PAGE, { slug: p.slug, title: p.title }),
+    })),
     {
       id: 'delete',
       title: PROFILE_DELETE_ACCOUNT,
+      desc: PROFILE_DELETE_ACCOUNT_DESC,
       icon: 'trash-2',
       iconBg: lightPink,
       iconColor: redColor,
@@ -514,12 +533,13 @@ const ProfileScreen = ({ navigation }) => {
     {
       id: 'logout',
       title: PROFILE_LOGOUT,
+      desc: PROFILE_LOGOUT_DESC,
       icon: 'log-out',
       iconBg: '#E8F0F8',
       iconColor: blueColor,
       onPress: () => setShowLogoutModal(true),
     }
-    
+
   ];
 
   const renderViewField = (label, value) => (
@@ -743,6 +763,8 @@ const ProfileScreen = ({ navigation }) => {
         title={PROFILE_UPLOAD_PHOTO}
         photoOnly
       />
+
+      <ContactUsModal visible={showContactModal} onClose={() => setShowContactModal(false)} />
 
       <NotificationSettingsModal
         visible={showNotificationModal}

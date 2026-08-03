@@ -60,6 +60,7 @@ import {
   PORTFOLIO_LINKS,
   PROFILE_CANCEL,
   PROFILE_DELETE_ACCOUNT,
+  PROFILE_DELETE_ACCOUNT_DESC,
   PROFILE_DELETE_CONFIRM,
   PROFILE_DELETE_REASON_PLACEHOLDER,
   ERROR_DELETE_REASON_REQUIRED,
@@ -73,6 +74,7 @@ import {
   PROFILE_ACCOUNT_SETTINGS,
   PROFILE_FULL_NAME,
   PROFILE_LOGOUT,
+  PROFILE_LOGOUT_DESC,
   PROFILE_LOGOUT_CONFIRM,
   PROFILE_LOGOUT_MESSAGE,
   PROFILE_LOGOUT_TITLE,
@@ -88,6 +90,7 @@ import {
   RESUME_CV,
   RESPONSE_TIME_OPTIONS,
   SCREEN_NAMES,
+  STATIC_PAGES,
   SELLER_NOTIF_BID_RESPONSES,
   SELLER_NOTIF_BID_RESPONSES_DESC,
   SELLER_NOTIF_NEW_JOBS,
@@ -119,6 +122,7 @@ import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import SuccessModal from '../../components/modal/SuccessModal';
 import NotificationSettingsModal from '../../components/modal/NotificationSettingsModal';
+import ContactUsModal from '../../components/modal/ContactUsModal';
 import UploadOptionsModal from '../../components/modal/UploadOptionsModal';
 import { pickImageFromCamera, pickImagesFromGallery, isImageFile } from '../../utils/filePicker';
 import { DEFAULT_COUNTRY } from '../../utils/locationData';
@@ -281,6 +285,7 @@ const SellerProfileScreen = ({ navigation }) => {
   const [deleteReasonError, setDeleteReasonError] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
 
   const [savedProfile, setSavedProfile] = useState(createEmptySellerProfile);
@@ -680,9 +685,22 @@ const SellerProfileScreen = ({ navigation }) => {
       iconColor: redColor,
       onPress: () => setShowNotificationModal(true),
     },
+    ...STATIC_PAGES.map(p => ({
+      id: p.slug,
+      title: p.title,
+      desc: p.desc,
+      icon: p.icon,
+      iconBg: '#E8F0F8',
+      iconColor: blueColor,
+      onPress:
+        p.slug === 'contact'
+          ? () => setShowContactModal(true)
+          : () => navigation.navigate(SCREEN_NAMES.STATIC_PAGE, { slug: p.slug, title: p.title }),
+    })),
     {
       id: 'delete',
       title: PROFILE_DELETE_ACCOUNT,
+      desc: PROFILE_DELETE_ACCOUNT_DESC,
       icon: 'trash-2',
       iconBg: lightPink,
       iconColor: redColor,
@@ -692,6 +710,7 @@ const SellerProfileScreen = ({ navigation }) => {
     {
       id: 'logout',
       title: PROFILE_LOGOUT,
+      desc: PROFILE_LOGOUT_DESC,
       icon: 'log-out',
       iconBg: '#E8F0F8',
       iconColor: blueColor,
@@ -1158,6 +1177,8 @@ const SellerProfileScreen = ({ navigation }) => {
         title={PROFILE_UPLOAD_PHOTO}
         photoOnly
       />
+
+      <ContactUsModal visible={showContactModal} onClose={() => setShowContactModal(false)} />
 
       <NotificationSettingsModal
         visible={showNotificationModal}

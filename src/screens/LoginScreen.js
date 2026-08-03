@@ -16,6 +16,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import RNPhoneInput from 'react-native-phone-number-input';
 import { MATCH_CREATORZ_LOGO } from '../assests/images';
 import CustomButton from '../components/CustomButton';
+import AuthLegalLinks from '../components/AuthLegalLinks';
 import CustomTextInput from '../components/CustomTextInput';
 import FormLabel from '../components/FormLabel';
 import SocialButton from '../components/SocialButton';
@@ -518,6 +519,8 @@ const LoginScreen = ({ navigation }) => {
               </Text>
             </Text>
           </View>
+
+          <AuthLegalLinks navigation={navigation} />
         </ScrollView>
       </KeyboardAvoidingView>
 

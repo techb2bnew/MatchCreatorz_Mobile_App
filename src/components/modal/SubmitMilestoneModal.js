@@ -65,7 +65,7 @@ const SubmitMilestoneModal = ({ visible, milestone, onClose, onSubmit, loading =
     // Android's native Alert supports max 3 buttons — drop Cancel there (back /
     // tap-outside dismisses it); iOS keeps the Cancel button.
     const buttons = [
-      { text: PHOTO_LIBRARY, onPress: async () => appendFiles(await pickImagesFromGallery(true)) },
+      { text: PHOTO_LIBRARY, onPress: async () => appendFiles(await pickImagesFromGallery(true, MAX_FILES - files.length)) },
       { text: TAKE_PHOTO, onPress: async () => appendFiles(await pickImageFromCamera()) },
       { text: 'Choose File', onPress: async () => appendFiles(await pickDocuments(true)) },
     ];
@@ -128,11 +128,7 @@ const SubmitMilestoneModal = ({ visible, milestone, onClose, onSubmit, loading =
               />
 
               <Text style={[styles.label, style.fontWeightMedium]}>Attach files (optional)</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filesRow}
-                keyboardShouldPersistTaps="handled">
+              <View style={[styles.filesRow, flexDirectionRow]}>
                 {files.map((file, index) => {
                   const isImage = /^image\//i.test(String(file.type || '')) ||
                     /\.(png|jpe?g|gif|webp|heic)$/i.test(String(file.uri || file.name || ''));
@@ -168,7 +164,7 @@ const SubmitMilestoneModal = ({ visible, milestone, onClose, onSubmit, loading =
                     <Text style={[styles.addFileText, style.fontWeightThin]}>Add</Text>
                   </TouchableOpacity>
                 ) : null}
-              </ScrollView>
+              </View>
             </ScrollView>
 
             <TouchableOpacity
@@ -230,9 +226,9 @@ const styles = StyleSheet.create({
     color: blackColor,
     marginBottom: spacings.large,
   },
-  filesRow: { gap: spacings.normal, paddingVertical: spacings.small },
+  filesRow: { gap: spacings.normal, paddingVertical: spacings.small, flexWrap: 'wrap' },
   fileWrap: { position: 'relative' },
-  file: { width: wp(18), height: wp(18), borderRadius: 10, backgroundColor: inputBgColor },
+  file: { width: wp(26), height: wp(26), borderRadius: 10, backgroundColor: inputBgColor },
   docBox: { borderWidth: 1, borderColor: borderLightColor, padding: 4, gap: 2 },
   docName: { fontSize: 9, color: grayColor, textAlign: 'center' },
   removeFileBtn: {
@@ -247,8 +243,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addFileBox: {
-    width: wp(18),
-    height: wp(18),
+    width: wp(26),
+    height: wp(26),
     borderRadius: 10,
     borderWidth: 1,
     borderColor: borderLightColor,

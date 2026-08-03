@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import CustomTextInput from './CustomTextInput';
 import FormLabel from './FormLabel';
@@ -37,6 +37,8 @@ import {
 } from '../constans/Constants';
 import {
   filterWithinTotalLimit,
+  capToMaxCount,
+  MAX_UPLOAD_COUNT,
   formatFileSize,
   isImageFile,
   pickDocuments,
@@ -74,9 +76,11 @@ const PortfolioStep = ({
 
   const appendFiles = files => {
     if (!files.length) return;
+    const withinCount = capToMaxCount(portfolioFiles.length, files);
+    if (!withinCount.length) return;
     // Reserve space already used by resume (and any other prior uploads).
     const reserved = [{ size: existingUploadBytes }];
-    const accepted = filterWithinTotalLimit([...reserved, ...portfolioFiles], files);
+    const accepted = filterWithinTotalLimit([...reserved, ...portfolioFiles], withinCount);
     if (!accepted.length) return;
     onChange({
       ...form,
@@ -85,7 +89,7 @@ const PortfolioStep = ({
   };
 
   const handleUploadOption = async option => {
-    if (option === 'gallery') appendFiles(await pickImagesFromGallery(true));
+    if (option === 'gallery') appendFiles(await pickImagesFromGallery(true, MAX_UPLOAD_COUNT - portfolioFiles.length));
     if (option === 'camera') appendFiles(await pickImageFromCamera());
     if (option === 'files') appendFiles(await pickDocuments(true));
   };
@@ -120,7 +124,7 @@ const PortfolioStep = ({
         ) : (
           <View style={styles.previewContent}>
             {imageFiles.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageRow}>
+              <View style={styles.imageRow}>
                 {imageFiles.map((file, index) => {
                   const fileIndex = portfolioFiles.indexOf(file);
                   return (
@@ -135,7 +139,7 @@ const PortfolioStep = ({
                     </View>
                   );
                 })}
-              </ScrollView>
+              </View>
             ) : null}
 
             {otherFiles.length > 0 ? (
@@ -317,6 +321,8 @@ const styles = StyleSheet.create({
     gap: spacings.large,
   },
   imageRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacings.normal,
     paddingVertical: spacings.xsmall,
   },

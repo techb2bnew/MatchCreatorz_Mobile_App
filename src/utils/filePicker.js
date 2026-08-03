@@ -6,6 +6,21 @@ import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 /** Combined resume + portfolio limit for register/upload requests. */
 export const MAX_TOTAL_UPLOAD_BYTES = 8 * 1024 * 1024;
+/** Max number of files/images allowed per upload field. */
+export const MAX_UPLOAD_COUNT = 5;
+
+/**
+ * Caps new files so the combined total stays within `max`. Returns the slice of
+ * `newFiles` that fits; shows an alert if the limit is already reached.
+ */
+export const capToMaxCount = (existingCount = 0, newFiles = [], max = MAX_UPLOAD_COUNT) => {
+  const remaining = max - existingCount;
+  if (remaining <= 0) {
+    Alert.alert('', `You can upload up to ${max} files.`);
+    return [];
+  }
+  return newFiles.slice(0, remaining);
+};
 
 const IMAGE_PICKER_OPTIONS = {
   quality: 0.5,
@@ -101,10 +116,11 @@ export const filterWithinTotalLimit = (existingFiles = [], newFiles = [], maxTot
   return accepted;
 };
 
-export const pickImagesFromGallery = async (allowMultiple = true) => {
+// `limit` caps how many images the gallery lets you pick (e.g. remaining slots).
+export const pickImagesFromGallery = async (allowMultiple = true, limit = 0) => {
   const result = await launchImageLibrary({
     mediaType: 'photo',
-    selectionLimit: allowMultiple ? 0 : 1,
+    selectionLimit: limit > 0 ? limit : allowMultiple ? 0 : 1,
     ...IMAGE_PICKER_OPTIONS,
   });
 

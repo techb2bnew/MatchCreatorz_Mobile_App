@@ -19,6 +19,7 @@ const CustomDropdown = ({
   searchable = false,
   required = false,
   error = '',
+  emptyText = 'No results found',
 }) => {
   const [visible, setVisible] = useState(false);
   const [search, setSearch] = useState('');
@@ -85,7 +86,9 @@ const CustomDropdown = ({
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.listContent}
               ListEmptyComponent={
-                <Text style={[styles.emptyText, style.fontWeightThin]}>No results found</Text>
+                <Text style={[styles.emptyText, style.fontWeightThin]}>
+                  {searchable && search.trim() ? 'No results found' : emptyText}
+                </Text>
               }
               renderItem={({ item }) => (
                 <TouchableOpacity

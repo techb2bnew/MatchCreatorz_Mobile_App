@@ -4,6 +4,7 @@ import SplashScreen from '../screens/SplashScreen';
 import LoginScreen from '../screens/LoginScreen';
 import CreateAccountScreen from '../screens/CreateAccountScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import StaticPageScreen from '../screens/StaticPageScreen';
 import { SCREEN_NAMES } from '../constans/Constants';
 
 const Stack = createNativeStackNavigator();
@@ -34,6 +35,11 @@ const AuthStack = () => {
       <Stack.Screen
         name={SCREEN_NAMES.FORGOT_PASSWORD}
         component={ForgotPasswordScreen}
+        options={{ statusBarStyle: 'dark' }}
+      />
+      <Stack.Screen
+        name={SCREEN_NAMES.STATIC_PAGE}
+        component={StaticPageScreen}
         options={{ statusBarStyle: 'dark' }}
       />
     </Stack.Navigator>

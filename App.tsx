@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Provider } from 'react-redux';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Text, TextInput } from 'react-native';
+import { Alert, Text, TextInput } from 'react-native';
 import RootNavigator from './src/navigations/RootNavigator';
 import store from './src/redux/store';
 import {
@@ -9,6 +9,9 @@ import {
   subscribeToTokenRefresh,
 } from './src/services/notificationService';
 import { configureGoogleSignIn } from './src/services/googleAuthService';
+import { setSessionExpiredHandler } from './src/services/sessionExpiry';
+import { logoutUser } from './src/redux/slices/authSlice';
+import { SESSION_EXPIRED_MESSAGE, SESSION_EXPIRED_TITLE } from './src/constans/Constants';
 
 // Lock all app text to its designed size — ignore the device's system
 // font-size / accessibility "large text" setting so layouts never break.
@@ -27,7 +30,18 @@ const App = () => {
     initializeNotifications();
     const unsubscribeFromTokenRefresh = subscribeToTokenRefresh();
 
-    return unsubscribeFromTokenRefresh;
+    // Any API call that comes back 401 (expired/invalid token) kicks the user
+    // back to login instead of leaving them on a screen that can't load data.
+    setSessionExpiredHandler(() => {
+      if (!store.getState()?.auth?.token) return;
+      store.dispatch(logoutUser() as any);
+      Alert.alert(SESSION_EXPIRED_TITLE, SESSION_EXPIRED_MESSAGE);
+    });
+
+    return () => {
+      setSessionExpiredHandler(null);
+      unsubscribeFromTokenRefresh?.();
+    };
   }, []);
 
   return (

@@ -49,20 +49,21 @@ const ScreenHeader = ({
     return { name, initials };
   }, [user, authUser]);
 
+  // `navigate` bubbles up the navigator tree to find the route, so these work
+  // from tab screens AND from top-level (mainStack) screens like StaticPage.
   const openNotifications = () => {
-    navigation.getParent()?.getParent()?.navigate(SCREEN_NAMES.NOTIFICATIONS);
+    navigation.navigate(SCREEN_NAMES.NOTIFICATIONS);
   };
 
   const openProfile = () => {
-    const tabNavigation = navigation.getParent();
-    if (!tabNavigation) return;
-
     const isSeller = appRole === USER_ROLES.CREATOR;
+    const tabsRoute = isSeller ? SCREEN_NAMES.SELLER_TABS : SCREEN_NAMES.BUYER_TABS;
     const profileStack = isSeller ? SELLER_TABS.PROFILE_STACK : BUYER_TABS.PROFILE_STACK;
     const profileScreen = isSeller ? SCREEN_NAMES.SELLER_PROFILE : SCREEN_NAMES.PROFILE;
 
-    tabNavigation.navigate(profileStack, {
-      screen: profileScreen,
+    navigation.navigate(tabsRoute, {
+      screen: profileStack,
+      params: { screen: profileScreen },
     });
   };
 

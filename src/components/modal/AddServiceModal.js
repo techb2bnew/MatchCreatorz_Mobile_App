@@ -158,7 +158,7 @@ const AddServiceModal = ({
 
   const handleUploadOption = async option => {
     if (option === 'gallery') {
-      appendImages(await pickImagesFromGallery(true));
+      appendImages(await pickImagesFromGallery(true, MAX_IMAGES - totalImageCount));
       return;
     }
     if (option === 'camera') {
@@ -318,10 +318,7 @@ const AddServiceModal = ({
 
                 <View style={styles.fieldWrap}>
                   <FieldLabel label={COPY.imagesLabel} />
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.imagesRow}>
+                  <View style={[styles.imagesRow, flexDirectionRow]}>
                     {existingImages.map((uri, index) => (
                       <View key={`existing-${uri}-${index}`} style={styles.imagePreviewWrap}>
                         <Image source={{ uri }} style={styles.imagePreview} />
@@ -358,7 +355,7 @@ const AddServiceModal = ({
                         </Text>
                       </TouchableOpacity>
                     ) : null}
-                  </ScrollView>
+                  </View>
                 </View>
 
                 <View style={styles.fieldWrap}>
@@ -568,11 +565,12 @@ const styles = StyleSheet.create({
   },
   imagesRow: {
     gap: spacings.normal,
+    flexWrap: 'wrap',
     alignItems: 'center',
   },
   addPhotoBox: {
-    width: wp(22),
-    height: wp(22),
+    width: wp(26),
+    height: wp(26),
     borderWidth: 1.5,
     borderColor: borderLightColor,
     borderStyle: 'dashed',
@@ -584,8 +582,8 @@ const styles = StyleSheet.create({
     color: grayColor,
   },
   imagePreviewWrap: {
-    width: wp(22),
-    height: wp(22),
+    width: wp(26),
+    height: wp(26),
     borderRadius: 10,
     overflow: 'hidden',
   },

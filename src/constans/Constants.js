@@ -30,7 +30,23 @@ export const SCREEN_NAMES = {
   SELLER_WALLET: 'SellerWallet',
   SELLER_MY_SERVICES: 'SellerMyServices',
   SELLER_CONNECTS: 'SellerConnects',
+  STATIC_PAGE: 'StaticPage',
 };
+
+// Static info pages shown in the app (GET /public/pages/{slug}).
+// About Us + FAQ exist on the backend but are intentionally hidden in the app.
+export const STATIC_PAGES = [
+  { slug: 'terms', title: 'Terms of Service', icon: 'file-text', desc: 'Rules for using MatchCreatorz' },
+  { slug: 'privacy', title: 'Privacy Policy', icon: 'shield', desc: 'How we handle your data' },
+  { slug: 'contact', title: 'Contact Us', icon: 'mail', desc: 'Reach our support team' },
+];
+
+export const AUTH_LEGAL_PREFIX = 'By continuing you agree to our';
+export const CONTACT_US_TITLE = 'Contact Us';
+export const CONTACT_US_SUBTITLE = 'We usually reply within 24 hours';
+export const CONTACT_US_EMPTY = 'Contact details are not available right now.';
+export const PROFILE_DELETE_ACCOUNT_DESC = 'Permanently remove your account';
+export const PROFILE_LOGOUT_DESC = 'Sign out of this device';
 
 export const BUYER_TABS = {
   DASHBOARD_STACK: 'DashboardStack',
@@ -1029,6 +1045,8 @@ export const GOOGLE_ROLE_MODAL_TITLE = 'One last step';
 export const GOOGLE_ROLE_MODAL_SUBTITLE = 'How do you want to use MatchCreatorz?';
 export const ERROR_UPLOAD_TOO_LARGE =
   'Upload is too large. Please use smaller files (max 5MB each, 8MB total).';
+export const SESSION_EXPIRED_TITLE = 'Session expired';
+export const SESSION_EXPIRED_MESSAGE = 'Your session has expired. Please log in again.';
 export const ERROR_PROFILE_UPDATE_FAILED = 'Failed to update profile. Please try again.';
 export const ERROR_UPDATE_PREFERENCE_FAILED = 'Failed to update setting. Please try again.';
 export const ERROR_POST_JOB_FAILED = 'Failed to post job. Please try again.';
@@ -1058,6 +1076,8 @@ export const API_ENDPOINTS = {
   AUTH_RESET_PASSWORD: '/auth/reset-password',
   AUTH_GOOGLE: '/auth/google',
   AUTH_APPLE: '/auth/apple',
+  PUBLIC_STATS: '/public/stats',
+  PUBLIC_PAGES: '/public/pages',
   BUYER_PROFILE: '/buyer/profile',
   BUYER_ACCOUNT: '/buyer/account',
   BUYER_STATS: '/buyer/stats',

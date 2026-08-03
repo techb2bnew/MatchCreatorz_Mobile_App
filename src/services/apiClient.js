@@ -1,4 +1,5 @@
 import { API_BASE_URL, ERROR_REGISTER_FAILED, ERROR_UPLOAD_TOO_LARGE } from '../constans/Constants';
+import { isSessionExpiredResponse, notifySessionExpired } from './sessionExpiry';
 
 export const buildApiUrl = (endpoint = '') => `${API_BASE_URL}${endpoint}`;
 
@@ -89,6 +90,13 @@ export const apiRequest = async (endpoint, options = {}) => {
     const error = new Error(getApiErrorMessage(data, ERROR_REGISTER_FAILED, response.status));
     error.status = response.status;
     error.data = data;
+
+    if (isSessionExpiredResponse({ status: response.status, data, hadToken: Boolean(token) })) {
+      console.log('[Auth] Token expired/invalid on', endpoint, '— logging out');
+      error.sessionExpired = true;
+      notifySessionExpired();
+    }
+
     throw error;
   }
 

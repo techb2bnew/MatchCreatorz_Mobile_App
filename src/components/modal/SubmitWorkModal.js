@@ -69,7 +69,7 @@ const SubmitWorkModal = ({ visible, booking, onClose, onSubmit, onSplitMilestone
     // Android's native Alert supports max 3 buttons — drop Close there (back /
     // tap-outside dismisses it); iOS keeps the Close button.
     const buttons = [
-      { text: PHOTO_LIBRARY, onPress: async () => appendPhotos(await pickImagesFromGallery(true)) },
+      { text: PHOTO_LIBRARY, onPress: async () => appendPhotos(await pickImagesFromGallery(true, MAX_PHOTOS - photos.length)) },
       { text: TAKE_PHOTO, onPress: async () => appendPhotos(await pickImageFromCamera()) },
       { text: 'Choose File', onPress: async () => appendPhotos(await pickDocuments(true)) },
     ];
@@ -143,11 +143,7 @@ const SubmitWorkModal = ({ visible, booking, onClose, onSubmit, onSplitMilestone
             />
 
             <Text style={[styles.label, style.fontWeightMedium]}>{COPY.photosLabel}</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.photosRow}
-              keyboardShouldPersistTaps="handled">
+            <View style={[styles.photosRow, flexDirectionRow]}>
               {photos.map((file, index) => {
                 const isImage = /^image\//i.test(String(file.type || '')) ||
                   /\.(png|jpe?g|gif|webp|heic)$/i.test(String(file.uri || file.name || ''));
@@ -181,7 +177,7 @@ const SubmitWorkModal = ({ visible, booking, onClose, onSubmit, onSplitMilestone
                   <Text style={[styles.addPhotoText, style.fontWeightThin]}>{COPY.addPhoto}</Text>
                 </TouchableOpacity>
               ) : null}
-            </ScrollView>
+            </View>
 
             {error ? <Text style={[styles.errorText, style.fontWeightThin]}>{error}</Text> : null}
           </ScrollView>
@@ -294,13 +290,14 @@ const styles = StyleSheet.create({
   photosRow: {
     gap: spacings.normal,
     paddingVertical: spacings.small,
+    flexWrap: 'wrap',
   },
   photoWrap: {
     position: 'relative',
   },
   photo: {
-    width: wp(20),
-    height: wp(20),
+    width: wp(26),
+    height: wp(26),
     borderRadius: 10,
     backgroundColor: inputBgColor,
   },
@@ -318,8 +315,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addPhotoBox: {
-    width: wp(20),
-    height: wp(20),
+    width: wp(26),
+    height: wp(26),
     borderRadius: 10,
     borderWidth: 1,
     borderColor: borderLightColor,

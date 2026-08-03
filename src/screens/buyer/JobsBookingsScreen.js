@@ -28,7 +28,6 @@ import {
   getBuyerServicesApi,
   acceptBuyerBookingApi,
   acceptBuyerMilestoneApi,
-  payBuyerMilestoneApi,
   rejectBuyerMilestoneApi,
   rejectBuyerBookingApi,
   cancelBuyerBookingApi,
@@ -154,6 +153,8 @@ import UploadOptionsModal from '../../components/modal/UploadOptionsModal';
 import EmptyState from '../../components/EmptyState';
 import {
   filterWithinTotalLimit,
+  capToMaxCount,
+  MAX_UPLOAD_COUNT,
   isImageFile,
   pickDocuments,
   pickImageFromCamera,
@@ -297,11 +298,11 @@ const mapApiBookingToUi = booking => {
     ),
     hasReview: Boolean(
       booking?.has_review ??
-        booking?.hasReview ??
-        booking?.is_reviewed ??
-        booking?.isReviewed ??
-        booking?.review?.id ??
-        booking?.review_id,
+      booking?.hasReview ??
+      booking?.is_reviewed ??
+      booking?.isReviewed ??
+      booking?.review?.id ??
+      booking?.review_id,
     ),
     reviewRating: Number(booking?.review?.rating ?? booking?.rating ?? 0) || 0,
     raw: booking,
@@ -716,7 +717,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   const [bookingFilter, setBookingFilter] = useState(BOOKINGS_FILTER_TABS.ACTIVE);
   const [serviceCategory, setServiceCategory] = useState('All');
   const [serviceCategoryFilters, setServiceCategoryFilters] = useState(['All']);
-  const [jobCategoryOptions, setJobCategoryOptions] = useState(JOB_CATEGORIES);
+  const [jobCategoryOptions, setJobCategoryOptions] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [jobs, setJobs] = useState([]);
   const [jobsTotalCount, setJobsTotalCount] = useState(0);
@@ -1380,13 +1381,16 @@ const JobsBookingsScreen = ({ navigation, route }) => {
 
   const appendJobAttachments = files => {
     if (!files.length) return;
-    const accepted = filterWithinTotalLimit(postJobAttachments, files);
+    const withinCount = capToMaxCount(postJobAttachments.length, files);
+    if (!withinCount.length) return;
+    const accepted = filterWithinTotalLimit(postJobAttachments, withinCount);
     if (!accepted.length) return;
     setPostJobAttachments(prev => [...prev, ...accepted]);
   };
 
   const handleJobUploadOption = async option => {
-    if (option === 'gallery') appendJobAttachments(await pickImagesFromGallery(true));
+    const remaining = MAX_UPLOAD_COUNT - postJobAttachments.length;
+    if (option === 'gallery') appendJobAttachments(await pickImagesFromGallery(true, remaining));
     if (option === 'camera') appendJobAttachments(await pickImageFromCamera());
     if (option === 'files') appendJobAttachments(await pickDocuments(true));
   };
@@ -1460,9 +1464,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     if (!token || !bookingId || milestone?.id == null || milestoneBusyId != null) return;
     setMilestoneBusyId(milestone.id);
     try {
-      if (milestone.needsPay) {
-        await payBuyerMilestoneApi(token, bookingId, milestone.id);
-      }
+      // Accept releases (and charges) the stage — backend has no separate /pay.
       await acceptBuyerMilestoneApi(token, bookingId, milestone.id);
       const result = await loadBuyerBookingDetail(bookingId, { showLoader: false });
       const ms = result?.milestones || [];
@@ -1479,7 +1481,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         setTimeout(() => openReviewModal(reviewBooking), 400);
       }
     } catch (error) {
-      await loadBuyerBookingDetail(bookingId, { showLoader: false }).catch(() => {});
+      await loadBuyerBookingDetail(bookingId, { showLoader: false }).catch(() => { });
       Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Action failed. Please try again.'));
     } finally {
       setMilestoneBusyId(null);
@@ -1706,10 +1708,10 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       const acceptedBooking =
         actionType === 'accept'
           ? bookings.find(item => String(item.id) === String(bookingId)) || {
-              id: String(bookingId),
-              title: 'Booking',
-              sellerName: '',
-            }
+            id: String(bookingId),
+            title: 'Booking',
+            sellerName: '',
+          }
           : null;
 
       if (actionType === 'accept') {
@@ -2213,274 +2215,272 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     const isHourly = String(postJobForm.jobType || '').toLowerCase() === 'hourly';
 
     return (
-    <View>
-      {renderJobsSubTabs()}
+      <View>
+        {renderJobsSubTabs()}
 
-      <View style={styles.formCard}>
-        <View style={[flexDirectionRow, alignItemsCenter, styles.formHeader]}>
-          <View style={[styles.formIconWrap, alignJustifyCenter]}>
-            <Icon name={editingJobId ? 'edit-2' : 'plus'} size={16} color={whiteColor} />
-          </View>
-          <View style={flex}>
-            <Text style={[styles.formTitle, style.fontWeightMedium]}>
-              {editingJobId ? UPDATE_JOB_BTN : POST_JOB_TITLE}
-            </Text>
-            <Text style={[styles.formSubtitle, style.fontWeightThin]}>{POST_JOB_SUBTITLE}</Text>
-          </View>
-        </View>
-
-        {isLoadingJobDetail ? (
-          <View style={styles.jobDetailLoader}>
-            <ActivityIndicator size="small" color={redColor} />
-            <Text style={[styles.jobDetailLoaderText, style.fontWeightThin]}>Loading job details...</Text>
-          </View>
-        ) : null}
-
-        <CustomTextInput
-          label={POST_JOB_LABELS.title}
-          required
-          value={postJobForm.title}
-          onChangeText={v => updateForm('title', v)}
-          placeholder={POST_JOB_PLACEHOLDERS.title}
-          leftIcon="edit-2"
-          maxLength={JOB_TITLE_MAX_LENGTH}
-          onFocus={handleInputFocus}
-          error={postJobFieldErrors.title}
-        />
-
-        <View style={styles.formField}>
-          <RichTextEditor
-            label={POST_JOB_LABELS.description}
-            value={postJobForm.description}
-            onChange={v => updateForm('description', v)}
-            placeholder={POST_JOB_PLACEHOLDERS.description}
-            error={postJobFieldErrors.description}
-          />
-        </View>
-
-        <CustomDropdown
-          label={POST_JOB_LABELS.category}
-          required
-          value={postJobForm.category}
-          options={jobCategoryOptions}
-          searchable
-          onSelect={v => updateForm('category', v)}
-          style={styles.formField}
-          error={postJobFieldErrors.category}
-        />
-
-        <CustomDropdown
-          label={POST_JOB_LABELS.jobType}
-          value={postJobForm.jobType}
-          options={JOB_TYPES}
-          onSelect={v => updateForm('jobType', v)}
-          style={styles.formField}
-        />
-
-        <View style={[flexDirectionRow, styles.budgetRow]}>
-          <CustomTextInput
-            label={isHourly ? POST_JOB_LABELS.rateMin : POST_JOB_LABELS.budgetMin}
-            value={postJobForm.budgetMin}
-            onChangeText={v => updateForm('budgetMin', v)}
-            placeholder={POST_JOB_PLACEHOLDERS.budgetMin}
-            keyboardType="numeric"
-            leftIcon="dollar-sign"
-            onFocus={handleInputFocus}
-            style={styles.budgetField}
-          />
-          <CustomTextInput
-            label={isHourly ? POST_JOB_LABELS.rateMax : POST_JOB_LABELS.budgetMax}
-            value={postJobForm.budgetMax}
-            onChangeText={v => updateForm('budgetMax', v)}
-            placeholder={POST_JOB_PLACEHOLDERS.budgetMax}
-            keyboardType="numeric"
-            leftIcon="dollar-sign"
-            onFocus={handleInputFocus}
-            style={styles.budgetField}
-          />
-        </View>
-
-        <View style={styles.formField}>
-          <FormLabel label={POST_JOB_LABELS.deadline} />
-          <TouchableOpacity
-            style={[styles.deadlineField, flexDirectionRow, alignItemsCenter]}
-            activeOpacity={0.8}
-            onPress={() => setShowDeadlinePicker(true)}
-            disabled={isLoadingJobDetail}>
-            <Icon name="calendar" size={16} color={grayColor} />
-            <Text
-              style={[
-                styles.deadlineText,
-                style.fontWeightThin,
-                !postJobForm.deadline && styles.deadlinePlaceholder,
-              ]}>
-              {postJobForm.deadline
-                ? formatDeadlineForDisplay(postJobForm.deadline)
-                : POST_JOB_PLACEHOLDERS.deadline}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {Platform.OS === 'android' && showDeadlinePicker ? (
-          <DateTimePicker
-            value={selectedDeadline}
-            mode="date"
-            display="default"
-            minimumDate={getTodayStart()}
-            onChange={handleDeadlineChange}
-          />
-        ) : null}
-
-        {Platform.OS === 'ios' && showDeadlinePicker ? (
-          <Modal
-            visible
-            transparent
-            animationType="slide"
-            presentationStyle="overFullScreen"
-            onRequestClose={() => setShowDeadlinePicker(false)}>
-            <View style={styles.deadlineModalOverlay}>
-              <View style={styles.deadlineModalCard}>
-                <View
-                  style={[
-                    styles.deadlineModalHeader,
-                    flexDirectionRow,
-                    justifyContentSpaceBetween,
-                    alignItemsCenter,
-                  ]}>
-                  <TouchableOpacity onPress={() => setShowDeadlinePicker(false)}>
-                    <Text style={[styles.deadlineModalAction, style.fontWeightMedium]}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setShowDeadlinePicker(false)}>
-                    <Text
-                      style={[
-                        styles.deadlineModalAction,
-                        styles.deadlineModalDone,
-                        style.fontWeightMedium,
-                      ]}>
-                      Done
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.deadlinePickerWrap}>
-                  <DateTimePicker
-                    value={selectedDeadline}
-                    mode="date"
-                    display="inline"
-                    minimumDate={getTodayStart()}
-                    onChange={handleDeadlineChange}
-                    style={styles.deadlineIosPicker}
-                    textColor={blackColor}
-                    themeVariant="light"
-                  />
-                </View>
-              </View>
+        <View style={styles.formCard}>
+          <View style={[flexDirectionRow, alignItemsCenter, styles.formHeader]}>
+            <View style={[styles.formIconWrap, alignJustifyCenter]}>
+              <Icon name={editingJobId ? 'edit-2' : 'plus'} size={16} color={whiteColor} />
             </View>
-          </Modal>
-        ) : null}
-
-        <CustomDropdown
-          label={POST_JOB_LABELS.experienceLevel}
-          value={postJobForm.experienceLevel}
-          options={EXPERIENCE_LEVELS}
-          onSelect={v => updateForm('experienceLevel', v)}
-          style={styles.formField}
-        />
-
-        <CustomTextInput
-          label={POST_JOB_LABELS.skills}
-          value={postJobForm.skills}
-          onChangeText={v => updateForm('skills', v)}
-          placeholder={POST_JOB_PLACEHOLDERS.skills}
-          leftIcon="code"
-          onFocus={handleInputFocus}
-          style={styles.formField}
-        />
-
-        <View style={styles.formField}>
-          <FormLabel label={POST_JOB_LABELS.attachments} />
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => setShowJobUploadOptions(true)}
-            style={[styles.jobUploadArea, postJobAttachments.length > 0 && styles.jobUploadAreaFilled]}>
-            {postJobAttachments.length === 0 ? (
-              <View style={alignJustifyCenter}>
-                <View style={styles.jobUploadIconCircle}>
-                  <Icon name="upload-cloud" size={24} color="#5B9BD5" />
-                </View>
-                <Text style={[styles.jobUploadTitle, style.fontWeightMedium]}>{UPLOAD_FILES}</Text>
-                <Text style={[styles.jobUploadHint, style.fontWeightThin]}>{POST_JOB_ATTACHMENTS_HINT}</Text>
-              </View>
-            ) : (
-              <View style={styles.jobAttachmentsPreview}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.jobAttachmentsRow}>
-                  {postJobAttachments.map((file, index) =>
-                    isImageFile(file) ? (
-                      <View key={`${file.uri}-${index}`} style={styles.jobImagePreviewWrap}>
-                        <Image source={{ uri: file.uri }} style={styles.jobImagePreview} />
-                        <TouchableOpacity
-                          style={styles.jobRemoveImageBtn}
-                          onPress={() => removeJobAttachment(index)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Icon name="x" size={12} color={whiteColor} />
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <View
-                        key={`${file.uri}-${index}`}
-                        style={[styles.jobFileChip, flexDirectionRow, alignItemsCenter]}>
-                        <Icon name="file" size={13} color={redColor} />
-                        <Text style={[styles.jobFileChipName, style.fontWeightThin]} numberOfLines={1}>
-                          {file.name}
-                        </Text>
-                        <TouchableOpacity onPress={() => removeJobAttachment(index)}>
-                          <Icon name="x" size={13} color={grayColor} />
-                        </TouchableOpacity>
-                      </View>
-                    ),
-                  )}
-                </ScrollView>
-                <View style={[styles.jobAddMoreRow, flexDirectionRow, alignItemsCenter]}>
-                  <Icon name="plus-circle" size={14} color={redColor} />
-                  <Text style={[styles.jobAddMoreText, style.fontWeightMedium]}>{ADD_MORE_FILES}</Text>
-                </View>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <UploadOptionsModal
-          visible={showJobUploadOptions}
-          onClose={() => setShowJobUploadOptions(false)}
-          onSelect={handleJobUploadOption}
-        />
-
-        {postJobError ? <Text style={styles.postJobError}>{postJobError}</Text> : null}
-
-        <CustomButton
-          title={editingJobId ? UPDATE_JOB_BTN : POST_JOB_BTN}
-          iconName="send"
-          onPress={handlePostJob}
-          loading={isPostingJob || isLoadingJobDetail}
-          disabled={isPostingJob || isLoadingJobDetail}
-          style={styles.postJobBtn}
-        />
-      </View>
-
-      {renderInfoCard(TIPS_TITLE, 'zap', goldColor, (
-        <View style={styles.tipsList}>
-          {POST_JOB_TIPS.map((tip, index) => (
-            <View key={index} style={[flexDirectionRow, alignItemsCenter, styles.tipRow]}>
-              <Icon name="check-circle" size={14} color={greenColor} />
-              <Text style={[styles.tipText, style.fontWeightThin]}>{tip}</Text>
+            <View style={flex}>
+              <Text style={[styles.formTitle, style.fontWeightMedium]}>
+                {editingJobId ? UPDATE_JOB_BTN : POST_JOB_TITLE}
+              </Text>
+              <Text style={[styles.formSubtitle, style.fontWeightThin]}>{POST_JOB_SUBTITLE}</Text>
             </View>
-          ))}
-        </View>
-      ))}
+          </View>
 
-      {/* Platform stats + Buyer protection blocks hidden for now.
+          {isLoadingJobDetail ? (
+            <View style={styles.jobDetailLoader}>
+              <ActivityIndicator size="small" color={redColor} />
+              <Text style={[styles.jobDetailLoaderText, style.fontWeightThin]}>Loading job details...</Text>
+            </View>
+          ) : null}
+
+          <CustomTextInput
+            label={POST_JOB_LABELS.title}
+            required
+            value={postJobForm.title}
+            onChangeText={v => updateForm('title', v)}
+            placeholder={POST_JOB_PLACEHOLDERS.title}
+            leftIcon="edit-2"
+            maxLength={JOB_TITLE_MAX_LENGTH}
+            onFocus={handleInputFocus}
+            error={postJobFieldErrors.title}
+          />
+
+          <View style={styles.formField}>
+            <RichTextEditor
+              label={POST_JOB_LABELS.description}
+              value={postJobForm.description}
+              onChange={v => updateForm('description', v)}
+              placeholder={POST_JOB_PLACEHOLDERS.description}
+              error={postJobFieldErrors.description}
+            />
+          </View>
+
+          <CustomDropdown
+            label={POST_JOB_LABELS.category}
+            required
+            value={postJobForm.category}
+            options={jobCategoryOptions}
+            searchable
+            onSelect={v => updateForm('category', v)}
+            style={styles.formField}
+            error={postJobFieldErrors.category}
+            emptyText="No categories available"
+          />
+
+          <CustomDropdown
+            label={POST_JOB_LABELS.jobType}
+            value={postJobForm.jobType}
+            options={JOB_TYPES}
+            onSelect={v => updateForm('jobType', v)}
+            style={styles.formField}
+          />
+
+          <View style={[flexDirectionRow, styles.budgetRow]}>
+            <CustomTextInput
+              label={isHourly ? POST_JOB_LABELS.rateMin : POST_JOB_LABELS.budgetMin}
+              value={postJobForm.budgetMin}
+              onChangeText={v => updateForm('budgetMin', v)}
+              placeholder={POST_JOB_PLACEHOLDERS.budgetMin}
+              keyboardType="numeric"
+              leftIcon="dollar-sign"
+              onFocus={handleInputFocus}
+              style={styles.budgetField}
+            />
+            <CustomTextInput
+              label={isHourly ? POST_JOB_LABELS.rateMax : POST_JOB_LABELS.budgetMax}
+              value={postJobForm.budgetMax}
+              onChangeText={v => updateForm('budgetMax', v)}
+              placeholder={POST_JOB_PLACEHOLDERS.budgetMax}
+              keyboardType="numeric"
+              leftIcon="dollar-sign"
+              onFocus={handleInputFocus}
+              style={styles.budgetField}
+            />
+          </View>
+
+          <View style={styles.formField}>
+            <FormLabel label={POST_JOB_LABELS.deadline} />
+            <TouchableOpacity
+              style={[styles.deadlineField, flexDirectionRow, alignItemsCenter]}
+              activeOpacity={0.8}
+              onPress={() => setShowDeadlinePicker(true)}
+              disabled={isLoadingJobDetail}>
+              <Icon name="calendar" size={16} color={grayColor} />
+              <Text
+                style={[
+                  styles.deadlineText,
+                  style.fontWeightThin,
+                  !postJobForm.deadline && styles.deadlinePlaceholder,
+                ]}>
+                {postJobForm.deadline
+                  ? formatDeadlineForDisplay(postJobForm.deadline)
+                  : POST_JOB_PLACEHOLDERS.deadline}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {Platform.OS === 'android' && showDeadlinePicker ? (
+            <DateTimePicker
+              value={selectedDeadline}
+              mode="date"
+              display="default"
+              minimumDate={getTodayStart()}
+              onChange={handleDeadlineChange}
+            />
+          ) : null}
+
+          {Platform.OS === 'ios' && showDeadlinePicker ? (
+            <Modal
+              visible
+              transparent
+              animationType="slide"
+              presentationStyle="overFullScreen"
+              onRequestClose={() => setShowDeadlinePicker(false)}>
+              <View style={styles.deadlineModalOverlay}>
+                <View style={styles.deadlineModalCard}>
+                  <View
+                    style={[
+                      styles.deadlineModalHeader,
+                      flexDirectionRow,
+                      justifyContentSpaceBetween,
+                      alignItemsCenter,
+                    ]}>
+                    <TouchableOpacity onPress={() => setShowDeadlinePicker(false)}>
+                      <Text style={[styles.deadlineModalAction, style.fontWeightMedium]}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setShowDeadlinePicker(false)}>
+                      <Text
+                        style={[
+                          styles.deadlineModalAction,
+                          styles.deadlineModalDone,
+                          style.fontWeightMedium,
+                        ]}>
+                        Done
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.deadlinePickerWrap}>
+                    <DateTimePicker
+                      value={selectedDeadline}
+                      mode="date"
+                      display="inline"
+                      minimumDate={getTodayStart()}
+                      onChange={handleDeadlineChange}
+                      style={styles.deadlineIosPicker}
+                      textColor={blackColor}
+                      themeVariant="light"
+                    />
+                  </View>
+                </View>
+              </View>
+            </Modal>
+          ) : null}
+
+          <CustomDropdown
+            label={POST_JOB_LABELS.experienceLevel}
+            value={postJobForm.experienceLevel}
+            options={EXPERIENCE_LEVELS}
+            onSelect={v => updateForm('experienceLevel', v)}
+            style={styles.formField}
+          />
+
+          <CustomTextInput
+            label={POST_JOB_LABELS.skills}
+            value={postJobForm.skills}
+            onChangeText={v => updateForm('skills', v)}
+            placeholder={POST_JOB_PLACEHOLDERS.skills}
+            leftIcon="code"
+            onFocus={handleInputFocus}
+            style={styles.formField}
+          />
+
+          <View style={styles.formField}>
+            <FormLabel label={POST_JOB_LABELS.attachments} />
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setShowJobUploadOptions(true)}
+              style={[styles.jobUploadArea, postJobAttachments.length > 0 && styles.jobUploadAreaFilled]}>
+              {postJobAttachments.length === 0 ? (
+                <View style={alignJustifyCenter}>
+                  <View style={styles.jobUploadIconCircle}>
+                    <Icon name="upload-cloud" size={24} color="#5B9BD5" />
+                  </View>
+                  <Text style={[styles.jobUploadTitle, style.fontWeightMedium]}>{UPLOAD_FILES}</Text>
+                  <Text style={[styles.jobUploadHint, style.fontWeightThin]}>{POST_JOB_ATTACHMENTS_HINT}</Text>
+                </View>
+              ) : (
+                <View style={styles.jobAttachmentsPreview}>
+                  <View style={[styles.jobAttachmentsRow, flexDirectionRow]}>
+                    {postJobAttachments.map((file, index) =>
+                      isImageFile(file) ? (
+                        <View key={`${file.uri}-${index}`} style={styles.jobImagePreviewWrap}>
+                          <Image source={{ uri: file.uri }} style={styles.jobImagePreview} />
+                          <TouchableOpacity
+                            style={styles.jobRemoveImageBtn}
+                            onPress={() => removeJobAttachment(index)}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <Icon name="x" size={12} color={whiteColor} />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <View
+                          key={`${file.uri}-${index}`}
+                          style={[styles.jobFileChip, flexDirectionRow, alignItemsCenter]}>
+                          <Icon name="file" size={13} color={redColor} />
+                          <Text style={[styles.jobFileChipName, style.fontWeightThin]} numberOfLines={1}>
+                            {file.name}
+                          </Text>
+                          <TouchableOpacity onPress={() => removeJobAttachment(index)}>
+                            <Icon name="x" size={13} color={grayColor} />
+                          </TouchableOpacity>
+                        </View>
+                      ),
+                    )}
+                  </View>
+                  <View style={[styles.jobAddMoreRow, flexDirectionRow, alignItemsCenter]}>
+                    <Icon name="plus-circle" size={14} color={redColor} />
+                    <Text style={[styles.jobAddMoreText, style.fontWeightMedium]}>{ADD_MORE_FILES}</Text>
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <UploadOptionsModal
+            visible={showJobUploadOptions}
+            onClose={() => setShowJobUploadOptions(false)}
+            onSelect={handleJobUploadOption}
+          />
+
+          {postJobError ? <Text style={styles.postJobError}>{postJobError}</Text> : null}
+
+          <CustomButton
+            title={editingJobId ? UPDATE_JOB_BTN : POST_JOB_BTN}
+            iconName="send"
+            onPress={handlePostJob}
+            loading={isPostingJob || isLoadingJobDetail}
+            disabled={isPostingJob || isLoadingJobDetail}
+            style={styles.postJobBtn}
+          />
+        </View>
+
+        {renderInfoCard(TIPS_TITLE, 'zap', goldColor, (
+          <View style={styles.tipsList}>
+            {POST_JOB_TIPS.map((tip, index) => (
+              <View key={index} style={[flexDirectionRow, alignItemsCenter, styles.tipRow]}>
+                <Icon name="check-circle" size={14} color={greenColor} />
+                <Text style={[styles.tipText, style.fontWeightThin]}>{tip}</Text>
+              </View>
+            ))}
+          </View>
+        ))}
+
+        {/* Platform stats + Buyer protection blocks hidden for now.
       {renderInfoCard(PLATFORM_STATS_TITLE, 'bar-chart-2', blueColor, (
         <View style={styles.platformStats}>
           {PLATFORM_STATS.map(stat => (
@@ -2502,7 +2502,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         <Text style={[styles.protectionText, style.fontWeightThin]}>{BUYER_PROTECTION.text}</Text>
       </View>
       */}
-    </View>
+      </View>
     );
   };
 
@@ -2764,7 +2764,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         service={serviceDetailModal.service}
         hasContacted={Boolean(
           serviceDetailModal.service &&
-            contactedServiceIds[String(serviceDetailModal.service.id)],
+          contactedServiceIds[String(serviceDetailModal.service.id)],
         )}
         onClose={closeServiceDetail}
         onContactSeller={openConfirmBooking}
@@ -3193,13 +3193,14 @@ const styles = StyleSheet.create({
   jobAttachmentsRow: {
     gap: spacings.normal,
     paddingVertical: spacings.xsmall,
+    flexWrap: 'wrap',
   },
   jobImagePreviewWrap: {
     position: 'relative',
   },
   jobImagePreview: {
-    width: hp(9),
-    height: hp(9),
+    width: wp(25),
+    height: wp(26),
     borderRadius: 10,
     backgroundColor: '#E8E8ED',
   },
