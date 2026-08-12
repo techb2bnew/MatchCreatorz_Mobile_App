@@ -24,6 +24,7 @@ import {
   tabBgColor,
   whiteColor,
   blueColor,
+  purpleColor,
 } from '../constans/Color';
 import { style, spacings } from '../constans/Fonts';
 import {
@@ -34,6 +35,7 @@ import {
   JOBS_BOOKINGS_TABS,
   MARK_ALL_READ,
   MY_JOBS_SUB_TABS,
+  NOTIFICATION_ANNOUNCEMENT_TAG,
   NOTIFICATION_FILTER_LABELS,
   NOTIFICATION_FILTER_TABS,
   NOTIFICATIONS_TITLE,
@@ -47,6 +49,7 @@ import {
 import EmptyState from '../components/EmptyState';
 import ConfirmationModal from '../components/modal/ConfirmationModal';
 import SwipeToDelete from '../components/SwipeToDelete';
+import AnnouncementModal from '../components/modal/AnnouncementModal';
 import { getApiErrorMessage } from '../services/apiClient';
 import { selectAuth, selectAppRole } from '../redux/slices/authSlice';
 import { fetchUnreadNotificationsCount } from '../redux/slices/notificationsSlice';
@@ -78,11 +81,14 @@ const CATEGORY_ICON_CONFIG = {
   bookings: { icon: 'calendar', iconColor: blueColor, iconBg: '#E8F0F8' },
   payments: { icon: 'credit-card', iconColor: greenColor, iconBg: '#E8F8EE' },
   jobs: { icon: 'briefcase', iconColor: blueColor, iconBg: '#E8F0F8' },
+  announcements: { icon: 'radio', iconColor: purpleColor, iconBg: '#F3E8FB' },
   system: { icon: 'bell', iconColor: redColor, iconBg: lightPink },
 };
 
 const normalizeCategory = value => {
   const normalized = String(value || '').trim().toLowerCase();
+  // Admin broadcasts (type: "broadcast") — checked first, they have no target screen.
+  if (normalized.includes('broadcast') || normalized.includes('announce')) return 'announcements';
   if (normalized.includes('book')) return 'bookings';
   if (normalized.includes('pay') || normalized.includes('wallet') || normalized.includes('refund')) {
     return 'payments';
@@ -128,6 +134,18 @@ const formatRelativeTime = dateStr => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
+const formatFullTime = dateStr => {
+  const date = new Date(dateStr);
+  if (!dateStr || Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
 const mapApiNotificationToUi = n => {
   const category = normalizeCategory(n?.type || n?.category || n?.notification_type);
   const config = CATEGORY_ICON_CONFIG[category];
@@ -143,6 +161,8 @@ const mapApiNotificationToUi = n => {
     icon: config.icon,
     iconColor: config.iconColor,
     iconBg: config.iconBg,
+    isAnnouncement: category === 'announcements',
+    fullTime: formatFullTime(n?.created_at || n?.createdAt),
     bookingId: extractReferenceId(n, ['booking_id', 'bookingId']) || extractReferenceId(data, ['booking_id', 'bookingId']),
     jobId: extractReferenceId(n, ['job_id', 'jobId']) || extractReferenceId(data, ['job_id', 'jobId']),
   };
@@ -160,6 +180,7 @@ const NotificationsScreen = ({ navigation }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [deleteModal, setDeleteModal] = useState({ visible: false, item: null, loading: false, error: '' });
+  const [announcement, setAnnouncement] = useState({ visible: false, item: null });
 
   const refreshUnreadBadge = useCallback(() => {
     if (token && role) dispatch(fetchUnreadNotificationsCount({ token, role }));
@@ -268,6 +289,12 @@ const NotificationsScreen = ({ navigation }) => {
       } catch (error) {
         // Best-effort — UI already reflects read state optimistically.
       }
+    }
+
+    // Broadcasts have no target screen — show the full message in a popup.
+    if (item.isAnnouncement) {
+      setAnnouncement({ visible: true, item });
+      return;
     }
 
     routeToNotificationTarget(item);
@@ -430,9 +457,18 @@ const NotificationsScreen = ({ navigation }) => {
                         </TouchableOpacity>
                       </View>
                     </View>
-                    <Text style={[styles.notifMessage, style.fontWeightThin]} numberOfLines={2}>
+                    <Text
+                      style={[styles.notifMessage, style.fontWeightThin]}
+                      numberOfLines={2}>
                       {item.message}
                     </Text>
+                    {item.isAnnouncement ? (
+                      <View style={[styles.announcementTag, alignJustifyCenter]}>
+                        <Text style={[styles.announcementTagText, style.fontWeightMedium]}>
+                          {NOTIFICATION_ANNOUNCEMENT_TAG}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                 </TouchableOpacity>
                 </SwipeToDelete>
@@ -441,6 +477,12 @@ const NotificationsScreen = ({ navigation }) => {
           </ScrollView>
         )}
       </View>
+
+      <AnnouncementModal
+        visible={announcement.visible}
+        item={announcement.item}
+        onClose={() => setAnnouncement({ visible: false, item: null })}
+      />
 
       <ConfirmationModal
         visible={deleteModal.visible}
@@ -585,5 +627,17 @@ const styles = StyleSheet.create({
     color: grayColor,
     marginTop: 4,
     lineHeight: 18,
+  },
+  announcementTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F3E8FB',
+    borderRadius: 6,
+    paddingHorizontal: spacings.small,
+    paddingVertical: 2,
+    marginTop: 6,
+  },
+  announcementTagText: {
+    fontSize: style.fontSizeSmall.fontSize,
+    color: purpleColor,
   },
 });

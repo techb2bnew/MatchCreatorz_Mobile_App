@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import CustomTextInput from './CustomTextInput';
 import RichTextEditor from './RichTextEditor';
 import FormLabel from './FormLabel';
 import CustomDropdown from './CustomDropdown';
+import AddressAutocompleteInput from './AddressAutocompleteInput';
 import { BaseStyle } from '../constans/Style';
 import {
   blackColor,
@@ -24,39 +25,31 @@ import {
   whiteColor,
 } from '../constans/Color';
 import { style, spacings } from '../constans/Fonts';
-import { getCountryNames, getDefaultStateForCountry, getStateNamesForCountry } from '../utils/locationData';
 import {
   BIO,
   BIO_PLACEHOLDER,
   CATEGORY,
   CATEGORY_OPTIONS,
-  CITY_PLACEHOLDER,
-  COUNTRY,
+  LABEL_ADDRESS,
   DATE_OF_BIRTH,
   DOB_PLACEHOLDER,
   GENDER,
   GENDER_OPTIONS,
   HOURLY_RATE_PLACEHOLDER,
-  LABEL_CITY,
   LABEL_HOURLY_RATE,
-  LABEL_ZIP_CODE,
   POST_JOB_PLACEHOLDERS,
   PROFILE_DETAILS,
   RESPONSE_TIME,
   RESPONSE_TIME_OPTIONS,
   RESUME_CV,
-  SKILL_TAGS,
-  STATE,
   TAGS_SKILLS,
   UPLOAD_RESUME,
-  ZIP_PLACEHOLDER,
 } from '../constans/Constants';
 import { formatFileSize, showResumePicker } from '../utils/filePicker';
 import { heightPercentageToDP as hp } from '../utils';
 
 const {
   flexDirectionRow,
-  flexWrap,
   alignItemsCenter,
   alignItemsFlexStart,
   justifyContentSpaceBetween,
@@ -109,28 +102,11 @@ const parseDobDisplay = value => {
   return date;
 };
 
-const ProfileDetailsStep = ({
-  form,
-  onChange,
-  onToggleTag,
-  errors = {},
-  variant = 'signup',
-}) => {
+const ProfileDetailsStep = ({ form, onChange, errors = {}, variant = 'signup' }) => {
   const isSellerProfile = variant === 'sellerProfile';
   const setField = (field, value) => onChange({ ...form, [field]: value });
-  const stateOptions = useMemo(() => getStateNamesForCountry(form.country), [form.country]);
-  const countryOptions = useMemo(() => getCountryNames(), []);
-  const hasStateDropdown = stateOptions.length > 0;
   const [showDobPicker, setShowDobPicker] = useState(false);
   const selectedDob = parseDobDisplay(form.dateOfBirth) || getDefaultDobDate();
-
-  const handleCountryChange = country => {
-    onChange({
-      ...form,
-      country,
-      state: getDefaultStateForCountry(country),
-    });
-  };
 
   const handleResumePick = () => {
     showResumePicker(file => {
@@ -226,46 +202,25 @@ const ProfileDetailsStep = ({
           style={styles.fieldGap}
         />
 
-        <View style={[styles.gridRow, flexDirectionRow]}>
-          <CustomDropdown
-            label={COUNTRY}
-            required
-            value={form.country}
-            options={countryOptions}
-            searchable
-            onSelect={handleCountryChange}
-          />
-          <CustomTextInput
-            value={form.city}
-            onChangeText={val => setField('city', val)}
-            label={LABEL_CITY}
-            required
-            placeholder={CITY_PLACEHOLDER}
-            leftIcon="map-pin"
-            error={errors.city}
-            style={styles.halfInput}
-          />
-        </View>
-        {errors.country ? <Text style={styles.errorText}>{errors.country}</Text> : null}
+        <AddressAutocompleteInput
+          label={LABEL_ADDRESS}
+          required
+          value={form.address}
+          onChangeText={val => setField('address', val)}
+          error={errors.address}
+          style={styles.fieldGap}
+        />
 
-        <FormLabel label={TAGS_SKILLS} required />
-        <View style={[styles.tagsBox, flexDirectionRow, flexWrap, errors.skills && styles.tagsBoxError]}>
-          {SKILL_TAGS.map(tag => {
-            const isSelected = form.tags.includes(tag);
-            return (
-              <TouchableOpacity
-                key={tag}
-                activeOpacity={0.85}
-                onPress={() => onToggleTag(tag)}
-                style={[styles.tag, isSelected && styles.tagSelected]}>
-                <Text style={[styles.tagText, style.fontWeightThin, isSelected && styles.tagTextSelected]}>
-                  {tag}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        {errors.skills ? <Text style={styles.errorText}>{errors.skills}</Text> : null}
+        <CustomTextInput
+          value={form.skills || ''}
+          onChangeText={val => setField('skills', val)}
+          label={TAGS_SKILLS}
+          required
+          placeholder={POST_JOB_PLACEHOLDERS.skills}
+          leftIcon="tag"
+          error={errors.skills}
+          style={styles.fieldGap}
+        />
 
         <RichTextEditor
           label={BIO}
@@ -372,57 +327,14 @@ const ProfileDetailsStep = ({
         </Modal>
       ) : null}
 
-      <View style={[styles.gridRow, flexDirectionRow]}>
-        <CustomDropdown
-          label={COUNTRY}
-          required
-          value={form.country}
-          options={countryOptions}
-          searchable
-          onSelect={handleCountryChange}
-        />
-        {hasStateDropdown ? (
-          <CustomDropdown
-            label={STATE}
-            value={form.state}
-            options={stateOptions}
-            searchable
-            onSelect={val => setField('state', val)}
-          />
-        ) : (
-          <CustomTextInput
-            value={form.state}
-            onChangeText={val => setField('state', val)}
-            label={STATE}
-            placeholder={STATE}
-            leftIcon="map"
-            style={styles.halfInput}
-          />
-        )}
-      </View>
-      {errors.country ? <Text style={styles.errorText}>{errors.country}</Text> : null}
-
-      <View style={[styles.gridRow, flexDirectionRow]}>
-        <CustomTextInput
-          value={form.city}
-          onChangeText={val => setField('city', val)}
-          label={LABEL_CITY}
-          required
-          placeholder={CITY_PLACEHOLDER}
-          leftIcon="map-pin"
-          error={errors.city}
-          style={styles.halfInput}
-        />
-        <CustomTextInput
-          value={form.zipCode}
-          onChangeText={val => setField('zipCode', val)}
-          label={LABEL_ZIP_CODE}
-          placeholder={ZIP_PLACEHOLDER}
-          leftIcon="hash"
-          keyboardType="number-pad"
-          style={styles.halfInput}
-        />
-      </View>
+      <AddressAutocompleteInput
+        label={LABEL_ADDRESS}
+        required
+        value={form.address}
+        onChangeText={val => setField('address', val)}
+        error={errors.address}
+        style={styles.fieldGap}
+      />
 
       <View style={[styles.gridRow, flexDirectionRow]}>
         <CustomDropdown
@@ -540,43 +452,11 @@ const styles = StyleSheet.create({
     width: '100%',
     height: hp(38),
   },
-  tagsBox: {
-    backgroundColor: inputBgColor,
-    borderRadius: 12,
-    padding: spacings.large,
-    gap: spacings.normal,
-    marginBottom: hp(1.5),
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  tagsBoxError: {
-    borderColor: redColor,
-    marginBottom: spacings.xsmall,
-  },
   errorText: {
     color: redColor,
     fontSize: style.fontSizeSmall1x.fontSize,
     marginBottom: hp(1.2),
     marginLeft: spacings.xsmall,
-  },
-  tag: {
-    paddingHorizontal: spacings.large,
-    paddingVertical: spacings.normal,
-    borderRadius: 20,
-    backgroundColor: '#E8E8ED',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  tagSelected: {
-    backgroundColor: lightPink,
-    borderColor: redColor,
-  },
-  tagText: {
-    fontSize: style.fontSizeSmall1x.fontSize,
-    color: grayColor,
-  },
-  tagTextSelected: {
-    color: redColor,
   },
   fieldGap: {
     marginBottom: hp(1.2),

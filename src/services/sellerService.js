@@ -1021,9 +1021,7 @@ export const buildUpdateSellerProfileFormData = ({
   name,
   phone,
   bio,
-  location,
-  city,
-  country,
+  address,
   skills,
   hourly_rate,
   resumeFile,
@@ -1035,10 +1033,10 @@ export const buildUpdateSellerProfileFormData = ({
   formData.append('name', String(name || '').trim());
   formData.append('phone', String(phone || '').trim());
   formData.append('bio', String(bio || '').trim());
-  if (location) formData.append('location', String(location).trim());
-  if (city) formData.append('city', String(city).trim());
-  if (country) formData.append('country', String(country).trim());
-  if (skills) formData.append('skills', String(skills));
+  if (address) formData.append('address', String(address).trim());
+  // skills is an array per swagger — one field per entry.
+  if (Array.isArray(skills)) skills.forEach(skill => formData.append('skills', String(skill)));
+  else if (skills) formData.append('skills', String(skills));
   if (hourly_rate) formData.append('hourly_rate', String(hourly_rate));
   if (removeResume) formData.append('remove_resume', 'true');
   appendProfileFile(formData, 'resume', resumeFile);

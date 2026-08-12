@@ -88,14 +88,12 @@ import {
   ERROR_REGISTER_FAILED,
   mapAppRoleToApiRole,
 } from '../constans/Constants';
-import { getDefaultStateForCountry, DEFAULT_COUNTRY } from '../utils/locationData';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
   formatPhoneInput,
-  validateCity,
+  validateAddress,
   validateConfirmPassword,
-  validateCountry,
   validateEmail,
   validateFullName,
   validateHourlyRate,
@@ -132,10 +130,7 @@ const ROLE_OPTIONS = [
 const createInitialProfileForm = () => ({
   hourlyRate: '',
   dateOfBirth: '',
-  country: DEFAULT_COUNTRY,
-  state: getDefaultStateForCountry(DEFAULT_COUNTRY),
-  city: '',
-  zipCode: '',
+  address: '',
   gender: GENDER_OPTIONS[0],
   category: CATEGORY_OPTIONS[0],
   skills: '',
@@ -157,8 +152,7 @@ const EMPTY_ERRORS = {
   password: '',
   confirmPassword: '',
   terms: '',
-  city: '',
-  country: '',
+  address: '',
   skills: '',
   hourlyRate: '',
 };
@@ -218,8 +212,7 @@ const CreateAccountScreen = ({ navigation }) => {
 
   const validateProfileStep = () => {
     const newErrors = {
-      city: validateCity(profileForm.city),
-      country: validateCountry(profileForm.country),
+      address: validateAddress(profileForm.address),
       skills: validateSkills(profileForm.skills),
       hourlyRate: validateHourlyRate(profileForm.hourlyRate),
     };
@@ -357,7 +350,7 @@ const CreateAccountScreen = ({ navigation }) => {
         }),
       ).unwrap();
       // NOTE: for a brand-new SELLER, this account is created with just
-      // name/email/role — none of the skills/hourly_rate/city/country/portfolio
+      // name/email/role — none of the skills/hourly_rate/address/portfolio
       // fields our normal seller signup collects. There's currently no follow-up
       // "complete your profile" redirect after Google signup — the seller lands
       // in the app with an incomplete profile until this is confirmed/handled.
@@ -677,11 +670,10 @@ const CreateAccountScreen = ({ navigation }) => {
               form={profileForm}
               onChange={next => {
                 setProfileForm(next);
-                if (errors.city || errors.country || errors.skills || errors.hourlyRate) {
+                if (errors.address || errors.skills || errors.hourlyRate) {
                   setErrors(prev => ({
                     ...prev,
-                    city: '',
-                    country: '',
+                    address: '',
                     skills: '',
                     hourlyRate: '',
                   }));

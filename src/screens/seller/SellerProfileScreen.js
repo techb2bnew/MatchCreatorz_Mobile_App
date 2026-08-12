@@ -51,9 +51,8 @@ import {
   NOTIF_SMS_DESC,
   BIO,
   CATEGORY_OPTIONS,
-  COUNTRY,
   GENDER_OPTIONS,
-  LABEL_CITY,
+  LABEL_ADDRESS,
   LABEL_HOURLY_RATE,
   PORTFOLIO,
   PORTFOLIO_LINK_PLACEHOLDER,
@@ -125,7 +124,6 @@ import NotificationSettingsModal from '../../components/modal/NotificationSettin
 import ContactUsModal from '../../components/modal/ContactUsModal';
 import UploadOptionsModal from '../../components/modal/UploadOptionsModal';
 import { pickImageFromCamera, pickImagesFromGallery, isImageFile } from '../../utils/filePicker';
-import { DEFAULT_COUNTRY } from '../../utils/locationData';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import {
   keyboardAvoidingBehavior,
@@ -146,19 +144,16 @@ const createEmptySellerProfile = () => ({
   fullName: '',
   email: '',
   phone: '',
-  location: '',
   bio: '',
   initials: '',
   photoUri: null,
   hourlyRate: '',
   dateOfBirth: '',
-  country: DEFAULT_COUNTRY,
-  state: '',
-  city: '',
-  zipCode: '',
+  address: '',
   gender: GENDER_OPTIONS[0],
   category: CATEGORY_OPTIONS[0],
   tags: [],
+  skills: '',
   responseTime: RESPONSE_TIME_OPTIONS[2],
   resumeUrl: null,
   resumeFile: null,
@@ -189,14 +184,6 @@ const parseSkills = skills => {
   );
 };
 
-const formatLocation = (city, country, location) => {
-  if (String(location || '').trim()) return String(location).trim();
-  return [city, country]
-    .map(value => String(value || '').trim())
-    .filter(Boolean)
-    .join(', ');
-};
-
 const getFileNameFromUrl = url => {
   if (!url) return 'File';
   const pathname = String(url).split('?')[0];
@@ -214,27 +201,22 @@ const capitalizeFirstLetter = value => {
 const mapSellerProfileToUi = data => {
   const sellerProfile = data?.seller_profile || {};
   const fullName = capitalizeFirstLetter(data?.name);
-  const city = sellerProfile.city || '';
-  const country = sellerProfile.country || DEFAULT_COUNTRY;
   const resumeUrl = sellerProfile.resume || null;
 
   return {
     fullName,
     email: data?.email || '',
     phone: data?.phone || '',
-    location: formatLocation(city, country, data?.location),
     bio: sellerProfile.bio || data?.bio || '',
     initials: getInitials(fullName),
     photoUri: sellerProfile.profile_image || data?.avatar || null,
     hourlyRate: sellerProfile.hourly_rate ? String(Number(sellerProfile.hourly_rate)) : '',
     dateOfBirth: '',
-    country,
-    state: '',
-    city,
-    zipCode: '',
+    address: data?.address || sellerProfile.address || '',
     gender: GENDER_OPTIONS[0],
     category: CATEGORY_OPTIONS[0],
     tags: parseSkills(sellerProfile.skills),
+    skills: parseSkills(sellerProfile.skills).join(', '),
     responseTime: RESPONSE_TIME_OPTIONS[2],
     resumeUrl,
     resumeFile: resumeUrl
@@ -447,13 +429,12 @@ const SellerProfileScreen = ({ navigation }) => {
     const name = String(profileForm.fullName || '').trim();
     const phone = String(profileForm.phone || '').trim();
     const bio = String(profileForm.bio || '').trim();
-    const city = String(profileForm.city || '').trim();
-    const country = String(profileForm.country || '').trim();
-    const location =
-      formatLocation(city, country, profileForm.location) ||
-      [city, country].filter(Boolean).join(', ');
+    const address = String(profileForm.address || '').trim();
     const hourlyRate = String(profileForm.hourlyRate || '').trim();
-    const skills = Array.isArray(profileForm.tags) ? profileForm.tags : [];
+    const skills = String(profileForm.skills || '')
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean);
     const hasNewResume = profileForm.resumeFile?.uri && !profileForm.resumeFile.isRemote;
     const removeResume = Boolean(profileForm.resumeRemoved);
 
@@ -474,10 +455,8 @@ const SellerProfileScreen = ({ navigation }) => {
       name,
       phone,
       bio,
-      location,
-      city,
-      country,
-      skills: skills.join(','),
+      address,
+      skills,
       hourly_rate: hourlyRate ? String(Number(hourlyRate)) : undefined,
       portfolio_links: profileForm.portfolioLinks || [],
       ...(hasNewResume || removeResume
@@ -499,11 +478,10 @@ const SellerProfileScreen = ({ navigation }) => {
         fullName: fromApi?.fullName || capitalizeFirstLetter(name),
         phone: fromApi?.phone || phone,
         bio: fromApi ? fromApi.bio : bio,
-        location: fromApi ? fromApi.location : location,
-        city: fromApi?.city || city,
-        country: fromApi?.country || country,
+        address: fromApi?.address || address,
         hourlyRate: fromApi?.hourlyRate || hourlyRate,
         tags: fromApi?.tags || skills,
+        skills: fromApi?.skills || skills.join(', '),
         email: fromApi?.email || savedProfile.email,
         photoUri: fromApi?.photoUri || savedProfile.photoUri,
         resumeUrl: fromApi?.resumeUrl ?? (removeResume && !hasNewResume ? null : savedProfile.resumeUrl),
@@ -526,7 +504,7 @@ const SellerProfileScreen = ({ navigation }) => {
               name: nextProfile.fullName,
               phone: nextProfile.phone,
               bio: nextProfile.bio,
-              location: nextProfile.location,
+              address: nextProfile.address,
               avatar: nextProfile.photoUri,
             },
           }),
@@ -543,14 +521,6 @@ const SellerProfileScreen = ({ navigation }) => {
 
   const handleProfessionalChange = updated => {
     setProfileForm(prev => ({ ...prev, ...updated }));
-    if (saveError) setSaveError('');
-  };
-
-  const handleToggleTag = tag => {
-    setProfileForm(prev => ({
-      ...prev,
-      tags: prev.tags.includes(tag) ? prev.tags.filter(item => item !== tag) : [...prev.tags, tag],
-    }));
     if (saveError) setSaveError('');
   };
 
@@ -804,13 +774,12 @@ const SellerProfileScreen = ({ navigation }) => {
   const renderProfessionalView = () => {
     const profile = savedProfile;
     const hasHourlyRate = Boolean(String(profile.hourlyRate || '').trim());
-    const hasCountry = Boolean(String(profile.country || '').trim());
-    const hasCity = Boolean(String(profile.city || '').trim());
+    const hasAddress = Boolean(String(profile.address || '').trim());
     const hasTags = profile.tags?.length > 0;
     const hasResume = Boolean(profile.resumeUrl);
     const hasBio = Boolean(String(profile.bio || '').trim());
 
-    if (!hasHourlyRate && !hasCountry && !hasCity && !hasTags && !hasResume && !hasBio) {
+    if (!hasHourlyRate && !hasAddress && !hasTags && !hasResume && !hasBio) {
       return <Text style={[styles.emptyHint, style.fontWeightThin]}>No profile details added</Text>;
     }
 
@@ -819,19 +788,12 @@ const SellerProfileScreen = ({ navigation }) => {
         {hasHourlyRate ? (
           <>
             {renderViewField(LABEL_HOURLY_RATE, `$${profile.hourlyRate}`)}
-            {hasCountry || hasCity || hasTags || hasResume || hasBio ? renderSectionDivider() : null}
+            {hasAddress || hasTags || hasResume || hasBio ? renderSectionDivider() : null}
           </>
         ) : null}
-        {hasCountry || hasCity ? (
+        {hasAddress ? (
           <>
-            <View style={[styles.detailRow, flexDirectionRow]}>
-              {hasCountry ? (
-                <View style={styles.detailCol}>{renderDetailItem(COUNTRY, profile.country)}</View>
-              ) : null}
-              {hasCity ? (
-                <View style={styles.detailCol}>{renderDetailItem(LABEL_CITY, profile.city)}</View>
-              ) : null}
-            </View>
+            {renderDetailItem(LABEL_ADDRESS, profile.address)}
             {hasTags || hasResume || hasBio ? renderSectionDivider() : null}
           </>
         ) : null}
@@ -1084,6 +1046,19 @@ const SellerProfileScreen = ({ navigation }) => {
                 </View>
               </View>
             </View>
+
+            {savedProfile.tags?.length ? (
+              <View style={styles.cardSkills}>
+                <FormLabel label={TAGS_SKILLS} style={styles.compactLabel} />
+                <View style={[styles.tagsView, flexDirectionRow, flexWrap]}>
+                  {savedProfile.tags.map(tag => (
+                    <View key={tag} style={styles.tagChip}>
+                      <Text style={[styles.tagChipText, style.fontWeightThin]}>{tag}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.statsSummaryCard}>
@@ -1128,7 +1103,6 @@ const SellerProfileScreen = ({ navigation }) => {
                 variant="sellerProfile"
                 form={profileForm}
                 onChange={handleProfessionalChange}
-                onToggleTag={handleToggleTag}
               />
             ) : (
               renderProfessionalView()
@@ -1410,6 +1384,12 @@ const styles = StyleSheet.create({
   },
   tagsView: {
     gap: spacings.small,
+  },
+  cardSkills: {
+    marginTop: spacings.large,
+    paddingTop: spacings.large,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: borderLightColor,
   },
   tagChip: {
     backgroundColor: lightPink,

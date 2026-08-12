@@ -68,7 +68,7 @@ import {
   PROFILE_EMAIL_LOGIN_HINT,
   PROFILE_ACCOUNT_SETTINGS,
   PROFILE_FULL_NAME,
-  PROFILE_LOCATION,
+  LABEL_ADDRESS,
   PROFILE_LOGOUT,
   PROFILE_LOGOUT_DESC,
   STATIC_PAGES,
@@ -96,6 +96,7 @@ import {
   ERROR_UPDATE_PREFERENCE_FAILED,
 } from '../../constans/Constants';
 import CustomTextInput from '../../components/CustomTextInput';
+import AddressAutocompleteInput from '../../components/AddressAutocompleteInput';
 import RichTextEditor from '../../components/RichTextEditor';
 import RichTextViewer from '../../components/RichTextViewer';
 import CustomButton from '../../components/CustomButton';
@@ -126,7 +127,7 @@ const EMPTY_PROFILE = {
   fullName: '',
   email: '',
   phone: '',
-  location: '',
+  address: '',
   bio: '',
   initials: '',
   photoUri: null,
@@ -170,7 +171,7 @@ const mapBuyerProfileToUi = data => {
     fullName,
     email: data?.email || '',
     phone: data?.phone || '',
-    location: data?.location || '',
+    address: data?.address || '',
     bio: data?.bio || '',
     initials: getInitials(fullName),
     photoUri: data?.avatar || null,
@@ -334,7 +335,7 @@ const ProfileScreen = ({ navigation }) => {
     const name = String(profileForm.fullName || '').trim();
     const phone = String(profileForm.phone || '').trim();
     const bio = String(profileForm.bio || '').trim();
-    const location = String(profileForm.location || '').trim();
+    const address = String(profileForm.address || '').trim();
 
     if (!name) {
       setSaveError(ERROR_FULL_NAME_REQUIRED);
@@ -349,7 +350,7 @@ const ProfileScreen = ({ navigation }) => {
       return;
     }
 
-    const payload = { name, phone, bio, location };
+    const payload = { name, phone, bio, address };
     setIsSaving(true);
     setSaveError('');
 
@@ -361,7 +362,7 @@ const ProfileScreen = ({ navigation }) => {
         fullName: fromApi?.fullName || capitalizeFirstLetter(name),
         phone: fromApi?.phone || phone,
         bio: fromApi ? fromApi.bio : bio,
-        location: fromApi ? fromApi.location : location,
+        address: fromApi ? fromApi.address : address,
         email: fromApi?.email || savedProfile.email,
         photoUri: fromApi?.photoUri || savedProfile.photoUri,
         initials: getInitials(fromApi?.fullName || name),
@@ -426,7 +427,7 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const hasPhone = Boolean(String(savedProfile.phone || '').trim());
-  const hasLocation = Boolean(String(savedProfile.location || '').trim());
+  const hasAddress = Boolean(String(savedProfile.address || '').trim());
   const hasBio = Boolean(String(savedProfile.bio || '').trim());
 
   const statItems = [
@@ -583,11 +584,10 @@ const ProfileScreen = ({ navigation }) => {
             onFocus={handleInputFocus}
             style={styles.fieldGap}
           />
-          <CustomTextInput
-            label={PROFILE_LOCATION}
-            value={profileForm.location}
-            onChangeText={value => updateProfileField('location', value)}
-            onFocus={handleInputFocus}
+          <AddressAutocompleteInput
+            label={LABEL_ADDRESS}
+            value={profileForm.address}
+            onChangeText={value => updateProfileField('address', value)}
             style={styles.fieldGap}
           />
           <View style={styles.fieldGap}>
@@ -606,7 +606,7 @@ const ProfileScreen = ({ navigation }) => {
         {renderViewField(PROFILE_FULL_NAME, savedProfile.fullName)}
         {renderViewField(PROFILE_EMAIL, savedProfile.email)}
         {hasPhone ? renderViewField(PROFILE_PHONE, savedProfile.phone) : null}
-        {hasLocation ? renderViewField(PROFILE_LOCATION, savedProfile.location) : null}
+        {hasAddress ? renderViewField(LABEL_ADDRESS, savedProfile.address) : null}
         {hasBio ? (
           <View style={styles.fieldGap}>
             <FormLabel label={PROFILE_BIO} />

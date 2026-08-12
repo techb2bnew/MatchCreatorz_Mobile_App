@@ -16,9 +16,9 @@ const appendFile = (formData, field, file) => {
  *
  * Required all roles: name, email, password, role (SELLER|BUYER)
  * Optional all: phone, profile_image
- * Required SELLER: skills, hourly_rate, city, country
+ * Required SELLER: skills, hourly_rate, address
  * Optional SELLER: bio, resume, portfolio_files, portfolio_links
- * Optional BUYER: company_name, city, country
+ * Optional BUYER: company_name, address
  */
 export const buildRegisterFormData = ({
   role,
@@ -89,10 +89,9 @@ export const buildRegisterFormData = ({
   appendFile(formData, 'profile_image', profileImage);
 
   if (isSeller) {
-    debugPayload.skills = skills.join(',');
+    debugPayload.skills = skills;
     debugPayload.hourly_rate = String(Number(profile.hourlyRate));
-    debugPayload.city = (profile.city || '').trim();
-    debugPayload.country = (profile.country || '').trim();
+    debugPayload.address = (profile.address || '').trim();
     debugPayload.bio = profile.bio?.trim() || undefined;
     debugPayload.resume = profile.resumeFile
       ? {
@@ -110,10 +109,11 @@ export const buildRegisterFormData = ({
     }));
     debugPayload.portfolio_links = portfolioLinks.length ? portfolioLinks : undefined;
 
-    formData.append('skills', debugPayload.skills);
+    // Swagger types skills as an array — send one field per skill so the
+    // backend parses req.body.skills as a list (a comma string was saved as []).
+    skills.forEach(skill => formData.append('skills', skill));
     formData.append('hourly_rate', debugPayload.hourly_rate);
-    formData.append('city', debugPayload.city);
-    formData.append('country', debugPayload.country);
+    formData.append('address', debugPayload.address);
 
     if (debugPayload.bio) {
       formData.append('bio', debugPayload.bio);

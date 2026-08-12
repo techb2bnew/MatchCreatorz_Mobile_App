@@ -1,3 +1,5 @@
+import Config from 'react-native-config';
+
 export const SCREEN_NAMES = {
   SPLASH: 'Splash',
   LOGIN: 'Login',
@@ -191,11 +193,6 @@ export const BIO_PLACEHOLDER = 'Tell clients about yourself and your expertise..
 export const TAGS_SKILLS = 'TAGS / SKILLS';
 export const PRICE_RANGE = 'PRICE RANGE';
 export const DATE_OF_BIRTH = 'DATE OF BIRTH';
-export const COUNTRY = 'COUNTRY';
-export const STATE = 'STATE';
-export const CITY = 'City';
-export const CITY_PLACEHOLDER = 'Enter your city';
-export const ZIP_PLACEHOLDER = '110001';
 export const GENDER = 'GENDER';
 
 // Uppercase labels shown above form fields
@@ -204,8 +201,10 @@ export const LABEL_EMAIL_ADDRESS = 'EMAIL ADDRESS';
 export const LABEL_PHONE_NUMBER = 'PHONE NUMBER';
 export const LABEL_PASSWORD = 'PASSWORD';
 export const LABEL_CONFIRM_PASSWORD = 'CONFIRM PASSWORD';
-export const LABEL_CITY = 'CITY';
-export const LABEL_ZIP_CODE = 'ZIP CODE';
+// Single address field (Google Places). Added next to the existing
+// city/state/country fields until the backend switches to one `address` key.
+export const LABEL_ADDRESS = 'ADDRESS';
+export const ADDRESS_PLACEHOLDER = 'Search your address';
 export const LABEL_OTP = 'VERIFICATION CODE';
 export const CATEGORY = 'CATEGORY';
 export const RESPONSE_TIME = 'RESPONSE TIME';
@@ -405,7 +404,6 @@ export const PROFILE_EMAIL = 'EMAIL ADDRESS';
 export const PROFILE_EMAIL_LOGIN_HINT = 'Used for login and cannot be changed.';
 export const PROFILE_ACCOUNT_SETTINGS = 'Account Settings';
 export const PROFILE_PHONE = 'PHONE NUMBER';
-export const PROFILE_LOCATION = 'LOCATION';
 export const PROFILE_BIO = 'BIO';
 export const PROFILE_BUYER_ROLE = 'Buyer';
 export const PROFILE_STAT_WALLET = 'Wallet';
@@ -471,6 +469,7 @@ export const NOTIFICATION_FILTER_TABS = {
   ALL: 'all',
   BOOKINGS: 'bookings',
   PAYMENTS: 'payments',
+  ANNOUNCEMENTS: 'announcements',
   SYSTEM: 'system',
 };
 
@@ -478,8 +477,13 @@ export const NOTIFICATION_FILTER_LABELS = {
   ALL: 'All',
   BOOKINGS: 'Bookings',
   PAYMENTS: 'Payments',
+  ANNOUNCEMENTS: 'Announcements',
   SYSTEM: 'System',
 };
+
+// Admin broadcasts arrive as notifications with type "broadcast" and
+// data.broadcast_id — shown as announcements, with no screen to route to.
+export const NOTIFICATION_ANNOUNCEMENT_TAG = 'Announcement';
 
 // Jobs & Bookings screen
 export const JOBS_SCREEN_TITLE = 'My Jobs';
@@ -1033,8 +1037,7 @@ export const AUTH_ROLE_KEY = 'matchcreators_auth_role';
 
 export const ERROR_PASSWORD_STRENGTH =
   'Password must include at least 1 uppercase letter and 1 number';
-export const ERROR_CITY_REQUIRED = 'City is required';
-export const ERROR_COUNTRY_REQUIRED = 'Country is required';
+export const ERROR_ADDRESS_REQUIRED = 'Address is required';
 export const ERROR_SKILLS_REQUIRED = 'Please enter at least one skill';
 export const ERROR_HOURLY_RATE_REQUIRED = 'Hourly rate is required';
 export const ERROR_HOURLY_RATE_INVALID = 'Enter a valid hourly rate';
@@ -1059,13 +1062,13 @@ export const LABEL_COMPANY_NAME = 'COMPANY NAME';
 export const LABEL_HOURLY_RATE = 'HOURLY RATE ($)';
 export const HOURLY_RATE_PLACEHOLDER = 'e.g. 500';
 
-// API
-export const API_BASE_URL = 'https://adminbackend.matchcreatorz.com/api/v1';
-export const SOCKET_BASE_URL = 'https://adminbackend.matchcreatorz.com';
+// API — values come from the root .env file (see .env.example)
+export const API_BASE_URL = Config.API_BASE_URL;
+export const SOCKET_BASE_URL = Config.SOCKET_BASE_URL;
 
 // Firebase -> Project settings -> Your apps -> Web app -> Web client ID
 // Example: 559577074349-xxxxx.apps.googleusercontent.com
-export const GOOGLE_WEB_CLIENT_ID = '559577074349-9nd1l599v7df5bpmj6ql6a3n3fld2fpl.apps.googleusercontent.com';
+export const GOOGLE_WEB_CLIENT_ID = Config.GOOGLE_WEB_CLIENT_ID;
 
 export const API_ENDPOINTS = {
   AUTH_REGISTER: '/auth/register',
@@ -1125,5 +1128,6 @@ export const API_ENDPOINTS = {
 
 // Stripe Checkout return URLs — the in-app WebView watches for these to detect
 // success/cancel (Stripe redirects here after the hosted checkout finishes).
-export const STRIPE_SUCCESS_URL = 'https://matchcreatorz.com/app/payment-success';
-export const STRIPE_CANCEL_URL = 'https://matchcreatorz.com/app/payment-cancel';
+export const STRIPE_SUCCESS_URL = Config.STRIPE_SUCCESS_URL;
+export const STRIPE_CANCEL_URL = Config.STRIPE_CANCEL_URL;
+export const GOOGLE_PLACES_API_KEY = Config.GOOGLE_PLACES_API_KEY;

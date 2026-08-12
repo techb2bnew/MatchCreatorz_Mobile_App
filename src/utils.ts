@@ -2,9 +2,8 @@
 import { Dimensions, PixelRatio } from 'react-native';
 import { PermissionsAndroid, Platform, Alert } from 'react-native';
 import {
-  ERROR_CITY_REQUIRED,
+  ERROR_ADDRESS_REQUIRED,
   ERROR_CONFIRM_PASSWORD_REQUIRED,
-  ERROR_COUNTRY_REQUIRED,
   ERROR_EMAIL_INVALID,
   ERROR_EMAIL_REQUIRED,
   ERROR_FULL_NAME_MIN,
@@ -85,13 +84,8 @@ export const validateOtp = (otp: string) => {
   return '';
 };
 
-export const validateCity = (city: string) => {
-  if (!city.trim()) return ERROR_CITY_REQUIRED;
-  return '';
-};
-
-export const validateCountry = (country: string) => {
-  if (!country.trim()) return ERROR_COUNTRY_REQUIRED;
+export const validateAddress = (address: string) => {
+  if (!address.trim()) return ERROR_ADDRESS_REQUIRED;
   return '';
 };
 
