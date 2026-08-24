@@ -27,6 +27,7 @@ export const openAttachment = url => {
 const STATUS_META = {
   paid: { label: 'Paid', bg: '#E8F8EE', text: greenColor },
   submitted: { label: 'Submitted', bg: '#E7EEFB', text: '#3B6981' },
+  countered: { label: 'Countered', bg: '#FFF4E5', text: '#B26A00' },
   rejected: { label: 'Rejected', bg: '#FDECEC', text: redColor },
   not_submitted: { label: 'Not submitted', bg: '#F3F4F6', text: grayColor },
 };
@@ -34,8 +35,8 @@ const STATUS_META = {
 /**
  * Renders a booking's milestones + role-appropriate actions (real API driven).
  *  - seller: not_submitted/rejected → Submit / Resubmit.
- *  - buyer:  submitted + held        → Accept (+ Reject)
- *            submitted + needsPay     → Pay Now (+ Reject)
+ *  - buyer:  submitted → Accept & Pay / Counter / Reject
+ *  - countered by buyer → seller can Accept the countered amount or counter back
  * busyId = the milestone id currently mid-action (shows a spinner).
  */
 const MilestonesSection = ({
@@ -45,6 +46,9 @@ const MilestonesSection = ({
   onSubmit,
   onAcceptPay,
   onReject,
+  onCounter,
+  onAcceptCounter,
+  onCounterBack,
 }) => {
   if (!milestones.length) return null;
 
@@ -72,6 +76,9 @@ const MilestonesSection = ({
         const sellerCanSubmit =
           role === 'seller' && (m.status === 'not_submitted' || m.status === 'rejected');
         const buyerSubmitted = role === 'buyer' && m.status === 'submitted';
+        const buyerCountered = m.status === 'countered' && m.counterBy === 'buyer';
+        const sellerCountered = m.status === 'countered' && m.counterBy === 'seller';
+        const sellerCanRespond = role === 'seller' && buyerCountered;
 
         return (
           <View key={String(m.id)} style={styles.card}>
@@ -124,6 +131,57 @@ const MilestonesSection = ({
               </View>
             ) : null}
 
+            {buyerCountered ? (
+              <View style={styles.counterBox}>
+                <Text style={[styles.counterText, style.fontWeightThin]}>
+                  {role === 'seller'
+                    ? `Buyer offered ${fmt(m.counterAmount)} instead of ${fmt(m.amount)}.`
+                    : `You offered ${fmt(m.counterAmount)} instead of ${fmt(m.amount)}. Waiting for seller to respond.`}
+                </Text>
+                {m.counterNote ? (
+                  <Text style={[styles.counterNote, style.fontWeightThin]}>{m.counterNote}</Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            {sellerCountered ? (
+              <View style={styles.counterBox}>
+                <Text style={[styles.counterText, style.fontWeightThin]}>
+                  {role === 'seller'
+                    ? `You countered back with ${fmt(m.counterAmount)}. Waiting for buyer to respond.`
+                    : `Seller countered back with ${fmt(m.counterAmount)}.`}
+                </Text>
+                {m.counterNote ? (
+                  <Text style={[styles.counterNote, style.fontWeightThin]}>{m.counterNote}</Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            {sellerCanRespond ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.acceptFullBtn, alignJustifyCenter]}
+                  onPress={() => onAcceptCounter?.(m)}
+                  disabled={busy}
+                  activeOpacity={0.85}>
+                  {busy ? (
+                    <ActivityIndicator size="small" color={whiteColor} />
+                  ) : (
+                    <Text style={[styles.acceptText, style.fontWeightMedium]}>
+                      Accept {fmt(m.counterAmount)}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.counterBackBtn, alignJustifyCenter]}
+                  onPress={() => onCounterBack?.(m)}
+                  disabled={busy}
+                  activeOpacity={0.85}>
+                  <Text style={[styles.rejectText, style.fontWeightMedium]}>Counter back</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+
             {sellerCanSubmit ? (
               <TouchableOpacity
                 style={[styles.submitBtn, alignJustifyCenter]}
@@ -141,16 +199,27 @@ const MilestonesSection = ({
             ) : null}
 
             {buyerSubmitted ? (
-              <View style={[styles.buyerActions, flexDirectionRow]}>
+              <>
+                <View style={[styles.buyerActions, flexDirectionRow]}>
+                  <TouchableOpacity
+                    style={[styles.rejectBtn, alignJustifyCenter]}
+                    onPress={() => onReject?.(m)}
+                    disabled={busy}
+                    activeOpacity={0.85}>
+                    <Text style={[styles.rejectText, style.fontWeightMedium]}>Reject</Text>
+                  </TouchableOpacity>
+                  {onCounter ? (
+                    <TouchableOpacity
+                      style={[styles.rejectBtn, alignJustifyCenter]}
+                      onPress={() => onCounter?.(m)}
+                      disabled={busy}
+                      activeOpacity={0.85}>
+                      <Text style={[styles.rejectText, style.fontWeightMedium]}>Counter</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
                 <TouchableOpacity
-                  style={[styles.rejectBtn, alignJustifyCenter]}
-                  onPress={() => onReject?.(m)}
-                  disabled={busy}
-                  activeOpacity={0.85}>
-                  <Text style={[styles.rejectText, style.fontWeightMedium]}>Reject</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.acceptBtn, alignJustifyCenter]}
+                  style={[styles.acceptFullBtn, alignJustifyCenter]}
                   onPress={() => onAcceptPay?.(m)}
                   disabled={busy}
                   activeOpacity={0.85}>
@@ -160,7 +229,7 @@ const MilestonesSection = ({
                     <Text style={[styles.acceptText, style.fontWeightMedium]}>Accept &amp; Pay</Text>
                   )}
                 </TouchableOpacity>
-              </View>
+              </>
             ) : null}
           </View>
         );
@@ -238,5 +307,30 @@ const styles = StyleSheet.create({
   },
   rejectText: { fontSize: style.fontSizeSmall1x.fontSize, color: blackColor },
   acceptBtn: { flex: 1.4, minHeight: 42, borderRadius: 10, backgroundColor: greenColor },
+  acceptFullBtn: {
+    marginTop: spacings.small,
+    minHeight: 44,
+    borderRadius: 10,
+    backgroundColor: greenColor,
+  },
+  counterBackBtn: {
+    marginTop: spacings.small,
+    minHeight: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: borderLightColor,
+  },
+  counterBox: {
+    backgroundColor: '#FFF4E5',
+    borderRadius: 10,
+    padding: spacings.normal,
+    marginTop: spacings.xsmall,
+  },
+  counterText: { fontSize: style.fontSizeSmall1x.fontSize, color: blackColor },
+  counterNote: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: grayColor,
+    marginTop: spacings.xsmall,
+  },
   acceptText: { fontSize: style.fontSizeSmall1x.fontSize, color: whiteColor },
 });

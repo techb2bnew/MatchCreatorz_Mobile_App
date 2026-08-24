@@ -343,25 +343,21 @@ export const logoutUserApi = async token => {
   }
 };
 
-const buildForgotIdentifierPayload = ({ email, phone }) => {
-  const payload = {};
-  const phoneDigits = (phone || '').replace(/\D/g, '');
-
-  if (email?.trim()) {
-    payload.email = email.trim().toLowerCase();
-  } else if (phoneDigits) {
-    payload.phone = phone.startsWith('+') ? phone : `+91${phoneDigits}`;
-  }
-
-  return payload;
+// Phone numbers go to the API in E.164 form.
+const toE164 = phone => {
+  const raw = String(phone || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  return raw.startsWith('+') ? raw : `+91${digits}`;
 };
 
 /**
- * POST /api/v1/auth/forgot-password
- * Body: { email } OR { phone } (exactly one)
+ * POST /api/v1/auth/forgot-password — EMAIL only.
+ * Phone resets use sendPhoneOtpApi + verifyForgotPhoneApi instead
+ * (per swagger: "Password reset by phone no longer goes through this endpoint").
  */
-export const forgotPasswordApi = async ({ email, phone }) => {
-  const payload = buildForgotIdentifierPayload({ email, phone });
+export const forgotPasswordApi = async ({ email }) => {
+  const payload = { email: String(email || '').trim().toLowerCase() };
   console.log('[ForgotPassword] Payload >>>', JSON.stringify(payload, null, 2));
 
   try {
@@ -382,13 +378,12 @@ export const forgotPasswordApi = async ({ email, phone }) => {
 };
 
 /**
- * POST /api/v1/auth/verify-forgot-otp
- * Body: { email?, phone?, otp } — same identifier used in forgot-password
- * Returns: data.reset_token
+ * POST /api/v1/auth/verify-forgot-otp — email OTP.
+ * Body: { email, otp } → data.reset_token
  */
-export const verifyForgotOtpApi = async ({ email, phone, otp }) => {
+export const verifyForgotOtpApi = async ({ email, otp }) => {
   const payload = {
-    ...buildForgotIdentifierPayload({ email, phone }),
+    email: String(email || '').trim().toLowerCase(),
     otp: String(otp || '').trim(),
   };
   console.log('[VerifyForgotOtp] Payload >>>', JSON.stringify(payload, null, 2));
@@ -402,6 +397,57 @@ export const verifyForgotOtpApi = async ({ email, phone, otp }) => {
     return response;
   } catch (error) {
     console.log('[VerifyForgotOtp] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * POST /api/v1/auth/send-phone-otp — Twilio Verify SMS OTP.
+ * Body: { phone } (E.164). Shared by signup's phone-verify step and the
+ * forgot-password phone tab.
+ */
+export const sendPhoneOtpApi = async ({ phone }) => {
+  const payload = { phone: toE164(phone) };
+  console.log('[SendPhoneOtp] Payload >>>', JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.AUTH_SEND_PHONE_OTP, {
+      method: 'POST',
+      body: payload,
+    });
+    console.log('[SendPhoneOtp] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[SendPhoneOtp] Error response <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * POST /api/v1/auth/verify-forgot-phone — phone OTP for password reset.
+ * Body: { phone, otp } → data.reset_token
+ */
+export const verifyForgotPhoneApi = async ({ phone, otp }) => {
+  const payload = { phone: toE164(phone), otp: String(otp || '').trim() };
+  console.log('[VerifyForgotPhone] Payload >>>', JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await apiRequest(API_ENDPOINTS.AUTH_VERIFY_FORGOT_PHONE, {
+      method: 'POST',
+      body: payload,
+    });
+    console.log('[VerifyForgotPhone] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[VerifyForgotPhone] Error response <<<', {
       status: error?.status,
       message: error?.message,
       data: error?.data,

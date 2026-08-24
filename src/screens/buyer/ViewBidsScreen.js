@@ -34,13 +34,14 @@ import {
   redColor,
   whiteColor,
 } from '../../constans/Color';
-import { style } from '../../constans/Fonts';
+import { style, spacings } from '../../constans/Fonts';
 import {
   BID_STATUS_COUNTERED,
   BIDS_SUFFIX,
   BUYER_TABS,
   COUNTER_OFFER_BTN,
   COUNTER_OFFER_MODAL,
+  BID_ANSWERS_TITLE,
   COUNTERED_BY_LABEL,
   EMPTY_BIDS_MESSAGE,
   EMPTY_BIDS_TITLE,
@@ -137,6 +138,13 @@ const getBidStatusStyle = status => {
   return { bg: '#F3F4F6', text: grayColor };
 };
 
+// Answers line up with job.questions by index (API contract).
+const extractBidAnswers = bid => {
+  const list = bid?.answers ?? bid?.question_answers ?? [];
+  if (!Array.isArray(list)) return [];
+  return list.map(a => (typeof a === 'string' ? a : a?.answer || a?.text || ''));
+};
+
 const mapApiBidToUi = bid => {
   const seller = bid.seller || bid.creator || bid.user || {};
   const creatorName =
@@ -168,6 +176,7 @@ const mapApiBidToUi = bid => {
     statusLabel: formatBidStatus(bid.status),
     isCountered: isCounteredStatus(status),
     counterNote,
+    answers: extractBidAnswers(bid),
     hired: status === 'accepted' || Boolean(bid.hired),
     rejected: status === 'rejected',
     raw: bid,
@@ -178,6 +187,12 @@ const ViewBidsScreen = ({ navigation, route }) => {
   const { token } = useSelector(selectAuth);
   const routeJob = route.params?.job;
   const jobId = routeJob?.id;
+  const jobQuestionsRaw = routeJob?.questions ?? routeJob?.raw?.questions ?? [];
+  const jobQuestions = Array.isArray(jobQuestionsRaw)
+    ? jobQuestionsRaw
+        .map(q => (typeof q === 'string' ? q : q?.question || q?.text || ''))
+        .filter(Boolean)
+    : [];
 
   const [searchQuery, setSearchQuery] = useState('');
   const [bids, setBids] = useState([]);
@@ -504,6 +519,24 @@ const ViewBidsScreen = ({ navigation, route }) => {
                       />
                     ) : null}
 
+                    {bid.answers?.length ? (
+                      <View style={styles.answersWrap}>
+                        <Text style={[styles.answersLabel, style.fontWeightMedium]}>
+                          {BID_ANSWERS_TITLE}
+                        </Text>
+                        {bid.answers.map((answer, index) => (
+                          <View key={`a-${index}`} style={styles.answerBlock}>
+                            <Text style={[styles.answerQuestion, style.fontWeightMedium]}>
+                              {index + 1}. {jobQuestions[index] || `Question ${index + 1}`}
+                            </Text>
+                            <Text style={[styles.answerText, style.fontWeightThin]}>
+                              {String(answer || '').trim() || '—'}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+
                     {bid.isCountered && bid.counterNote ? (
                       <View style={styles.counterNoteWrap}>
                         <Text style={[styles.counterNoteLabel, style.fontWeightMedium]}>
@@ -763,6 +796,20 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: hp(1.5),
   },
+  answersWrap: {
+    backgroundColor: inputBgColor,
+    borderRadius: 10,
+    padding: spacings.normal,
+    marginTop: spacings.small,
+  },
+  answersLabel: {
+    fontSize: style.fontSizeExtraSmall.fontSize,
+    color: grayColor,
+    marginBottom: spacings.small,
+  },
+  answerBlock: { marginBottom: spacings.small },
+  answerQuestion: { fontSize: style.fontSizeSmall1x.fontSize, color: blackColor },
+  answerText: { fontSize: style.fontSizeSmall1x.fontSize, color: grayColor, marginTop: 2 },
   counterNoteWrap: {
     backgroundColor: '#F3E8FF',
     borderRadius: wp(2),

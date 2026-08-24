@@ -36,6 +36,7 @@ import {
 } from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import MilestonesSection from '../MilestonesSection';
+import WorkEntriesSection from '../WorkEntriesSection';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -82,6 +83,18 @@ const SellerBookingDetailModal = ({
   milestones = [],
   milestoneBusyId,
   onSubmitMilestone,
+  onAcceptMilestoneCounter,
+  onCounterMilestoneBack,
+  // Hourly bookings: dated work entries instead of a single work submission.
+  isHourly = false,
+  workEntries = [],
+  workEntryBusyId,
+  hourlyRate = 0,
+  weeklyLimit = null,
+  weeklyUsed = 0,
+  onLogWork,
+  onAcceptWorkEntryCounter,
+  onCounterWorkEntryBack,
 }) => {
   const statusStyle = getBookingStatusStyle(booking?.status);
 
@@ -202,12 +215,37 @@ const SellerBookingDetailModal = ({
                     />
                   ) : null}
 
-                  <MilestonesSection
-                    milestones={milestones}
-                    role="seller"
-                    busyId={milestoneBusyId}
-                    onSubmit={onSubmitMilestone}
-                  />
+                  {isHourly ? (
+                    <>
+                      <WorkEntriesSection
+                        entries={workEntries}
+                        role="seller"
+                        busyId={workEntryBusyId}
+                        hourlyRate={hourlyRate}
+                        weeklyLimit={weeklyLimit}
+                        weeklyUsed={weeklyUsed}
+                        onAcceptCounter={onAcceptWorkEntryCounter}
+                        onCounterBack={onCounterWorkEntryBack}
+                      />
+                      {onLogWork ? (
+                        <TouchableOpacity
+                          style={[styles.logWorkBtn, alignJustifyCenter]}
+                          onPress={onLogWork}
+                          activeOpacity={0.85}>
+                          <Text style={[styles.logWorkText, style.fontWeightMedium]}>Log work</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </>
+                  ) : (
+                    <MilestonesSection
+                      milestones={milestones}
+                      role="seller"
+                      busyId={milestoneBusyId}
+                      onSubmit={onSubmitMilestone}
+                      onAcceptCounter={onAcceptMilestoneCounter}
+                      onCounterBack={onCounterMilestoneBack}
+                    />
+                  )}
                 </>
               ) : null}
             </ScrollView>
@@ -221,6 +259,13 @@ const SellerBookingDetailModal = ({
 export default SellerBookingDetailModal;
 
 const styles = StyleSheet.create({
+  logWorkBtn: {
+    marginTop: spacings.small,
+    minHeight: 46,
+    borderRadius: 12,
+    backgroundColor: redColor,
+  },
+  logWorkText: { fontSize: style.fontSizeNormal2x.fontSize, color: whiteColor },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',

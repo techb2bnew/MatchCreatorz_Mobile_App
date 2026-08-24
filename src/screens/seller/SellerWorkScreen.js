@@ -107,11 +107,20 @@ import EmptyState from '../../components/EmptyState';
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import CounterOfferModal from '../../components/modal/CounterOfferModal';
 import SellerBookingDetailModal from '../../components/modal/SellerBookingDetailModal';
+import LogWorkEntryModal from '../../components/modal/LogWorkEntryModal';
+import WorkEntryActionModal from '../../components/modal/WorkEntryActionModal';
 import SubmitWorkModal from '../../components/modal/SubmitWorkModal';
 import SplitMilestonesModal from '../../components/modal/SplitMilestonesModal';
 import SubmitMilestoneModal from '../../components/modal/SubmitMilestoneModal';
 import RichTextInline from '../../components/RichTextInline';
 import { extractMilestones } from '../../utils/milestones';
+import {
+  extractWorkEntries,
+  getBookingHourlyRate,
+  getWeeklyHourLimit,
+  hoursUsedInWeek,
+  isHourlyBooking,
+} from '../../utils/workEntries';
 import { selectAuth } from '../../redux/slices/authSlice';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { createOrGetConversationApi } from '../../services/chatService';
@@ -127,6 +136,11 @@ import {
   cancelSellerBookingApi,
   acceptSellerJobBidApi,
   counterSellerJobBidApi,
+  logSellerWorkEntryApi,
+  acceptWorkEntryCounterApi,
+  counterWorkEntryApi,
+  acceptMilestoneCounterApi,
+  counterMilestoneBackApi,
 } from '../../services/sellerService';
 import { heightPercentageToDP as hp, widthPercentageToDP as wp } from '../../utils';
 import { formatAppCurrency, formatAppPrice } from '../../utils/currency';
@@ -455,6 +469,166 @@ const SellerWorkScreen = ({ navigation, route }) => {
     }
   };
 
+  // ---- Hourly work entries -------------------------------------------------
+  // Money only moves on approve / accept-counter, so every action disables its
+  // button immediately and refetches the booking afterwards.
+  const refreshBookingDetail = bookingId =>
+    loadSellerBookingDetail(bookingId, { showLoader: false });
+
+  const openLogWorkModal = () => {
+    setBookingDetailModal(prev => ({ ...prev, visible: false }));
+    setTimeout(() => setLogWorkModal({ visible: true, loading: false }), 250);
+  };
+
+  const closeLogWorkModal = () => {
+    if (logWorkModal.loading) return;
+    setLogWorkModal({ visible: false, loading: false });
+    setTimeout(() => setBookingDetailModal(prev => ({ ...prev, visible: true })), 250);
+  };
+
+  const handleLogWorkEntry = async ({ workDate, hours, description, files }) => {
+    const bookingId = bookingDetailModal.bookingId;
+    if (!token || !bookingId || logWorkModal.loading) return;
+
+    setLogWorkModal(prev => ({ ...prev, loading: true }));
+    try {
+      // Files go to S3 first (same upload endpoint the whole-booking submit
+      // uses), then the entry carries their urls.
+      let attachments = [];
+      if (Array.isArray(files) && files.length) {
+        const uploaded = await Promise.all(
+          files.map(f => uploadBookingAttachmentApi(token, f).catch(() => null)),
+        );
+        attachments = uploaded
+          .filter(Boolean)
+          .map(r => {
+            const d = r?.data || r;
+            return { url: d?.url, name: d?.name, type: d?.type, size: d?.size };
+          })
+          .filter(a => a.url);
+      }
+      await logSellerWorkEntryApi(token, bookingId, { workDate, hours, description, attachments });
+      setLogWorkModal({ visible: false, loading: false });
+      await refreshBookingDetail(bookingId);
+      setBookingDetailModal(prev => ({ ...prev, visible: true }));
+      hasMoreBookingsRef.current = true;
+      bookingsPageRef.current = 1;
+      fetchSellerBookings(1, { isLoadMore: false });
+    } catch (error) {
+      setLogWorkModal(prev => ({ ...prev, loading: false }));
+      // The weekly-limit / not-hourly 400 messages are already user-facing.
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Could not log work.'));
+    }
+  };
+
+  const handleAcceptWorkEntryCounter = entry => {
+    const bookingId = bookingDetailModal.bookingId;
+    if (!token || !bookingId || !entry?.id || workEntryBusyId != null) return;
+
+    Alert.alert(
+      'Accept counter',
+      `Accept payment for ${entry.counterHours}h instead of ${entry.hours}h? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          onPress: async () => {
+            setWorkEntryBusyId(entry.id);
+            try {
+              await acceptWorkEntryCounterApi(token, bookingId, entry.id);
+              await refreshBookingDetail(bookingId);
+            } catch (error) {
+              Alert.alert(
+                '',
+                getApiErrorMessage(error?.data, error?.message || 'Could not accept the counter.'),
+              );
+            } finally {
+              setWorkEntryBusyId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const openCounterBackModal = (entry, target = 'entry') => {
+    setActionTarget(target);
+    setBookingDetailModal(prev => ({ ...prev, visible: false }));
+    setTimeout(
+      () =>
+        setEntryActionModal({
+          visible: true,
+          mode: target === 'milestone' ? 'amount' : 'counter',
+          entry,
+          loading: false,
+        }),
+      250,
+    );
+  };
+
+  // Seller accepts the buyer's counter on a milestone — paid at that amount.
+  const handleAcceptMilestoneCounter = milestone => {
+    const bookingId = bookingDetailModal.bookingId;
+    if (!token || !bookingId || milestone?.id == null || milestoneBusyId != null) return;
+
+    Alert.alert(
+      'Accept counter',
+      `Accept ${formatAppCurrency(milestone.counterAmount)} instead of ${formatAppCurrency(
+        milestone.amount,
+      )}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          onPress: async () => {
+            setMilestoneBusyId(milestone.id);
+            try {
+              await acceptMilestoneCounterApi(token, bookingId, milestone.id);
+            } catch (error) {
+              // 409 = already settled (duplicate/retry) — just resync.
+              if (error?.status !== 409) {
+                Alert.alert(
+                  '',
+                  getApiErrorMessage(error?.data, error?.message || 'Could not accept the counter.'),
+                );
+              }
+            } finally {
+              await refreshBookingDetail(bookingId).catch(() => {});
+              setMilestoneBusyId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const closeEntryActionModal = () => {
+    if (entryActionModal.loading) return;
+    setEntryActionModal({ visible: false, mode: 'counter', entry: null, loading: false });
+    setTimeout(() => setBookingDetailModal(prev => ({ ...prev, visible: true })), 250);
+  };
+
+  const handleCounterBack = async ({ counterHours, counterAmount, counterNote }) => {
+    const bookingId = bookingDetailModal.bookingId;
+    const entry = entryActionModal.entry;
+    if (!token || !bookingId || entry?.id == null || entryActionModal.loading) return;
+
+    setEntryActionModal(prev => ({ ...prev, loading: true }));
+    try {
+      if (actionTarget === 'milestone') {
+        await counterMilestoneBackApi(token, bookingId, entry.id, { counterAmount, counterNote });
+      } else {
+        await counterWorkEntryApi(token, bookingId, entry.id, { counterHours, counterNote });
+      }
+      setEntryActionModal({ visible: false, mode: 'counter', entry: null, loading: false });
+      await refreshBookingDetail(bookingId);
+      setBookingDetailModal(prev => ({ ...prev, visible: true }));
+    } catch (error) {
+      setEntryActionModal(prev => ({ ...prev, loading: false }));
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Could not send the counter.'));
+    }
+  };
+
   const openSubmitWorkModal = async booking => {
     if (!token || !booking?.id) return;
     // If this booking is already split into milestones, don't allow a whole-work
@@ -462,6 +636,23 @@ const SellerWorkScreen = ({ navigation, route }) => {
     try {
       const response = await getSellerBookingByIdApi(token, booking.id);
       const detail = response?.data || response;
+      // Hourly bookings no longer use the whole-booking submit endpoint — the
+      // seller logs dated work entries from the booking detail sheet instead.
+      if (isHourlyBooking(detail)) {
+        setBookingDetailModal({
+          visible: true,
+          loading: false,
+          booking: mapApiBookingToUi(detail),
+          bookingId: booking.id,
+          milestones: extractMilestones(detail),
+          isHourly: true,
+          workEntries: extractWorkEntries(detail),
+          hourlyRate: getBookingHourlyRate(detail),
+          weeklyLimit: getWeeklyHourLimit(detail),
+          error: '',
+        });
+        return;
+      }
       const ms = extractMilestones(detail);
       if (ms.length) {
         // Show the notice first; open the detail sheet only after the user taps
@@ -581,9 +772,31 @@ const SellerWorkScreen = ({ navigation, route }) => {
     booking: null,
     bookingId: null,
     milestones: [],
+    isHourly: false,
+    workEntries: [],
+    hourlyRate: 0,
+    weeklyLimit: null,
     error: '',
   });
   const [milestoneBusyId, setMilestoneBusyId] = useState(null);
+  const [workEntryBusyId, setWorkEntryBusyId] = useState(null);
+  const [logWorkModal, setLogWorkModal] = useState({ visible: false, loading: false });
+  const [entryActionModal, setEntryActionModal] = useState({
+    visible: false,
+    mode: 'counter',
+    entry: null,
+    loading: false,
+  });
+  // Which flow the shared action sheet is serving: work entry or milestone.
+  const [actionTarget, setActionTarget] = useState('entry');
+
+  // apiStatus is the raw backend value (ongoing / in_dispute / …).
+  const detailBookingStatus = String(
+    bookingDetailModal.booking?.apiStatus || bookingDetailModal.booking?.status || '',
+  ).toLowerCase();
+  const canLogWorkForDetail =
+    bookingDetailModal.isHourly &&
+    (detailBookingStatus.includes('ongoing') || detailBookingStatus.includes('dispute'));
   const [counterModal, setCounterModal] = useState({ visible: false, bid: null, loading: false, error: '' });
 
   const [bids, setBids] = useState([]);
@@ -905,6 +1118,10 @@ const SellerWorkScreen = ({ navigation, route }) => {
         booking: mapApiBookingToUi(detail),
         bookingId,
         milestones: extractMilestones(detail),
+        isHourly: isHourlyBooking(detail),
+        workEntries: extractWorkEntries(detail),
+        hourlyRate: getBookingHourlyRate(detail),
+        weeklyLimit: getWeeklyHourLimit(detail),
         error: '',
       });
     } catch (error) {
@@ -1562,6 +1779,17 @@ const SellerWorkScreen = ({ navigation, route }) => {
         milestones={bookingDetailModal.milestones}
         milestoneBusyId={milestoneBusyId}
         onSubmitMilestone={m => openSubmitMilestone(bookingDetailModal.bookingId, m)}
+        onAcceptMilestoneCounter={handleAcceptMilestoneCounter}
+        onCounterMilestoneBack={m => openCounterBackModal(m, 'milestone')}
+        isHourly={bookingDetailModal.isHourly}
+        workEntries={bookingDetailModal.workEntries}
+        workEntryBusyId={workEntryBusyId}
+        hourlyRate={bookingDetailModal.hourlyRate}
+        weeklyLimit={bookingDetailModal.weeklyLimit}
+        weeklyUsed={hoursUsedInWeek(bookingDetailModal.workEntries)}
+        onLogWork={canLogWorkForDetail ? openLogWorkModal : null}
+        onAcceptWorkEntryCounter={handleAcceptWorkEntryCounter}
+        onCounterWorkEntryBack={openCounterBackModal}
         onClose={closeBookingDetailModal}
       />
 
@@ -1572,6 +1800,25 @@ const SellerWorkScreen = ({ navigation, route }) => {
         onSubmit={handleSubmitWork}
         onSplitMilestones={openSplitFromSubmit}
         loading={isSubmittingWork}
+      />
+
+      <LogWorkEntryModal
+        visible={logWorkModal.visible}
+        hourlyRate={bookingDetailModal.hourlyRate}
+        weeklyLimit={bookingDetailModal.weeklyLimit}
+        weeklyUsed={hoursUsedInWeek(bookingDetailModal.workEntries)}
+        loading={logWorkModal.loading}
+        onClose={closeLogWorkModal}
+        onSubmit={handleLogWorkEntry}
+      />
+
+      <WorkEntryActionModal
+        visible={entryActionModal.visible}
+        mode={entryActionModal.mode}
+        entry={entryActionModal.entry}
+        loading={entryActionModal.loading}
+        onClose={closeEntryActionModal}
+        onSubmit={handleCounterBack}
       />
 
       <SplitMilestonesModal

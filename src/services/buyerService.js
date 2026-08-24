@@ -168,6 +168,12 @@ const capitalizeFirstLetter = value => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
+const buildQuestionsPayload = questions =>
+  (Array.isArray(questions) ? questions : [])
+    .map(q => String(q || '').trim())
+    .filter(Boolean)
+    .slice(0, 10);
+
 export const buildCreateJobPayload = form => {
   const skills = String(form.skills || '')
     .split(',')
@@ -194,6 +200,9 @@ export const buildCreateJobPayload = form => {
     payload.attachments = form.attachments;
   }
 
+  const questions = buildQuestionsPayload(form.questions);
+  if (questions.length) payload.questions = questions;
+
   return payload;
 };
 
@@ -215,6 +224,9 @@ export const buildUpdateJobPayload = form => {
   if (Array.isArray(form.attachments) && form.attachments.length) {
     payload.attachments = form.attachments;
   }
+
+  // Always sent on update — the API replaces the list, so an empty array clears it.
+  payload.questions = buildQuestionsPayload(form.questions);
 
   return payload;
 };
@@ -798,6 +810,87 @@ export const acceptBuyerMilestoneApi = async (token, bookingId, milestoneId) => 
     return response;
   } catch (error) {
     console.log('[BuyerMilestoneAccept] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/buyer/bookings/{id}/milestones/{milestoneId}/counter
+ * Offer to pay less than the submitted milestone amount.
+ * Body: { counter_amount, counter_note? } — counter_amount <= submitted amount.
+ */
+export const counterBuyerMilestoneApi = async (token, bookingId, milestoneId, { counterAmount, counterNote } = {}) => {
+  const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/milestones/${milestoneId}/counter`;
+  const payload = { counter_amount: Number(counterAmount) };
+  if (counterNote != null && String(counterNote).trim()) {
+    payload.counter_note = String(counterNote).trim();
+  }
+  console.log('[MilestoneCounter] Payload >>>', JSON.stringify({ endpoint, payload }));
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', body: payload, token });
+    console.log('[MilestoneCounter] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[MilestoneCounter] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/buyer/bookings/{id}/work-entries/{entryId}/approve
+ * Approve a logged work entry — pays the seller at its full hours.
+ * 409 → already processed (duplicate/retry): treat as a soft success, just refresh.
+ */
+export const approveWorkEntryApi = async (token, bookingId, entryId) => {
+  const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/work-entries/${entryId}/approve`;
+  console.log('[WorkEntryApprove] Payload >>>', { endpoint, bookingId, entryId });
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', headers: { Accept: '*/*' }, token });
+    console.log('[WorkEntryApprove] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[WorkEntryApprove] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/buyer/bookings/{id}/work-entries/{entryId}/counter
+ * Offer to pay for fewer hours than logged. Body: { counter_hours, counter_note? }
+ */
+export const counterWorkEntryApi = async (token, bookingId, entryId, { counterHours, counterNote } = {}) => {
+  const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/work-entries/${entryId}/counter`;
+  const payload = { counter_hours: Number(counterHours) };
+  if (counterNote != null && String(counterNote).trim()) {
+    payload.counter_note = String(counterNote).trim();
+  }
+  console.log('[WorkEntryCounter] Payload >>>', JSON.stringify({ endpoint, payload }));
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', body: payload, token });
+    console.log('[WorkEntryCounter] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[WorkEntryCounter] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/buyer/bookings/{id}/work-entries/{entryId}/dispute
+ * Escalate just this entry to admin (not the whole booking).
+ * Body: { dispute_reason? }
+ */
+export const disputeWorkEntryApi = async (token, bookingId, entryId, disputeReason = '') => {
+  const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/work-entries/${entryId}/dispute`;
+  const payload = {};
+  if (String(disputeReason || '').trim()) payload.dispute_reason = String(disputeReason).trim();
+  console.log('[WorkEntryDispute] Payload >>>', JSON.stringify({ endpoint, payload }));
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', body: payload, token });
+    console.log('[WorkEntryDispute] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[WorkEntryDispute] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
     throw error;
   }
 };

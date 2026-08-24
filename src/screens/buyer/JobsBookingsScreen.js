@@ -12,6 +12,7 @@ import {
   Modal,
   Alert,
   Image,
+  TextInput,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,6 +38,10 @@ import {
   createBuyerJobApi,
   updateBuyerJobApi,
   uploadBuyerJobAttachmentsApi,
+  approveWorkEntryApi,
+  counterWorkEntryApi,
+  disputeWorkEntryApi,
+  counterBuyerMilestoneApi,
 } from '../../services/buyerService';
 import { getCategoriesApi } from '../../services/sellerService';
 import { createOrGetConversationApi } from '../../services/chatService';
@@ -118,6 +123,10 @@ import {
   POST_JOB_ATTACHMENTS_HINT,
   POST_JOB_BTN,
   POST_JOB_LABELS,
+  MAX_JOB_QUESTIONS,
+  JOB_QUESTIONS_HINT,
+  JOB_QUESTION_PLACEHOLDER,
+  ADD_JOB_QUESTION,
   POST_JOB_PLACEHOLDERS,
   POST_JOB_SUBTITLE,
   POST_JOB_TIPS,
@@ -138,6 +147,13 @@ import CustomTextInput from '../../components/CustomTextInput';
 import RichTextEditor from '../../components/RichTextEditor';
 import RichTextInline from '../../components/RichTextInline';
 import { extractMilestones, extractSubmittedWork } from '../../utils/milestones';
+import {
+  extractWorkEntries,
+  getBookingHourlyRate,
+  getWeeklyHourLimit,
+  hoursUsedInWeek,
+  isHourlyBooking,
+} from '../../utils/workEntries';
 import CustomButton from '../../components/CustomButton';
 import CustomDropdown from '../../components/CustomDropdown';
 import FormLabel from '../../components/FormLabel';
@@ -146,6 +162,7 @@ import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import JobDetailModal from '../../components/modal/JobDetailModal';
 import BookingDetailModal from '../../components/modal/BookingDetailModal';
+import WorkEntryActionModal from '../../components/modal/WorkEntryActionModal';
 import BuyerServiceDetailModal from '../../components/modal/BuyerServiceDetailModal';
 import ConfirmBookingModal from '../../components/modal/ConfirmBookingModal';
 import SubmitReviewModal from '../../components/modal/SubmitReviewModal';
@@ -321,9 +338,17 @@ const EMPTY_POST_JOB_FORM = {
   deadline: '',
   experienceLevel: 'Any Level',
   skills: '',
+  questions: [],
 };
 
 const JOBS_PAGE_LIMIT = 20;
+
+// Screening questions arrive as an array of strings; older jobs have none.
+const extractJobQuestions = job => {
+  const list = job?.questions ?? job?.screening_questions ?? [];
+  if (!Array.isArray(list)) return [];
+  return list.map(q => (typeof q === 'string' ? q : q?.question || q?.text || '')).filter(Boolean);
+};
 
 const extractJobsList = response => {
   const data = response?.data;
@@ -523,6 +548,7 @@ const mapJobDetailToForm = job => {
     deadline: deadlineDate ? formatIsoDate(deadlineDate) : '',
     experienceLevel: mapExperienceLevelToUi(job?.experience_level || job?.experienceLevel),
     skills,
+    questions: extractJobQuestions(job),
   };
 };
 
@@ -760,9 +786,22 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     booking: null,
     bookingId: null,
     milestones: [],
+    isHourly: false,
+    workEntries: [],
+    hourlyRate: 0,
+    weeklyLimit: null,
     error: '',
   });
   const [milestoneBusyId, setMilestoneBusyId] = useState(null);
+  const [workEntryBusyId, setWorkEntryBusyId] = useState(null);
+  const [entryActionModal, setEntryActionModal] = useState({
+    visible: false,
+    mode: 'counter',
+    entry: null,
+    loading: false,
+  });
+  // Which flow the shared action sheet is serving: work entry or milestone.
+  const [actionTarget, setActionTarget] = useState('entry');
   const [serviceDetailModal, setServiceDetailModal] = useState({
     visible: false,
     service: null,
@@ -1416,7 +1455,18 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   };
 
   const closeBookingDetailModal = () => {
-    setBookingDetailModal({ visible: false, loading: false, booking: null, bookingId: null, milestones: [], error: '' });
+    setBookingDetailModal({
+      visible: false,
+      loading: false,
+      booking: null,
+      bookingId: null,
+      milestones: [],
+      isHourly: false,
+      workEntries: [],
+      hourlyRate: 0,
+      weeklyLimit: null,
+      error: '',
+    });
   };
 
   // Loads booking detail + real milestones; reused after accept/pay/reject to sync.
@@ -1436,6 +1486,10 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         bookingId,
         milestones,
         submittedWork,
+        isHourly: isHourlyBooking(detail),
+        workEntries: extractWorkEntries(detail),
+        hourlyRate: getBookingHourlyRate(detail),
+        weeklyLimit: getWeeklyHourLimit(detail),
         error: '',
       });
       return { milestones, booking: bookingUi };
@@ -1485,6 +1539,85 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Action failed. Please try again.'));
     } finally {
       setMilestoneBusyId(null);
+    }
+  };
+
+  // ---- Hourly work entries -------------------------------------------------
+  const handleApproveWorkEntry = entry => {
+    const bookingId = bookingDetailModal.bookingId;
+    if (!token || !bookingId || entry?.id == null || workEntryBusyId != null) return;
+
+    Alert.alert(
+      'Approve & Pay',
+      `Pay for ${entry.hours}h on this entry? The amount is released to the seller and cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Approve & Pay',
+          onPress: async () => {
+            setWorkEntryBusyId(entry.id);
+            try {
+              await approveWorkEntryApi(token, bookingId, entry.id);
+            } catch (error) {
+              // 409 = this entry was already settled (double tap / retry).
+              // Not an error for the user — just refresh and show current state.
+              if (error?.status !== 409) {
+                Alert.alert(
+                  '',
+                  getApiErrorMessage(error?.data, error?.message || 'Could not approve this entry.'),
+                );
+              }
+            } finally {
+              await loadBuyerBookingDetail(bookingId, { showLoader: false }).catch(() => {});
+              setWorkEntryBusyId(null);
+              fetchBuyerBookings();
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const openEntryActionModal = (mode, entry, target = 'entry') => {
+    setActionTarget(target);
+    setBookingDetailModal(prev => ({ ...prev, visible: false }));
+    setTimeout(() => setEntryActionModal({ visible: true, mode, entry, loading: false }), 250);
+  };
+
+  const closeEntryActionModal = () => {
+    if (entryActionModal.loading) return;
+    setEntryActionModal({ visible: false, mode: 'counter', entry: null, loading: false });
+    setTimeout(() => setBookingDetailModal(prev => ({ ...prev, visible: true })), 250);
+  };
+
+  const handleEntryActionSubmit = async ({
+    counterHours,
+    counterAmount,
+    counterNote,
+    disputeReason,
+  }) => {
+    const bookingId = bookingDetailModal.bookingId;
+    const { entry, mode, loading } = entryActionModal;
+    if (!token || !bookingId || entry?.id == null || loading) return;
+
+    setEntryActionModal(prev => ({ ...prev, loading: true }));
+    try {
+      if (actionTarget === 'milestone') {
+        await counterBuyerMilestoneApi(token, bookingId, entry.id, { counterAmount, counterNote });
+      } else if (mode === 'counter') {
+        await counterWorkEntryApi(token, bookingId, entry.id, { counterHours, counterNote });
+      } else {
+        await disputeWorkEntryApi(token, bookingId, entry.id, disputeReason);
+      }
+      setEntryActionModal({ visible: false, mode: 'counter', entry: null, loading: false });
+      await loadBuyerBookingDetail(bookingId, { showLoader: false });
+      setBookingDetailModal(prev => ({ ...prev, visible: true }));
+    } catch (error) {
+      setEntryActionModal(prev => ({ ...prev, loading: false }));
+      Alert.alert(
+        '',
+        getApiErrorMessage(error?.data, error?.message || 'Could not complete that action.'),
+      );
     }
   };
 
@@ -1566,6 +1699,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         deadline: '',
         experienceLevel: mapExperienceLevelToUi(job.raw?.experience_level),
         skills: Array.isArray(job.raw?.skills) ? job.raw.skills.join(', ') : '',
+        questions: extractJobQuestions(job.raw),
       });
       setPostJobError(
         getApiErrorMessage(error?.data, error?.message || 'Failed to load job details.'),
@@ -1573,6 +1707,32 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     } finally {
       setIsLoadingJobDetail(false);
     }
+  };
+
+  // ---- Screening questions (buyer) ----------------------------------------
+  const jobQuestions = Array.isArray(postJobForm.questions) ? postJobForm.questions : [];
+
+  const updateJobQuestion = (index, value) => {
+    setPostJobForm(prev => {
+      const next = [...(prev.questions || [])];
+      next[index] = value;
+      return { ...prev, questions: next };
+    });
+  };
+
+  const addJobQuestion = () => {
+    setPostJobForm(prev => {
+      const list = prev.questions || [];
+      if (list.length >= MAX_JOB_QUESTIONS) return prev;
+      return { ...prev, questions: [...list, ''] };
+    });
+  };
+
+  const removeJobQuestion = index => {
+    setPostJobForm(prev => ({
+      ...prev,
+      questions: (prev.questions || []).filter((_, i) => i !== index),
+    }));
   };
 
   const handlePostJob = async () => {
@@ -2400,6 +2560,38 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           />
 
           <View style={styles.formField}>
+            <FormLabel label={POST_JOB_LABELS.questions} />
+            <Text style={[styles.questionsHint, style.fontWeightThin]}>{JOB_QUESTIONS_HINT}</Text>
+            {jobQuestions.map((question, index) => (
+              <View key={`q-${index}`} style={[styles.questionRow, flexDirectionRow, alignItemsCenter]}>
+                <Text style={[styles.questionIndex, style.fontWeightMedium]}>{index + 1}</Text>
+                <TextInput
+                  value={question}
+                  onChangeText={value => updateJobQuestion(index, value)}
+                  placeholder={JOB_QUESTION_PLACEHOLDER}
+                  placeholderTextColor={grayColor}
+                  onFocus={handleInputFocus}
+                  style={[styles.questionInput, style.fontSizeNormal2x]}
+                />
+                <TouchableOpacity
+                  onPress={() => removeJobQuestion(index)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Icon name="x" size={16} color={grayColor} />
+                </TouchableOpacity>
+              </View>
+            ))}
+            {jobQuestions.length < MAX_JOB_QUESTIONS ? (
+              <TouchableOpacity
+                style={[styles.addQuestionBtn, flexDirectionRow, alignItemsCenter]}
+                onPress={addJobQuestion}
+                activeOpacity={0.8}>
+                <Icon name="plus" size={14} color={redColor} />
+                <Text style={[styles.addQuestionText, style.fontWeightMedium]}>{ADD_JOB_QUESTION}</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          <View style={styles.formField}>
             <FormLabel label={POST_JOB_LABELS.attachments} />
             <TouchableOpacity
               activeOpacity={0.85}
@@ -2756,7 +2948,26 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         milestoneBusyId={milestoneBusyId}
         onAcceptPayMilestone={handleAcceptPayMilestone}
         onRejectMilestone={handleRejectMilestone}
+        onCounterMilestone={m => openEntryActionModal('amount', m, 'milestone')}
+        isHourly={bookingDetailModal.isHourly}
+        workEntries={bookingDetailModal.workEntries}
+        workEntryBusyId={workEntryBusyId}
+        hourlyRate={bookingDetailModal.hourlyRate}
+        weeklyLimit={bookingDetailModal.weeklyLimit}
+        weeklyUsed={hoursUsedInWeek(bookingDetailModal.workEntries)}
+        onApproveWorkEntry={handleApproveWorkEntry}
+        onCounterWorkEntry={entry => openEntryActionModal('counter', entry)}
+        onDisputeWorkEntry={entry => openEntryActionModal('dispute', entry)}
         onClose={closeBookingDetailModal}
+      />
+
+      <WorkEntryActionModal
+        visible={entryActionModal.visible}
+        mode={entryActionModal.mode}
+        entry={entryActionModal.entry}
+        loading={entryActionModal.loading}
+        onClose={closeEntryActionModal}
+        onSubmit={handleEntryActionSubmit}
       />
 
       <BuyerServiceDetailModal
@@ -3153,6 +3364,23 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   formField: { marginTop: spacings.large },
+  questionsHint: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: grayColor,
+    marginBottom: spacings.small,
+  },
+  questionRow: {
+    gap: spacings.normal,
+    backgroundColor: inputBgColor,
+    borderRadius: 10,
+    paddingHorizontal: spacings.large,
+    minHeight: hp(6),
+    marginBottom: spacings.small,
+  },
+  questionIndex: { fontSize: style.fontSizeSmall1x.fontSize, color: grayColor },
+  questionInput: { flex: 1, color: blackColor, padding: 0 },
+  addQuestionBtn: { gap: spacings.small, alignSelf: 'flex-start', paddingVertical: spacings.small },
+  addQuestionText: { fontSize: style.fontSizeSmall1x.fontSize, color: redColor },
   jobUploadArea: {
     backgroundColor: inputBgColor,
     borderRadius: 12,

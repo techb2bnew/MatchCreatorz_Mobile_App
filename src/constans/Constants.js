@@ -43,6 +43,9 @@ export const STATIC_PAGES = [
   { slug: 'contact', title: 'Contact Us', icon: 'mail', desc: 'Reach our support team' },
 ];
 
+// Promotional banner placement used on both dashboards (GET /banners?position=).
+export const BANNER_POSITION_HOME = 'Home Top';
+
 export const AUTH_LEGAL_PREFIX = 'By continuing you agree to our';
 export const CONTACT_US_TITLE = 'Contact Us';
 export const CONTACT_US_SUBTITLE = 'We usually reply within 24 hours';
@@ -261,9 +264,18 @@ export const FORGOT_PASSWORD_EMAIL_SUBTITLE =
   "Don't worry, it happens. Enter the email linked to your MatchCreators account.";
 export const FORGOT_PASSWORD_EMAIL_NOTE =
   'We will send a secure 6-digit verification code to this email address.';
+export const FORGOT_PASSWORD_PHONE_SUBTITLE =
+  "Don't worry, it happens. Enter the phone number linked to your MatchCreators account.";
+export const FORGOT_PASSWORD_PHONE_NOTE =
+  'We will send a secure 6-digit verification code to this number by SMS.';
 export const FORGOT_PASSWORD_OTP_HEADING = 'Verify your email';
 export const FORGOT_PASSWORD_OTP_SUBTITLE =
   'Enter the verification code we sent to your registered email address.';
+export const FORGOT_PASSWORD_OTP_PHONE_HEADING = 'Verify your phone';
+export const FORGOT_PASSWORD_OTP_PHONE_SUBTITLE =
+  'Enter the verification code we sent to your registered phone number.';
+export const FORGOT_PASSWORD_OTP_PHONE_NOTE =
+  "Didn't get the SMS? Wait for the timer to end and tap Resend OTP.";
 export const FORGOT_PASSWORD_OTP_SENT_TO = 'Code sent to';
 export const FORGOT_PASSWORD_OTP_NOTE =
   "Didn't get the code? Check spam folder or tap Resend OTP after the timer ends.";
@@ -584,7 +596,19 @@ export const POST_JOB_LABELS = {
   experienceLevel: 'Experience Level',
   skills: 'Required Skills',
   attachments: 'Attachments',
+  questions: 'Screening Questions',
 };
+
+// Screening questions: buyer adds them on a job, every bidder must answer each
+// one (POST /buyer/jobs -> questions[], POST /seller/jobs/{id}/bid -> answers[]).
+export const MAX_JOB_QUESTIONS = 10;
+export const JOB_QUESTIONS_HINT =
+  'Bidders must answer these before placing a bid (optional, max 10)';
+export const JOB_QUESTION_PLACEHOLDER = 'e.g. Have you built a similar app before?';
+export const ADD_JOB_QUESTION = 'Add question';
+export const BID_ANSWERS_TITLE = 'Screening questions';
+export const BID_ANSWER_PLACEHOLDER = 'Your answer';
+export const ERROR_BID_ANSWERS_REQUIRED = 'Please answer all the questions.';
 
 export const POST_JOB_ATTACHMENTS_HINT = 'Add reference images or a brief (JPG, PNG, PDF, DOC)';
 
@@ -1076,11 +1100,14 @@ export const API_ENDPOINTS = {
   AUTH_LOGOUT: '/auth/logout',
   AUTH_FORGOT_PASSWORD: '/auth/forgot-password',
   AUTH_VERIFY_FORGOT_OTP: '/auth/verify-forgot-otp',
+  AUTH_SEND_PHONE_OTP: '/auth/send-phone-otp',
+  AUTH_VERIFY_FORGOT_PHONE: '/auth/verify-forgot-phone',
   AUTH_RESET_PASSWORD: '/auth/reset-password',
   AUTH_GOOGLE: '/auth/google',
   AUTH_APPLE: '/auth/apple',
   PUBLIC_STATS: '/public/stats',
   PUBLIC_PAGES: '/public/pages',
+  BANNERS: '/banners',
   BUYER_PROFILE: '/buyer/profile',
   BUYER_ACCOUNT: '/buyer/account',
   BUYER_STATS: '/buyer/stats',

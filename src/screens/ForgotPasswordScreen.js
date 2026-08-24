@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
+import RNPhoneInput from 'react-native-phone-number-input';
 import OTPTextInput from 'react-native-otp-textinput';
 import CustomButton from '../components/CustomButton';
 import CustomTextInput from '../components/CustomTextInput';
@@ -29,6 +30,7 @@ import { style, spacings } from '../constans/Fonts';
 import {
   CONFIRM_PASSWORD,
   CONTINUE,
+  EMAIL,
   EMAIL_ADDRESS,
   ERROR_FORGOT_PASSWORD_FAILED,
   ERROR_RESET_PASSWORD_FAILED,
@@ -40,8 +42,13 @@ import {
   FORGOT_PASSWORD_NEW_PASSWORD_SUBTITLE,
   FORGOT_PASSWORD_OTP_HEADING,
   FORGOT_PASSWORD_OTP_NOTE,
+  FORGOT_PASSWORD_OTP_PHONE_HEADING,
+  FORGOT_PASSWORD_OTP_PHONE_NOTE,
+  FORGOT_PASSWORD_OTP_PHONE_SUBTITLE,
   FORGOT_PASSWORD_OTP_SENT_TO,
   FORGOT_PASSWORD_OTP_SUBTITLE,
+  FORGOT_PASSWORD_PHONE_NOTE,
+  FORGOT_PASSWORD_PHONE_SUBTITLE,
   FORGOT_PASSWORD_PASSWORD_HINT,
   FORGOT_PASSWORD_SECURE_NOTE,
   FORGOT_PASSWORD_TITLE,
@@ -49,9 +56,14 @@ import {
   LABEL_EMAIL_ADDRESS,
   LABEL_OTP,
   LABEL_PASSWORD,
+  LABEL_PHONE_NUMBER,
+  LOGIN_TABS,
   NEXT,
   OTP_LENGTH,
   PASSWORD,
+  PHONE,
+  PHONE_MAX_LENGTH,
+  PHONE_NUMBER,
   PASSWORD_RESET_SUCCESS_MESSAGE,
   PASSWORD_RESET_SUCCESS_TITLE,
   RESEND_OTP,
@@ -62,35 +74,52 @@ import {
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
+  formatPhoneInput,
   validateConfirmPassword,
   validateEmail,
   validateOtp,
   validatePassword,
+  validatePhone,
 } from '../utils';
 import { getApiErrorMessage } from '../services/apiClient';
-import { forgotPasswordApi, resetPasswordApi, verifyForgotOtpApi } from '../services/authService';
+import {
+  forgotPasswordApi,
+  resetPasswordApi,
+  sendPhoneOtpApi,
+  verifyForgotOtpApi,
+  verifyForgotPhoneApi,
+} from '../services/authService';
 
 const { alignItemsCenter, alignJustifyCenter, flexDirectionRow, textAlign } = BaseStyle;
 
 const STEPS = {
-  EMAIL: 1,
+  IDENTIFIER: 1,
   OTP: 2,
   PASSWORD: 3,
 };
 
+// Copy differs per tab: email OTP comes by mail, phone OTP by SMS.
+const getStepContent = (step, isPhone) => {
+  if (step === STEPS.IDENTIFIER) {
+    return {
+      icon: isPhone ? 'smartphone' : 'mail',
+      heading: FORGOT_PASSWORD_EMAIL_HEADING,
+      subtitle: isPhone ? FORGOT_PASSWORD_PHONE_SUBTITLE : FORGOT_PASSWORD_EMAIL_SUBTITLE,
+      note: isPhone ? FORGOT_PASSWORD_PHONE_NOTE : FORGOT_PASSWORD_EMAIL_NOTE,
+    };
+  }
+  if (step === STEPS.OTP) {
+    return {
+      icon: 'shield',
+      heading: isPhone ? FORGOT_PASSWORD_OTP_PHONE_HEADING : FORGOT_PASSWORD_OTP_HEADING,
+      subtitle: isPhone ? FORGOT_PASSWORD_OTP_PHONE_SUBTITLE : FORGOT_PASSWORD_OTP_SUBTITLE,
+      note: isPhone ? FORGOT_PASSWORD_OTP_PHONE_NOTE : FORGOT_PASSWORD_OTP_NOTE,
+    };
+  }
+  return STEP_CONTENT[STEPS.PASSWORD];
+};
+
 const STEP_CONTENT = {
-  [STEPS.EMAIL]: {
-    icon: 'mail',
-    heading: FORGOT_PASSWORD_EMAIL_HEADING,
-    subtitle: FORGOT_PASSWORD_EMAIL_SUBTITLE,
-    note: FORGOT_PASSWORD_EMAIL_NOTE,
-  },
-  [STEPS.OTP]: {
-    icon: 'shield',
-    heading: FORGOT_PASSWORD_OTP_HEADING,
-    subtitle: FORGOT_PASSWORD_OTP_SUBTITLE,
-    note: FORGOT_PASSWORD_OTP_NOTE,
-  },
   [STEPS.PASSWORD]: {
     icon: 'lock',
     heading: FORGOT_PASSWORD_NEW_PASSWORD_HEADING,
@@ -106,14 +135,18 @@ const formatTimer = seconds => {
 };
 
 const ForgotPasswordScreen = ({ navigation }) => {
-  const [step, setStep] = useState(STEPS.EMAIL);
+  const [step, setStep] = useState(STEPS.IDENTIFIER);
+  // Email is the default tab; phone resets go through Twilio OTP instead.
+  const [activeTab, setActiveTab] = useState(LOGIN_TABS.EMAIL);
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [errors, setErrors] = useState({
     email: '',
+    phone: '',
     otp: '',
     password: '',
     confirmPassword: '',
@@ -124,6 +157,13 @@ const ForgotPasswordScreen = ({ navigation }) => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const otpRef = useRef(null);
+  const isPhoneTab = activeTab === LOGIN_TABS.PHONE;
+
+  const handleTabChange = tab => {
+    if (tab === activeTab || isSubmitting) return;
+    setActiveTab(tab);
+    setErrors(prev => ({ ...prev, email: '', phone: '', form: '' }));
+  };
 
   useEffect(() => {
     if (step !== STEPS.OTP || resendTimer <= 0) return undefined;
@@ -142,12 +182,12 @@ const ForgotPasswordScreen = ({ navigation }) => {
   const handleBack = () => {
     if (isSubmitting) return;
 
-    if (step === STEPS.EMAIL) {
+    if (step === STEPS.IDENTIFIER) {
       navigation.goBack();
       return;
     }
     if (step === STEPS.OTP) {
-      setStep(STEPS.EMAIL);
+      setStep(STEPS.IDENTIFIER);
       setOtp('');
       setResetToken('');
       setErrors(prev => ({ ...prev, otp: '', form: '' }));
@@ -166,6 +206,13 @@ const ForgotPasswordScreen = ({ navigation }) => {
     }
   };
 
+  const handlePhoneChange = text => {
+    setPhone(formatPhoneInput(text));
+    if (errors.phone || errors.form) {
+      setErrors(prev => ({ ...prev, phone: '', form: '' }));
+    }
+  };
+
   const handlePasswordChange = value => {
     setPassword(value);
     if (errors.password || errors.form) {
@@ -181,18 +228,27 @@ const ForgotPasswordScreen = ({ navigation }) => {
   };
 
   const sendForgotOtp = async () => {
+    if (isPhoneTab) {
+      await sendPhoneOtpApi({ phone });
+      return;
+    }
     await forgotPasswordApi({ email });
   };
 
-  const handleEmailNext = async () => {
-    const emailError = validateEmail(email);
-    if (emailError) {
-      setErrors(prev => ({ ...prev, email: emailError, form: '' }));
+  const handleIdentifierNext = async () => {
+    const identifierError = isPhoneTab ? validatePhone(phone) : validateEmail(email);
+    if (identifierError) {
+      setErrors(prev => ({
+        ...prev,
+        email: isPhoneTab ? '' : identifierError,
+        phone: isPhoneTab ? identifierError : '',
+        form: '',
+      }));
       return;
     }
 
     setIsSubmitting(true);
-    setErrors(prev => ({ ...prev, email: '', form: '' }));
+    setErrors(prev => ({ ...prev, email: '', phone: '', form: '' }));
 
     try {
       await sendForgotOtp();
@@ -219,7 +275,9 @@ const ForgotPasswordScreen = ({ navigation }) => {
     setErrors(prev => ({ ...prev, otp: '', form: '' }));
 
     try {
-      const response = await verifyForgotOtpApi({ email, otp });
+      const response = isPhoneTab
+        ? await verifyForgotPhoneApi({ phone, otp })
+        : await verifyForgotOtpApi({ email, otp });
       const token = response?.data?.reset_token;
       if (!token) {
         setErrors(prev => ({ ...prev, form: ERROR_VERIFY_OTP_FAILED }));
@@ -298,32 +356,81 @@ const ForgotPasswordScreen = ({ navigation }) => {
     navigation.navigate(SCREEN_NAMES.LOGIN);
   };
 
-  const stepContent = STEP_CONTENT[step];
+  const stepContent = getStepContent(step, isPhoneTab);
+  const sentToValue = isPhoneTab ? phone : email;
 
   const renderFormError = () =>
     errors.form ? <Text style={[styles.formErrorText, textAlign]}>{errors.form}</Text> : null;
 
   const renderStepContent = () => {
-    if (step === STEPS.EMAIL) {
+    if (step === STEPS.IDENTIFIER) {
       return (
         <>
-          <CustomTextInput
-            value={email}
-            onChangeText={handleEmailChange}
-            label={LABEL_EMAIL_ADDRESS}
-            required
-            placeholder={EMAIL_ADDRESS}
-            keyboardType="email-address"
-            leftIcon="mail"
-            error={errors.email}
-            style={styles.inputSpacing}
-          />
+          {/* Email / Phone tabs — same pattern as the login screen */}
+          <View style={[styles.tabRow, flexDirectionRow]}>
+            <TouchableOpacity
+              style={[styles.tab, flexDirectionRow, alignJustifyCenter, !isPhoneTab && styles.tabActive]}
+              onPress={() => handleTabChange(LOGIN_TABS.EMAIL)}>
+              <Icon name="mail" size={15} color={!isPhoneTab ? whiteColor : grayColor} />
+              <Text style={[styles.tabText, style.fontWeightMedium, !isPhoneTab && styles.tabTextActive]}>
+                {EMAIL}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, flexDirectionRow, alignJustifyCenter, isPhoneTab && styles.tabActive]}
+              onPress={() => handleTabChange(LOGIN_TABS.PHONE)}>
+              <Icon name="phone" size={15} color={isPhoneTab ? whiteColor : grayColor} />
+              <Text style={[styles.tabText, style.fontWeightMedium, isPhoneTab && styles.tabTextActive]}>
+                {PHONE}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {isPhoneTab ? (
+            <View style={styles.inputSpacing}>
+              <FormLabel label={LABEL_PHONE_NUMBER} required />
+              <RNPhoneInput
+                defaultCode="US"
+                layout="second"
+                value={phone}
+                onChangeText={handlePhoneChange}
+                placeholder={PHONE_NUMBER}
+                withDarkTheme={false}
+                withShadow={false}
+                flagSize={20}
+                containerStyle={[styles.phoneInput, errors.phone && styles.phoneInputError]}
+                countryPickerButtonStyle={styles.countryPicker}
+                flagButtonStyle={styles.countryPicker}
+                textContainerStyle={styles.phoneTextContainer}
+                codeTextStyle={[styles.phoneCode, style.fontSizeNormal2x]}
+                textInputStyle={[styles.phoneText, style.fontSizeNormal2x]}
+                renderDropdownImage={<Icon name="chevron-down" size={14} color={grayColor} />}
+                textInputProps={{
+                  placeholderTextColor: grayColor,
+                  maxLength: PHONE_MAX_LENGTH,
+                }}
+              />
+              {errors.phone ? <Text style={styles.errorText}>{errors.phone}</Text> : null}
+            </View>
+          ) : (
+            <CustomTextInput
+              value={email}
+              onChangeText={handleEmailChange}
+              label={LABEL_EMAIL_ADDRESS}
+              required
+              placeholder={EMAIL_ADDRESS}
+              keyboardType="email-address"
+              leftIcon="mail"
+              error={errors.email}
+              style={styles.inputSpacing}
+            />
+          )}
           {renderFormError()}
           <CustomButton
             title={NEXT}
             iconName="arrow-right"
             iconPosition="right"
-            onPress={handleEmailNext}
+            onPress={handleIdentifierNext}
             loading={isSubmitting}
             disabled={isSubmitting}
           />
@@ -443,10 +550,10 @@ const ForgotPasswordScreen = ({ navigation }) => {
             <Text style={[styles.heading, style.fontWeightBold, textAlign]}>{stepContent.heading}</Text>
             <Text style={[styles.subtitle, style.fontWeightThin, textAlign]}>{stepContent.subtitle}</Text>
 
-            {step === STEPS.OTP && email ? (
+            {step === STEPS.OTP && sentToValue ? (
               <View style={[styles.emailBadge, alignItemsCenter]}>
                 <Text style={[styles.emailBadgeLabel, style.fontWeightThin, textAlign]}>{FORGOT_PASSWORD_OTP_SENT_TO}</Text>
-                <Text style={[styles.emailHint, style.fontWeightMedium, textAlign]}>{email}</Text>
+                <Text style={[styles.emailHint, style.fontWeightMedium, textAlign]}>{sentToValue}</Text>
               </View>
             ) : null}
 
@@ -547,6 +654,49 @@ const styles = StyleSheet.create({
   inputSpacing: {
     marginBottom: spacings.xLarge,
   },
+  tabRow: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: spacings.xLarge,
+    gap: 4,
+  },
+  tab: { flex: 1, paddingVertical: spacings.medium, borderRadius: 8, gap: 6 },
+  tabActive: { backgroundColor: redColor },
+  tabText: { fontSize: style.fontSizeNormal2x.fontSize, color: grayColor },
+  tabTextActive: { color: whiteColor },
+  phoneInput: {
+    width: '100%',
+    backgroundColor: inputBgColor,
+    borderRadius: 10,
+    minHeight: hp(6),
+    overflow: 'hidden',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  phoneInputError: {
+    borderColor: redColor,
+  },
+  countryPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    paddingLeft: spacings.large,
+    paddingRight: spacings.normal,
+    height: '100%',
+    width: 'auto',
+  },
+  phoneTextContainer: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    paddingVertical: spacings.medium,
+    paddingLeft: spacings.large,
+    paddingRight: spacings.large,
+  },
+  phoneCode: { color: blackColor },
+  phoneText: { color: blackColor, padding: 0, height: '100%' },
   otpContainer: {
     marginBottom: spacings.small,
   },

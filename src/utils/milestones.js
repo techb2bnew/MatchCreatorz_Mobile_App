@@ -3,7 +3,7 @@
  * shape the UI uses. Field names + status values are parsed defensively because
  * the milestone schema is undocumented in swagger.
  *
- * Normalized status: 'not_submitted' | 'submitted' | 'paid' | 'rejected'
+ * Normalized status: 'not_submitted' | 'submitted' | 'countered' | 'paid' | 'rejected'
  *   - needsPay: buyer must pay/fund this stage (submitted but not yet held/paid)
  */
 
@@ -42,8 +42,13 @@ export const normalizeMilestone = (m, index = 0) => {
       attachments.length,
   );
 
+  const counterAmount = m?.counter_amount == null ? null : Number(m.counter_amount) || 0;
+  const counterBy = m?.counter_by || null;
+  const counterNote = m?.counter_note || '';
+
   let status;
-  if (/reject|dispute|declin/.test(rawStatus)) status = 'rejected';
+  if (/counter/.test(rawStatus)) status = 'countered';
+  else if (/reject|dispute|declin/.test(rawStatus)) status = 'rejected';
   else if (isReleasedStatus(rawStatus)) status = 'paid';
   else if (/submit|review|amidst|await|deliver|in_review/.test(rawStatus) || hasSubmission) {
     status = 'submitted';
@@ -52,7 +57,20 @@ export const normalizeMilestone = (m, index = 0) => {
   const paymentHeld = isHeldOrPaid(rawPay);
   const needsPay = status === 'submitted' && !paymentHeld;
 
-  return { id, title, amount, status, paymentHeld, needsPay, notes, attachments, raw: m };
+  return {
+    id,
+    title,
+    amount,
+    status,
+    paymentHeld,
+    needsPay,
+    notes,
+    attachments,
+    counterAmount,
+    counterBy,
+    counterNote,
+    raw: m,
+  };
 };
 
 export const extractMilestones = detail => {

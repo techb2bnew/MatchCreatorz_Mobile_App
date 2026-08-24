@@ -234,6 +234,120 @@ export const submitSellerBookingApi = async (token, bookingId, { notes, attachme
 };
 
 /**
+ * PATCH /api/v1/seller/bookings/{id}/milestones/{milestoneId}/accept-counter
+ * Accept the buyer's counter on a milestone — paid at the countered amount.
+ * 409 → already processed (duplicate/retry): treat as a soft success.
+ */
+export const acceptMilestoneCounterApi = async (token, bookingId, milestoneId) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_BOOKINGS}/${bookingId}/milestones/${milestoneId}/accept-counter`;
+  console.log('[MilestoneAcceptCounter] Payload >>>', { endpoint, bookingId, milestoneId });
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', headers: { Accept: '*/*' }, token });
+    console.log('[MilestoneAcceptCounter] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[MilestoneAcceptCounter] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/seller/bookings/{id}/milestones/{milestoneId}/counter
+ * Re-counter the buyer's counter with a different amount (<= submitted amount).
+ * Body: { counter_amount, counter_note? }
+ */
+export const counterMilestoneBackApi = async (token, bookingId, milestoneId, { counterAmount, counterNote } = {}) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_BOOKINGS}/${bookingId}/milestones/${milestoneId}/counter`;
+  const payload = { counter_amount: Number(counterAmount) };
+  if (counterNote != null && String(counterNote).trim()) {
+    payload.counter_note = String(counterNote).trim();
+  }
+  console.log('[MilestoneCounterBack] Payload >>>', JSON.stringify({ endpoint, payload }));
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', body: payload, token });
+    console.log('[MilestoneCounterBack] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[MilestoneCounterBack] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * POST /api/v1/seller/bookings/{id}/work-entries
+ * Log one day of hourly work. Adds an entry (never overwrites previous ones)
+ * with status `pending` — no money moves until the buyer approves.
+ * Rate always comes from the booking's hourly_rate, never from this request.
+ * Body: { work_date, hours, description?, attachments? }
+ * attachments are proof-of-work files already uploaded via
+ * POST /seller/bookings/upload — supported by the API but not yet in swagger.
+ * 400 → not hourly / not ongoing / invalid hours / weekly limit exceeded
+ *       (message is user-facing — show it as-is)
+ */
+export const logSellerWorkEntryApi = async (
+  token,
+  bookingId,
+  { workDate, hours, description, attachments } = {},
+) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_BOOKINGS}/${bookingId}/work-entries`;
+  const payload = { work_date: String(workDate || ''), hours: Number(hours) };
+  if (description != null && String(description).trim()) {
+    payload.description = String(description).trim();
+  }
+  if (Array.isArray(attachments) && attachments.length) {
+    payload.attachments = attachments;
+  }
+  console.log('[WorkEntryLog] Payload >>>', JSON.stringify({ endpoint, payload }));
+  try {
+    const response = await apiRequest(endpoint, { method: 'POST', body: payload, token });
+    console.log('[WorkEntryLog] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[WorkEntryLog] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/seller/bookings/{id}/work-entries/{entryId}/accept-counter
+ * Accept the buyer's counter — pays at counter_hours. Not reversible.
+ */
+export const acceptWorkEntryCounterApi = async (token, bookingId, entryId) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_BOOKINGS}/${bookingId}/work-entries/${entryId}/accept-counter`;
+  console.log('[WorkEntryAcceptCounter] Payload >>>', { endpoint, bookingId, entryId });
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', headers: { Accept: '*/*' }, token });
+    console.log('[WorkEntryAcceptCounter] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[WorkEntryAcceptCounter] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * PATCH /api/v1/seller/bookings/{id}/work-entries/{entryId}/counter
+ * Re-counter the buyer's counter with a different hours value (<= logged hours).
+ * Body: { counter_hours, counter_note? }
+ */
+export const counterWorkEntryApi = async (token, bookingId, entryId, { counterHours, counterNote } = {}) => {
+  const endpoint = `${API_ENDPOINTS.SELLER_BOOKINGS}/${bookingId}/work-entries/${entryId}/counter`;
+  const payload = { counter_hours: Number(counterHours) };
+  if (counterNote != null && String(counterNote).trim()) {
+    payload.counter_note = String(counterNote).trim();
+  }
+  console.log('[WorkEntrySellerCounter] Payload >>>', JSON.stringify({ endpoint, payload }));
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', body: payload, token });
+    console.log('[WorkEntrySellerCounter] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[WorkEntrySellerCounter] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
  * POST /api/v1/seller/bookings/{id}/milestones
  * Split a booking's total into milestones (min 2; amounts must sum to total).
  * Body: { milestones: [{ title, amount, duration_days? }] }
@@ -453,7 +567,8 @@ export const getSellerJobByIdApi = async (token, jobId) => {
 /**
  * POST /api/v1/seller/jobs/{id}/bid
  * Place a bid on a job
- * Body: { amount, delivery_days, proposal }
+ * Body: { amount, delivery_days, proposal, answers? }
+ * answers must line up with job.questions by index — required when the job has any.
  * Auth header: Bearer token
  */
 export const placeSellerJobBidApi = async (token, jobId, form) => {
@@ -462,6 +577,9 @@ export const placeSellerJobBidApi = async (token, jobId, form) => {
     delivery_days: Number(form.delivery_days),
     proposal: String(form.proposal || '').trim(),
   };
+  if (Array.isArray(form.answers) && form.answers.length) {
+    payload.answers = form.answers.map(a => String(a || '').trim());
+  }
   const endpoint = `${API_ENDPOINTS.SELLER_JOBS}/${jobId}/bid`;
 
   console.log('[SellerPlaceBid] Payload >>>', JSON.stringify({ endpoint, jobId, ...payload }, null, 2));

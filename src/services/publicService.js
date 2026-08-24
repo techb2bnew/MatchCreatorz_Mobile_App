@@ -31,3 +31,22 @@ export const getPublicStatsApi = async () => {
     throw error;
   }
 };
+
+/**
+ * GET /api/v1/banners — active promotional banners (no auth).
+ * Optional position filter, e.g. "Home Top".
+ * Response: { data: [{ id, title, image_url, link_url, position, display_order }] }
+ */
+export const getBannersApi = async (position = '') => {
+  const endpoint = position
+    ? `${API_ENDPOINTS.BANNERS}?position=${encodeURIComponent(position)}`
+    : API_ENDPOINTS.BANNERS;
+  try {
+    const response = await apiRequest(endpoint, { method: 'GET' });
+    console.log('[Banners] Response <<<', JSON.stringify(response));
+    return response;
+  } catch (error) {
+    console.log('[Banners] Error <<<', { status: error?.status, message: error?.message });
+    throw error;
+  }
+};

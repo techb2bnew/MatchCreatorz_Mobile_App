@@ -48,6 +48,7 @@ import {
   SELLER_WORK_TABS,
 } from '../../constans/Constants';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
+import BannerCarousel from '../../components/BannerCarousel';
 import EmptyState from '../../components/EmptyState';
 import {
   getSellerConnectsBalanceApi,
@@ -341,6 +342,8 @@ const SellerDashboardScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
+        <BannerCarousel style={styles.promoBanner} />
+
         <View style={styles.statsSection}>
           <View style={[styles.countSummaryCard, flexDirectionRow, alignItemsCenter]}>
             {secondaryStats.map((card, index) => (
@@ -486,6 +489,9 @@ export default SellerDashboardScreen;
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: screenBgColor },
+  promoBanner: {
+    marginBottom: hp(2),
+  },
   welcomeCard: {
     backgroundColor: redColor,
     borderRadius: 16,

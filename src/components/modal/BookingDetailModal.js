@@ -35,6 +35,7 @@ import {
 } from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import MilestonesSection, { openAttachment } from '../MilestonesSection';
+import WorkEntriesSection from '../WorkEntriesSection';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -83,6 +84,17 @@ const BookingDetailModal = ({
   milestoneBusyId,
   onAcceptPayMilestone,
   onRejectMilestone,
+  onCounterMilestone,
+  // Hourly bookings: per-day work entries the buyer approves/counters/disputes.
+  isHourly = false,
+  workEntries = [],
+  workEntryBusyId,
+  hourlyRate = 0,
+  weeklyLimit = null,
+  weeklyUsed = 0,
+  onApproveWorkEntry,
+  onCounterWorkEntry,
+  onDisputeWorkEntry,
 }) => {
   const statusStyle = getBookingStatusStyle(booking?.status);
 
@@ -208,7 +220,7 @@ const BookingDetailModal = ({
                     />
                   ) : null}
 
-                  {submittedWork ? (
+                  {submittedWork && !isHourly ? (
                     <View style={styles.deliveredWrap}>
                       <Text style={[styles.deliveredTitle, style.fontWeightMedium]}>DELIVERED WORK</Text>
                       {submittedWork.notes ? (
@@ -253,13 +265,28 @@ const BookingDetailModal = ({
                     </View>
                   ) : null}
 
-                  <MilestonesSection
-                    milestones={milestones}
-                    role="buyer"
-                    busyId={milestoneBusyId}
-                    onAcceptPay={onAcceptPayMilestone}
-                    onReject={onRejectMilestone}
-                  />
+                  {isHourly ? (
+                    <WorkEntriesSection
+                      entries={workEntries}
+                      role="buyer"
+                      busyId={workEntryBusyId}
+                      hourlyRate={hourlyRate}
+                      weeklyLimit={weeklyLimit}
+                      weeklyUsed={weeklyUsed}
+                      onApprove={onApproveWorkEntry}
+                      onCounter={onCounterWorkEntry}
+                      onDispute={onDisputeWorkEntry}
+                    />
+                  ) : (
+                    <MilestonesSection
+                      milestones={milestones}
+                      role="buyer"
+                      busyId={milestoneBusyId}
+                      onAcceptPay={onAcceptPayMilestone}
+                      onReject={onRejectMilestone}
+                      onCounter={onCounterMilestone}
+                    />
+                  )}
                 </>
               ) : null}
             </ScrollView>

@@ -25,7 +25,7 @@ import {
   redColor,
   whiteColor,
 } from '../../constans/Color';
-import { style } from '../../constans/Fonts';
+import { style, spacings } from '../../constans/Fonts';
 import {
   BIDS_SUFFIX,
   ERROR_START_CHAT_FAILED,
@@ -124,6 +124,13 @@ const mapJobAttachmentsList = job => {
     .filter(item => item.url);
 };
 
+// Buyer's screening questions — every bidder must answer each one.
+const mapJobQuestions = job => {
+  const list = job?.questions ?? job?.screening_questions ?? [];
+  if (!Array.isArray(list)) return [];
+  return list.map(q => (typeof q === 'string' ? q : q?.question || q?.text || '')).filter(Boolean);
+};
+
 const mapJobDetailForDisplay = job => {
   const min = job?.budget_min ?? job?.budgetMin;
   const max = job?.budget_max ?? job?.budgetMax;
@@ -151,6 +158,7 @@ const mapJobDetailForDisplay = job => {
     bidCount: Number(job?.bid_count ?? job?.bidCount ?? job?.bids_count ?? 0) || 0,
     date: formatJobDate(job?.created_at || job?.createdAt || job?.date),
     attachments: mapJobAttachmentsList(job),
+    questions: mapJobQuestions(job),
     hasBid: Boolean(job?.has_bid),
     myBid: myBid
       ? {
@@ -386,6 +394,23 @@ const SellerJobDetailsScreen = ({ navigation, route }) => {
                   )}
                 </View>
 
+                {job.questions?.length ? (
+                  <>
+                    <Text style={[styles.sectionTitle, style.fontWeightMedium]}>
+                      {POST_JOB_LABELS.questions}
+                    </Text>
+                    <View style={[styles.sectionCard, styles.skillsCard]}>
+                      {job.questions.map((question, index) => (
+                        <Text
+                          key={`q-${index}`}
+                          style={[styles.descriptionText, style.fontWeightThin, styles.questionLine]}>
+                          {index + 1}. {question}
+                        </Text>
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+
                 {job.attachments.length ? (
                   <>
                     <Text style={[styles.sectionTitle, style.fontWeightMedium]}>
@@ -601,6 +626,7 @@ const styles = StyleSheet.create({
     color: grayColor,
     lineHeight: 20,
   },
+  questionLine: { marginBottom: spacings.small },
   skillsCard: {
     paddingBottom: wp(3),
   },

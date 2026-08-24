@@ -25,7 +25,12 @@ import {
   whiteColor,
 } from '../../constans/Color';
 import { style, spacings } from '../../constans/Fonts';
-import { SELLER_PLACE_BID_MODAL } from '../../constans/Constants';
+import {
+  SELLER_PLACE_BID_MODAL,
+  BID_ANSWERS_TITLE,
+  BID_ANSWER_PLACEHOLDER,
+  ERROR_BID_ANSWERS_REQUIRED,
+} from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import RichTextEditor from '../RichTextEditor';
 
@@ -39,6 +44,13 @@ const FieldLabel = ({ icon, iconColor, label }) => (
   </View>
 );
 
+// Buyer's screening questions ride on the job; every one must be answered.
+const extractQuestions = job => {
+  const list = job?.questions ?? job?.raw?.questions ?? job?.screening_questions ?? [];
+  if (!Array.isArray(list)) return [];
+  return list.map(q => (typeof q === 'string' ? q : q?.question || q?.text || '')).filter(Boolean);
+};
+
 const PlaceBidModal = ({
   visible,
   job,
@@ -47,9 +59,11 @@ const PlaceBidModal = ({
   onClose,
   onSubmit,
 }) => {
+  const questions = extractQuestions(job);
   const [amount, setAmount] = useState('');
   const [deliveryDays, setDeliveryDays] = useState('');
   const [proposal, setProposal] = useState('');
+  const [answers, setAnswers] = useState([]);
   const [fieldError, setFieldError] = useState('');
 
   useEffect(() => {
@@ -57,9 +71,11 @@ const PlaceBidModal = ({
       setAmount('');
       setDeliveryDays('');
       setProposal('');
+      setAnswers(questions.map(() => ''));
       setFieldError('');
     }
-  }, [visible, job?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, job?.id, questions.length]);
 
   const handleSubmit = () => {
     const amountNum = Number(amount);
@@ -78,11 +94,18 @@ const PlaceBidModal = ({
       return;
     }
 
+    // The API matches answers to questions by index, so all must be filled.
+    if (questions.length && questions.some((_, i) => !String(answers[i] || '').trim())) {
+      setFieldError(ERROR_BID_ANSWERS_REQUIRED);
+      return;
+    }
+
     setFieldError('');
     onSubmit?.({
       amount: amountNum,
       delivery_days: daysNum,
       proposal: proposal.trim(),
+      answers: questions.length ? questions.map((_, i) => String(answers[i] || '').trim()) : [],
     });
   };
 
@@ -170,6 +193,35 @@ const PlaceBidModal = ({
                   disabled={loading}
                 />
               </View>
+
+              {questions.length ? (
+                <View style={styles.questionsWrap}>
+                  <FieldLabel icon="help-circle" iconColor={blueColor} label={BID_ANSWERS_TITLE} />
+                  {questions.map((question, index) => (
+                    <View key={`q-${index}`} style={styles.questionBlock}>
+                      <Text style={[styles.questionText, style.fontWeightMedium]}>
+                        {index + 1}. {question}
+                      </Text>
+                      <TextInput
+                        style={[styles.input, styles.answerInput, style.fontWeightThin]}
+                        value={answers[index] || ''}
+                        onChangeText={value => {
+                          setAnswers(prev => {
+                            const next = [...prev];
+                            next[index] = value;
+                            return next;
+                          });
+                          if (fieldError) setFieldError('');
+                        }}
+                        placeholder={BID_ANSWER_PLACEHOLDER}
+                        placeholderTextColor={grayColor}
+                        multiline
+                        editable={!loading}
+                      />
+                    </View>
+                  ))}
+                </View>
+              ) : null}
 
               <View style={[styles.connectsBanner, flexDirectionRow, alignItemsCenter]}>
                 <Icon name="zap" size={14} color="#B45309" />
@@ -266,6 +318,14 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeSmall1x.fontSize,
     color: redColor,
   },
+  questionsWrap: { marginBottom: spacings.large },
+  questionBlock: { marginBottom: spacings.normal },
+  questionText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: blackColor,
+    marginBottom: spacings.small,
+  },
+  answerInput: { minHeight: hp(7), textAlignVertical: 'top', paddingTop: spacings.medium },
   fieldWrap: {
     marginBottom: spacings.large,
   },
