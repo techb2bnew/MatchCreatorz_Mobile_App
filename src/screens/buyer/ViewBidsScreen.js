@@ -19,6 +19,8 @@ import {
   acceptBuyerJobBidApi,
   rejectBuyerJobBidApi,
   counterBuyerJobBidApi,
+  createEscrowCheckoutApi,
+  confirmEscrowPaymentApi,
 } from '../../services/buyerService';
 import { createOrGetConversationApi } from '../../services/chatService';
 import { getApiErrorMessage } from '../../services/apiClient';
@@ -35,6 +37,7 @@ import {
   whiteColor,
 } from '../../constans/Color';
 import { style, spacings } from '../../constans/Fonts';
+import { isEscrowBooking } from '../../utils/escrow';
 import {
   BID_STATUS_COUNTERED,
   BIDS_SUFFIX,
@@ -61,6 +64,8 @@ import {
   REJECT_BID_CONFIRM_TITLE,
   SCREEN_NAMES,
   VIEW_BIDS_TITLE,
+  ESCROW_CHECKOUT_TITLE,
+  ERROR_ESCROW_CHECKOUT_FAILED,
 } from '../../constans/Constants';
 import SearchBar from '../../components/SearchBar';
 import EmptyState from '../../components/EmptyState';
@@ -314,6 +319,32 @@ const ViewBidsScreen = ({ navigation, route }) => {
     setHireModal({ visible: false, bidId: null, creatorName: '' });
   };
 
+  // Opens Stripe Checkout for an escrow booking's card hold. Failure is not
+  // fatal — the booking detail screen keeps showing a "Complete payment" banner.
+  const startEscrowHold = async bookingId => {
+    try {
+      const response = await createEscrowCheckoutApi(token, bookingId);
+      const data = response?.data || response || {};
+      const url = data.checkout_url || data.checkoutUrl || '';
+      if (!url) return;
+      navigation.navigate(SCREEN_NAMES.STRIPE_CHECKOUT, {
+        checkoutUrl: url,
+        title: ESCROW_CHECKOUT_TITLE,
+        onResult: async result => {
+          if (result === 'success') {
+            await confirmEscrowPaymentApi(
+              token,
+              bookingId,
+              data.session_id || data.sessionId || '',
+            ).catch(() => {});
+          }
+        },
+      });
+    } catch (error) {
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_ESCROW_CHECKOUT_FAILED));
+    }
+  };
+
   const handleConfirmHire = async () => {
     const bidId = hireModal.bidId;
     if (!bidId || !token || !jobId || isHiring) {
@@ -323,7 +354,14 @@ const ViewBidsScreen = ({ navigation, route }) => {
 
     setIsHiring(true);
     try {
-      await acceptBuyerJobBidApi(token, jobId, bidId);
+      const acceptResponse = await acceptBuyerJobBidApi(token, jobId, bidId);
+      // Escrow bookings need a card hold right away — send the buyer to Stripe
+      // Checkout as soon as the booking exists.
+      const newBooking =
+        acceptResponse?.data?.booking || acceptResponse?.booking || acceptResponse?.data || null;
+      if (isEscrowBooking(newBooking) && newBooking?.id) {
+        startEscrowHold(newBooking.id);
+      }
       setBids(prev =>
         prev.map(b => ({
           ...b,

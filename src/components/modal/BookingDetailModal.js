@@ -32,10 +32,15 @@ import {
   FEE_INCL_PREFIX,
   FEE_SUFFIX,
   SELLER_PREFIX,
+  ESCROW_BANNER_TITLE,
+  ESCROW_BANNER_MESSAGE,
+  ESCROW_BANNER_BUTTON,
+  ESCROW_HELD_BADGE,
 } from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import MilestonesSection, { openAttachment } from '../MilestonesSection';
 import WorkEntriesSection from '../WorkEntriesSection';
+import { isEscrowHeld, needsEscrowPayment } from '../../utils/escrow';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -95,8 +100,17 @@ const BookingDetailModal = ({
   onApproveWorkEntry,
   onCounterWorkEntry,
   onDisputeWorkEntry,
+  // Escrow: card-hold bookings pay through Stripe, not the wallet.
+  onPayEscrow,
+  escrowBusy = false,
+  // Split into milestones — shown only while the booking is eligible.
+  canSplit = false,
+  onSplitMilestones,
 }) => {
   const statusStyle = getBookingStatusStyle(booking?.status);
+  const raw = booking?.raw || booking;
+  const showEscrowBanner = needsEscrowPayment(raw);
+  const showEscrowBadge = isEscrowHeld(raw);
 
   return (
     <Modal
@@ -155,10 +169,45 @@ const BookingDetailModal = ({
                         {booking.status}
                       </Text>
                     </View>
+                    {showEscrowBadge ? (
+                      <View style={[styles.escrowBadge, flexDirectionRow, alignItemsCenter]}>
+                        <Icon name="shield" size={11} color={greenColor} />
+                        <Text style={[styles.escrowBadgeText, style.fontWeightMedium]}>
+                          {ESCROW_HELD_BADGE}
+                        </Text>
+                      </View>
+                    ) : null}
                     <Text style={[styles.idText, style.fontWeightThin]}>
                       {BOOKING_ID_PREFIX}: #{booking.id}
                     </Text>
                   </View>
+
+                  {showEscrowBanner ? (
+                    <View style={styles.escrowBanner}>
+                      <View style={[flexDirectionRow, alignItemsCenter, styles.escrowBannerHead]}>
+                        <Icon name="alert-circle" size={15} color="#B26A00" />
+                        <Text style={[styles.escrowBannerTitle, style.fontWeightMedium]}>
+                          {ESCROW_BANNER_TITLE}
+                        </Text>
+                      </View>
+                      <Text style={[styles.escrowBannerText, style.fontWeightThin]}>
+                        {ESCROW_BANNER_MESSAGE}
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.escrowBannerBtn, alignJustifyCenter]}
+                        onPress={() => onPayEscrow?.(booking)}
+                        disabled={escrowBusy}
+                        activeOpacity={0.85}>
+                        {escrowBusy ? (
+                          <ActivityIndicator size="small" color={whiteColor} />
+                        ) : (
+                          <Text style={[styles.escrowBannerBtnText, style.fontWeightMedium]}>
+                            {ESCROW_BANNER_BUTTON}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
 
                   <View style={[styles.sellerRow, flexDirectionRow, alignItemsCenter]}>
                     <View style={[styles.sellerAvatar, alignJustifyCenter]}>
@@ -265,6 +314,18 @@ const BookingDetailModal = ({
                     </View>
                   ) : null}
 
+                  {canSplit && onSplitMilestones ? (
+                    <TouchableOpacity
+                      style={[styles.splitBtn, flexDirectionRow, alignItemsCenter, alignJustifyCenter]}
+                      onPress={onSplitMilestones}
+                      activeOpacity={0.85}>
+                      <Icon name="layers" size={15} color={redColor} />
+                      <Text style={[styles.splitBtnText, style.fontWeightMedium]}>
+                        Split into Milestones
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+
                   {isHourly ? (
                     <WorkEntriesSection
                       entries={workEntries}
@@ -300,6 +361,42 @@ const BookingDetailModal = ({
 export default BookingDetailModal;
 
 const styles = StyleSheet.create({
+  splitBtn: {
+    marginTop: spacings.large,
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: redColor,
+    gap: spacings.small,
+  },
+  splitBtnText: { fontSize: style.fontSizeSmall2x.fontSize, color: redColor },
+  escrowBadge: {
+    backgroundColor: '#E8F8EE',
+    borderRadius: 20,
+    paddingHorizontal: spacings.normal,
+    paddingVertical: 3,
+    gap: 4,
+  },
+  escrowBadgeText: { fontSize: style.fontSizeExtraSmall.fontSize, color: greenColor },
+  escrowBanner: {
+    backgroundColor: '#FFF4E5',
+    borderRadius: 12,
+    padding: spacings.large,
+    marginBottom: spacings.large,
+    gap: spacings.xsmall,
+  },
+  escrowBannerHead: { gap: spacings.small },
+  escrowBannerTitle: { fontSize: style.fontSizeNormal2x.fontSize, color: '#B26A00' },
+  escrowBannerText: { fontSize: style.fontSizeSmall1x.fontSize, color: blackColor, lineHeight: 18 },
+  escrowBannerBtn: {
+    marginTop: spacings.small,
+    minHeight: 42,
+    borderRadius: 10,
+    backgroundColor: redColor,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacings.xxLarge,
+  },
+  escrowBannerBtnText: { fontSize: style.fontSizeSmall1x.fontSize, color: whiteColor },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',

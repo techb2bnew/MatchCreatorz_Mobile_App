@@ -34,23 +34,29 @@ const fmt = n => `$${(Number(n) || 0).toFixed(2)}`;
 const toNum = v => Number(String(v).replace(/[^0-9.]/g, '')) || 0;
 
 /**
- * Split a booking into milestones. Each milestone has a title + amount; the
- * amounts must add up to the booking total before "Create Milestones" enables.
- * NOTE: no backend endpoint exists yet — onCreate just receives the built list
- * (caller console.logs / stores locally for now).
+ * Split a booking into milestones — used by both the buyer and the seller
+ * (POST /{role}/bookings/:id/milestones).
+ *
+ * Each row is title + amount + optional duration (days). Starts with 2 rows but
+ * a single milestone is allowed, so rows can be removed down to 1.
+ *
+ * "Create Milestones" only enables when every row has a title AND a positive
+ * amount AND the amounts add up to the booking total exactly — checking the
+ * total alone isn't enough, since a blank amount counts as 0 and would slip
+ * through when the other rows already add up.
  */
 const SplitMilestonesModal = ({ visible, total = 0, onClose, onCreate, loading = false }) => {
   const [rows, setRows] = useState([
-    { title: '', amount: '' },
-    { title: '', amount: '' },
+    { title: '', amount: '', duration: '' },
+    { title: '', amount: '', duration: '' },
   ]);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (visible) {
       setRows([
-        { title: '', amount: '' },
-        { title: '', amount: '' },
+        { title: '', amount: '', duration: '' },
+        { title: '', amount: '', duration: '' },
       ]);
       setError('');
     }
@@ -61,30 +67,39 @@ const SplitMilestonesModal = ({ visible, total = 0, onClose, onCreate, loading =
     [rows],
   );
   const matches = Math.abs(enteredTotal - Number(total)) < 0.005 && Number(total) > 0;
+  // Every row must be filled in on its own — a blank amount is 0 and would
+  // otherwise pass whenever the remaining rows already hit the total.
+  const rowsValid = rows.length > 0 && rows.every(r => r.title.trim() && toNum(r.amount) > 0);
+  const canCreate = matches && rowsValid;
 
   const updateRow = (index, key, value) =>
     setRows(prev => prev.map((r, i) => (i === index ? { ...r, [key]: value } : r)));
 
-  const addRow = () => setRows(prev => [...prev, { title: '', amount: '' }]);
+  const addRow = () => setRows(prev => [...prev, { title: '', amount: '', duration: '' }]);
   const removeRow = index => setRows(prev => prev.filter((_, i) => i !== index));
 
   const handleCreate = () => {
     if (loading) return;
     if (rows.some(r => !r.title.trim())) {
-      setError('Har milestone ka title bharo.');
+      setError('Give every milestone a title.');
       return;
     }
     if (rows.some(r => toNum(r.amount) <= 0)) {
-      setError('Har milestone ka amount 0 se zyada hona chahiye.');
+      setError('Every milestone needs an amount greater than 0.');
       return;
     }
     if (!matches) {
-      setError(`Amounts total ${fmt(total)} ke barabar hone chahiye.`);
+      setError(`Amounts must add up to exactly ${fmt(total)}.`);
       return;
     }
     setError('');
     onCreate?.(
-      rows.map((r, i) => ({ title: r.title.trim(), amount: toNum(r.amount), order: i + 1 })),
+      rows.map((r, i) => ({
+        title: r.title.trim(),
+        amount: toNum(r.amount),
+        duration_days: toNum(r.duration) > 0 ? Math.round(toNum(r.duration)) : null,
+        order: i + 1,
+      })),
     );
   };
 
@@ -111,7 +126,7 @@ const SplitMilestonesModal = ({ visible, total = 0, onClose, onCreate, loading =
 
             <Text style={[styles.hint, style.fontWeightThin]}>
               Amounts must add up to the booking total:{' '}
-              <Text style={style.fontWeightMedium}>{fmt(total)}</Text>
+              <Text style={style.fontWeightMedium}>{fmt(total)}</Text>. Days is optional.
             </Text>
 
             <ScrollView
@@ -137,7 +152,16 @@ const SplitMilestonesModal = ({ visible, total = 0, onClose, onCreate, loading =
                     keyboardType="decimal-pad"
                     editable={!loading}
                   />
-                  {rows.length > 2 ? (
+                  <TextInput
+                    style={[styles.durationInput, style.fontWeightThin]}
+                    value={row.duration}
+                    onChangeText={v => updateRow(index, 'duration', v.replace(/[^0-9]/g, ''))}
+                    placeholder="days"
+                    placeholderTextColor={grayColor}
+                    keyboardType="number-pad"
+                    editable={!loading}
+                  />
+                  {rows.length > 1 ? (
                     <TouchableOpacity
                       onPress={() => removeRow(index)}
                       disabled={loading}
@@ -172,13 +196,19 @@ const SplitMilestonesModal = ({ visible, total = 0, onClose, onCreate, loading =
                 </Text>
               ) : null}
 
+              {matches && !rowsValid ? (
+                <Text style={[styles.hintText, style.fontWeightThin]}>
+                  Every milestone needs a title and an amount.
+                </Text>
+              ) : null}
+
               {error ? <Text style={[styles.errorText, style.fontWeightThin]}>{error}</Text> : null}
             </ScrollView>
 
             <TouchableOpacity
-              style={[styles.createBtn, alignJustifyCenter, (!matches || loading) && styles.createBtnDisabled]}
+              style={[styles.createBtn, alignJustifyCenter, (!canCreate || loading) && styles.createBtnDisabled]}
               onPress={handleCreate}
-              disabled={loading || !matches}
+              disabled={loading || !canCreate}
               activeOpacity={0.85}>
               {loading ? (
                 <ActivityIndicator size="small" color={whiteColor} />
@@ -222,6 +252,7 @@ const styles = StyleSheet.create({
   row: { gap: spacings.small, marginBottom: spacings.normal },
   titleInput: {
     flex: 1,
+    minWidth: 0,
     borderWidth: 1,
     borderColor: borderLightColor,
     borderRadius: 24,
@@ -232,15 +263,28 @@ const styles = StyleSheet.create({
     color: blackColor,
   },
   amountInput: {
-    width: wp(22),
+    width: wp(18),
     borderWidth: 1,
     borderColor: borderLightColor,
     borderRadius: 24,
     backgroundColor: inputBgColor,
-    paddingHorizontal: spacings.large,
+    paddingHorizontal: spacings.normal,
     paddingVertical: spacings.medium,
     fontSize: style.fontSizeNormal2x.fontSize,
     color: blackColor,
+    textAlign: 'center',
+  },
+  durationInput: {
+    width: wp(15),
+    borderWidth: 1,
+    borderColor: borderLightColor,
+    borderRadius: 24,
+    backgroundColor: inputBgColor,
+    paddingHorizontal: spacings.small,
+    paddingVertical: spacings.medium,
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: blackColor,
+    textAlign: 'center',
   },
   removeBtn: { paddingLeft: spacings.xsmall },
   addRow: { gap: spacings.xsmall, paddingVertical: spacings.small, marginBottom: spacings.small },

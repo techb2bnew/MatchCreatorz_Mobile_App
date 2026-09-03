@@ -108,3 +108,14 @@ export const extractSubmittedWork = detail => {
   if (!String(notes || '').trim() && !attachments.length) return null;
   return { notes: String(notes || ''), attachments };
 };
+
+/**
+ * A booking can be split into milestones only while it's ongoing, isn't hourly
+ * (milestones aren't supported there) and hasn't been split already. Both the
+ * buyer and the seller can do it.
+ */
+export const canSplitIntoMilestones = (detail, milestones = []) => {
+  const status = String(detail?.status ?? '').trim().toLowerCase().replace(/-/g, '_');
+  const jobType = String(detail?.job_type ?? detail?.jobType ?? '').toLowerCase();
+  return status === 'ongoing' && jobType !== 'hourly' && !milestones.length;
+};

@@ -95,6 +95,9 @@ const SellerBookingDetailModal = ({
   onLogWork,
   onAcceptWorkEntryCounter,
   onCounterWorkEntryBack,
+  // Split into milestones — shown only while the booking is eligible.
+  canSplit = false,
+  onSplitMilestones,
 }) => {
   const statusStyle = getBookingStatusStyle(booking?.status);
 
@@ -215,6 +218,18 @@ const SellerBookingDetailModal = ({
                     />
                   ) : null}
 
+                  {canSplit && onSplitMilestones ? (
+                    <TouchableOpacity
+                      style={[styles.splitBtn, flexDirectionRow, alignItemsCenter, alignJustifyCenter]}
+                      onPress={onSplitMilestones}
+                      activeOpacity={0.85}>
+                      <Icon name="layers" size={15} color={redColor} />
+                      <Text style={[styles.splitBtnText, style.fontWeightMedium]}>
+                        Split into Milestones
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+
                   {isHourly ? (
                     <>
                       <WorkEntriesSection
@@ -259,6 +274,15 @@ const SellerBookingDetailModal = ({
 export default SellerBookingDetailModal;
 
 const styles = StyleSheet.create({
+  splitBtn: {
+    marginTop: spacings.large,
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: redColor,
+    gap: spacings.small,
+  },
+  splitBtnText: { fontSize: style.fontSizeSmall2x.fontSize, color: redColor },
   logWorkBtn: {
     marginTop: spacings.small,
     minHeight: 46,

@@ -47,6 +47,15 @@ export const STATIC_PAGES = [
 export const BANNER_POSITION_HOME = 'Home Top';
 
 export const AUTH_LEGAL_PREFIX = 'By continuing you agree to our';
+// Escrow payment mode
+export const ESCROW_BANNER_TITLE = 'Complete payment';
+export const ESCROW_BANNER_MESSAGE =
+  'This booking is protected by escrow. Authorise the payment so the seller can start — your card is only charged once you accept the finished work.';
+export const ESCROW_BANNER_BUTTON = 'Pay now';
+export const ESCROW_HELD_BADGE = 'Escrow protected';
+export const ESCROW_CHECKOUT_TITLE = 'Escrow Payment';
+export const ERROR_ESCROW_CHECKOUT_FAILED = 'Could not start the payment. Please try again.';
+
 export const CONTACT_US_TITLE = 'Contact Us';
 export const CONTACT_US_SUBTITLE = 'We usually reply within 24 hours';
 export const CONTACT_US_EMPTY = 'Contact details are not available right now.';
@@ -1114,6 +1123,10 @@ export const API_ENDPOINTS = {
   BUYER_JOBS: '/buyer/jobs',
   BUYER_JOBS_UPLOAD: '/buyer/jobs/upload',
   BUYER_BOOKINGS: '/buyer/bookings',
+  // Escrow (card-hold) payment mode. NOTE: these two paths are not in swagger yet —
+  // confirm with the backend team before release.
+  BUYER_ESCROW_CHECKOUT_SUFFIX: '/escrow/checkout',
+  BUYER_ESCROW_CONFIRM_SUFFIX: '/escrow/confirm',
   BUYER_SERVICES: '/buyer/services',
   BUYER_REVIEWS: '/buyer/reviews',
   BUYER_NOTIFICATIONS: '/buyer/notifications',

@@ -837,6 +837,74 @@ export const counterBuyerMilestoneApi = async (token, bookingId, milestoneId, { 
 };
 
 /**
+ * POST /api/v1/buyer/bookings/{id}/milestones
+ * Split a booking into milestones (buyers can do this too now, and a single
+ * milestone is allowed). Body: { milestones: [{ title, amount, duration_days }] }
+ * Amounts must add up to booking.amount exactly.
+ * 400 → booking not ongoing/in_dispute, hourly booking, already split, or the
+ *       amounts don't match (message is user-facing).
+ * If the booking is in escrow mode with a hold placed, the backend releases
+ * that hold automatically — nothing extra to do here.
+ */
+export const createBuyerMilestonesApi = async (token, bookingId, milestones) => {
+  const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/milestones`;
+  const payload = { milestones };
+  console.log('[BuyerMilestonesCreate] Payload >>>', JSON.stringify({ endpoint, payload }));
+  try {
+    const response = await apiRequest(endpoint, { method: 'POST', body: payload, token });
+    console.log('[BuyerMilestonesCreate] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[BuyerMilestonesCreate] Error <<<', {
+      status: error?.status,
+      message: error?.message,
+      data: error?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * POST /api/v1/buyer/bookings/{id}/escrow/checkout
+ * Starts (or retries) the escrow card payment — returns a Stripe Checkout URL.
+ * Safe to retry as long as payment_status is still "unpaid".
+ * 400 → booking is not in escrow mode, or already paid.
+ *
+ * NOTE: not documented in swagger yet — path confirmed with the backend team.
+ */
+export const createEscrowCheckoutApi = async (token, bookingId) => {
+  const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}${API_ENDPOINTS.BUYER_ESCROW_CHECKOUT_SUFFIX}`;
+  console.log('[EscrowCheckout] Payload >>>', { endpoint, bookingId });
+  try {
+    const response = await apiRequest(endpoint, { method: 'POST', token });
+    console.log('[EscrowCheckout] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[EscrowCheckout] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
+ * GET /api/v1/buyer/bookings/{id}/escrow/confirm
+ * Called after returning from Stripe Checkout (webhook fallback) so the hold is
+ * recorded even if the webhook is slow.
+ */
+export const confirmEscrowPaymentApi = async (token, bookingId, sessionId = '') => {
+  const query = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
+  const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}${API_ENDPOINTS.BUYER_ESCROW_CONFIRM_SUFFIX}${query}`;
+  console.log('[EscrowConfirm] Payload >>>', { endpoint, bookingId, sessionId });
+  try {
+    const response = await apiRequest(endpoint, { method: 'GET', token });
+    console.log('[EscrowConfirm] Response <<<', JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log('[EscrowConfirm] Error <<<', { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+/**
  * PATCH /api/v1/buyer/bookings/{id}/work-entries/{entryId}/approve
  * Approve a logged work entry — pays the seller at its full hours.
  * 409 → already processed (duplicate/retry): treat as a soft success, just refresh.

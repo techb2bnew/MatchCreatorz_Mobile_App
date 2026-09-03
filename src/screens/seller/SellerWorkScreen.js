@@ -113,7 +113,7 @@ import SubmitWorkModal from '../../components/modal/SubmitWorkModal';
 import SplitMilestonesModal from '../../components/modal/SplitMilestonesModal';
 import SubmitMilestoneModal from '../../components/modal/SubmitMilestoneModal';
 import RichTextInline from '../../components/RichTextInline';
-import { extractMilestones } from '../../utils/milestones';
+import { canSplitIntoMilestones, extractMilestones } from '../../utils/milestones';
 import {
   extractWorkEntries,
   getBookingHourlyRate,
@@ -401,6 +401,13 @@ const SellerWorkScreen = ({ navigation, route }) => {
   const bookingTotal = booking =>
     Number(booking?.total ?? booking?.amount ?? 0) || 0;
 
+  // From the booking detail sheet — iOS can't stack two Modals, so close it first.
+  const openSplitFromDetail = () => {
+    const b = bookingDetailModal.booking;
+    setBookingDetailModal(prev => ({ ...prev, visible: false }));
+    setTimeout(() => setSplitModal({ visible: true, booking: b }), 250);
+  };
+
   const openSplitFromSubmit = () => {
     const b = submitWorkModal.booking;
     setSubmitWorkModal({ visible: false, booking: null });
@@ -416,7 +423,11 @@ const SellerWorkScreen = ({ navigation, route }) => {
 
     setIsCreatingMilestones(true);
     try {
-      const payload = list.map(m => ({ title: m.title, amount: m.amount }));
+      const payload = list.map(m => ({
+        title: m.title,
+        amount: m.amount,
+        duration_days: m.duration_days ?? null,
+      }));
       await createBookingMilestonesApi(token, b.id, payload);
       setSplitModal({ visible: false, booking: null });
       // Show the real milestones straight from the backend.
@@ -1779,6 +1790,11 @@ const SellerWorkScreen = ({ navigation, route }) => {
         milestones={bookingDetailModal.milestones}
         milestoneBusyId={milestoneBusyId}
         onSubmitMilestone={m => openSubmitMilestone(bookingDetailModal.bookingId, m)}
+        canSplit={canSplitIntoMilestones(
+          bookingDetailModal.booking?.raw || bookingDetailModal.booking,
+          bookingDetailModal.milestones,
+        )}
+        onSplitMilestones={openSplitFromDetail}
         onAcceptMilestoneCounter={handleAcceptMilestoneCounter}
         onCounterMilestoneBack={m => openCounterBackModal(m, 'milestone')}
         isHourly={bookingDetailModal.isHourly}

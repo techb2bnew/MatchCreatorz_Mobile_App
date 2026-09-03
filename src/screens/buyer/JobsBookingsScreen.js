@@ -42,6 +42,9 @@ import {
   counterWorkEntryApi,
   disputeWorkEntryApi,
   counterBuyerMilestoneApi,
+  createEscrowCheckoutApi,
+  confirmEscrowPaymentApi,
+  createBuyerMilestonesApi,
 } from '../../services/buyerService';
 import { getCategoriesApi } from '../../services/sellerService';
 import { createOrGetConversationApi } from '../../services/chatService';
@@ -123,6 +126,8 @@ import {
   POST_JOB_ATTACHMENTS_HINT,
   POST_JOB_BTN,
   POST_JOB_LABELS,
+  ESCROW_CHECKOUT_TITLE,
+  ERROR_ESCROW_CHECKOUT_FAILED,
   MAX_JOB_QUESTIONS,
   JOB_QUESTIONS_HINT,
   JOB_QUESTION_PLACEHOLDER,
@@ -146,7 +151,13 @@ import {
 import CustomTextInput from '../../components/CustomTextInput';
 import RichTextEditor from '../../components/RichTextEditor';
 import RichTextInline from '../../components/RichTextInline';
-import { extractMilestones, extractSubmittedWork } from '../../utils/milestones';
+import { canSplitIntoMilestones, extractMilestones, extractSubmittedWork } from '../../utils/milestones';
+import {
+  extractEscrowCheckout,
+  isEscrowBooking,
+  isEscrowPaymentRequiredError,
+  needsEscrowPayment,
+} from '../../utils/escrow';
 import {
   extractWorkEntries,
   getBookingHourlyRate,
@@ -163,6 +174,7 @@ import ConfirmationModal from '../../components/modal/ConfirmationModal';
 import JobDetailModal from '../../components/modal/JobDetailModal';
 import BookingDetailModal from '../../components/modal/BookingDetailModal';
 import WorkEntryActionModal from '../../components/modal/WorkEntryActionModal';
+import SplitMilestonesModal from '../../components/modal/SplitMilestonesModal';
 import BuyerServiceDetailModal from '../../components/modal/BuyerServiceDetailModal';
 import ConfirmBookingModal from '../../components/modal/ConfirmBookingModal';
 import SubmitReviewModal from '../../components/modal/SubmitReviewModal';
@@ -1211,7 +1223,7 @@ const JobsBookingsScreen = ({ navigation, route }) => {
 
       setIsCreatingBooking(true);
       try {
-        await createBuyerBookingApi(token, {
+        const createResponse = await createBuyerBookingApi(token, {
           seller_id: sellerId,
           service_id: service.id,
           title: service.title,
@@ -1221,10 +1233,17 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         });
         markServiceContacted(service.id);
         setConfirmBookingModal({ visible: false, service: null });
-        Alert.alert(CONFIRM_BOOKING_MODAL.successTitle, CONFIRM_BOOKING_MODAL.successMessage);
         if (isBookingsTab) {
           fetchBuyerBookings();
         }
+        // Escrow bookings authorise the card up front — go straight to checkout.
+        const createdBooking =
+          createResponse?.data?.booking || createResponse?.booking || createResponse?.data || null;
+        if (isEscrowBooking(createdBooking) && createdBooking?.id) {
+          await startEscrowPayment(createdBooking.id);
+          return;
+        }
+        Alert.alert(CONFIRM_BOOKING_MODAL.successTitle, CONFIRM_BOOKING_MODAL.successMessage);
       } catch (error) {
         Alert.alert(
           CONFIRM_BOOKING_MODAL.title,
@@ -1234,6 +1253,10 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         setIsCreatingBooking(false);
       }
     },
+    // startEscrowPayment is declared further down; listing it here would read the
+    // const during render (TDZ ReferenceError). It's only called from the async
+    // body, so the closure picks up the latest one anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       confirmBookingModal.service,
       isCreatingBooking,
@@ -1519,7 +1542,18 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     setMilestoneBusyId(milestone.id);
     try {
       // Accept releases (and charges) the stage — backend has no separate /pay.
-      await acceptBuyerMilestoneApi(token, bookingId, milestone.id);
+      const acceptResponse = await acceptBuyerMilestoneApi(token, bookingId, milestone.id);
+      // Escrow bookings don't settle here: the response carries escrow: true +
+      // a checkout_url, and the card is charged on Stripe instead.
+      const escrowCheckout = extractEscrowCheckout(acceptResponse);
+      if (escrowCheckout?.checkoutUrl) {
+        setBookingDetailModal(prev => ({ ...prev, visible: false }));
+        openEscrowCheckout(escrowCheckout.checkoutUrl, {
+          bookingId,
+          sessionId: escrowCheckout.sessionId,
+        });
+        return;
+      }
       const result = await loadBuyerBookingDetail(bookingId, { showLoader: false });
       const ms = result?.milestones || [];
       if (ms.length && ms.every(m => m.status === 'paid')) {
@@ -1539,6 +1573,93 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Action failed. Please try again.'));
     } finally {
       setMilestoneBusyId(null);
+    }
+  };
+
+  // ---- Escrow (card-hold) payments -----------------------------------------
+  // Escrow bookings charge the buyer's card via Stripe Checkout instead of the
+  // wallet. Fixed-price places a hold right after the booking is created and
+  // captures it on accept; milestones take one charge per stage.
+  const [escrowBusyId, setEscrowBusyId] = useState(null);
+
+  // ---- Split into milestones ------------------------------------------------
+  const [splitModal, setSplitModal] = useState({ visible: false, loading: false });
+
+  const openSplitModal = () => {
+    // iOS can't stack two Modals — close the detail sheet first.
+    setBookingDetailModal(prev => ({ ...prev, visible: false }));
+    setTimeout(() => setSplitModal({ visible: true, loading: false }), 250);
+  };
+
+  const closeSplitModal = () => {
+    if (splitModal.loading) return;
+    setSplitModal({ visible: false, loading: false });
+    setTimeout(() => setBookingDetailModal(prev => ({ ...prev, visible: true })), 250);
+  };
+
+  const handleCreateMilestones = async list => {
+    const bookingId = bookingDetailModal.bookingId;
+    if (!token || !bookingId || splitModal.loading) return;
+
+    setSplitModal(prev => ({ ...prev, loading: true }));
+    try {
+      const payload = list.map(m => ({
+        title: m.title,
+        amount: m.amount,
+        duration_days: m.duration_days ?? null,
+      }));
+      await createBuyerMilestonesApi(token, bookingId, payload);
+      setSplitModal({ visible: false, loading: false });
+      await loadBuyerBookingDetail(bookingId, { showLoader: false });
+      setBookingDetailModal(prev => ({ ...prev, visible: true }));
+      fetchBuyerBookings();
+    } catch (error) {
+      setSplitModal(prev => ({ ...prev, loading: false }));
+      // Amounts-don't-match / already-split / not-ongoing messages are user-facing.
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Could not create milestones.'));
+    }
+  };
+
+  const openEscrowCheckout = (checkoutUrl, { bookingId, sessionId = '' } = {}) => {
+    navigation.navigate(SCREEN_NAMES.STRIPE_CHECKOUT, {
+      checkoutUrl,
+      title: ESCROW_CHECKOUT_TITLE,
+      onResult: async result => {
+        if (result === 'success') {
+          // Webhook fallback — make sure the hold is recorded before we refresh.
+          await confirmEscrowPaymentApi(token, bookingId, sessionId).catch(() => {});
+        }
+        await fetchBuyerBookings();
+        if (bookingDetailModal.bookingId) {
+          loadBuyerBookingDetail(bookingDetailModal.bookingId, { showLoader: false }).catch(() => {});
+        }
+      },
+    });
+  };
+
+  /** Starts (or retries) the escrow hold for a fixed-price booking. */
+  const startEscrowPayment = async bookingId => {
+    if (!token || !bookingId || escrowBusyId != null) return false;
+    setEscrowBusyId(bookingId);
+    try {
+      const response = await createEscrowCheckoutApi(token, bookingId);
+      const data = response?.data || response || {};
+      const url = data.checkout_url || data.checkoutUrl || '';
+      if (!url) {
+        Alert.alert('', ERROR_ESCROW_CHECKOUT_FAILED);
+        return false;
+      }
+      setBookingDetailModal(prev => ({ ...prev, visible: false }));
+      openEscrowCheckout(url, {
+        bookingId,
+        sessionId: data.session_id || data.sessionId || '',
+      });
+      return true;
+    } catch (error) {
+      Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_ESCROW_CHECKOUT_FAILED));
+      return false;
+    } finally {
+      setEscrowBusyId(null);
     }
   };
 
@@ -1792,10 +1913,16 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   };
 
   const openConfirmModal = (actionType, bookingId) => {
+    // Escrow bookings capture the card hold instead of debiting the wallet, so
+    // the confirmation wording differs.
+    const target = bookings.find(item => String(item.id) === String(bookingId));
+    const escrow = isEscrowBooking(target?.raw || target);
     const configs = {
       accept: {
         title: 'Accept & Pay',
-        message: 'Accepting will release the payment to the seller. Continue?',
+        message: escrow
+          ? 'Accepting will charge your card and release the payment to the seller. Continue?'
+          : 'Accepting will release the payment to the seller. Continue?',
         confirmColor: greenColor,
         iconName: 'check-circle',
         confirmText: 'Accept & Pay',
@@ -1898,6 +2025,13 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         });
       }
     } catch (error) {
+      // Escrow booking whose hold was never placed — send the buyer to checkout
+      // instead of showing an error; accepting again captures it.
+      if (actionType === 'accept' && isEscrowPaymentRequiredError(error)) {
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+        await startEscrowPayment(bookingId);
+        return;
+      }
       Alert.alert(
         confirmModal.title,
         getApiErrorMessage(error?.data, error?.message || ERROR_BOOKING_ACTION_FAILED),
@@ -2955,10 +3089,25 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         hourlyRate={bookingDetailModal.hourlyRate}
         weeklyLimit={bookingDetailModal.weeklyLimit}
         weeklyUsed={hoursUsedInWeek(bookingDetailModal.workEntries)}
+        canSplit={canSplitIntoMilestones(
+          bookingDetailModal.booking?.raw || bookingDetailModal.booking,
+          bookingDetailModal.milestones,
+        )}
+        onSplitMilestones={openSplitModal}
+        onPayEscrow={b => startEscrowPayment(b?.id || bookingDetailModal.bookingId)}
+        escrowBusy={escrowBusyId != null}
         onApproveWorkEntry={handleApproveWorkEntry}
         onCounterWorkEntry={entry => openEntryActionModal('counter', entry)}
         onDisputeWorkEntry={entry => openEntryActionModal('dispute', entry)}
         onClose={closeBookingDetailModal}
+      />
+
+      <SplitMilestonesModal
+        visible={splitModal.visible}
+        total={Number(bookingDetailModal.booking?.raw?.amount ?? bookingDetailModal.booking?.total ?? 0) || 0}
+        loading={splitModal.loading}
+        onClose={closeSplitModal}
+        onCreate={handleCreateMilestones}
       />
 
       <WorkEntryActionModal

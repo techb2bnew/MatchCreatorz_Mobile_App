@@ -46,8 +46,6 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>MatchCreators needs camera access to take photos for your portfolio.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>MatchCreators needs photo library access to upload images for your portfolio.</string>
 	<key>RCTNewArchEnabled</key>
