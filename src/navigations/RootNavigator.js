@@ -8,6 +8,7 @@ import MainStack from './mainStack';
 import { SCREEN_NAMES, USER_ROLES } from '../constans/Constants';
 import { redColor, whiteColor } from '../constans/Color';
 import { hydrateSession, selectAuth } from '../redux/slices/authSlice';
+import { hydrateBlockedUsers } from '../redux/slices/blockedUsersSlice';
 import { fetchUnreadNotificationsCount } from '../redux/slices/notificationsSlice';
 import { fetchChatUnreadCount } from '../redux/slices/chatSlice';
 import { fetchSupportUnreadCount } from '../redux/slices/supportSlice';
@@ -52,6 +53,8 @@ const RootNavigator = () => {
 
   useEffect(() => {
     dispatch(hydrateSession());
+    // Blocked users are stored on-device — load them before any list renders.
+    dispatch(hydrateBlockedUsers());
   }, [dispatch]);
 
   useEffect(() => {

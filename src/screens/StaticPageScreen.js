@@ -3,8 +3,12 @@ import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BaseStyle } from '../constans/Style';
 import { blackColor, grayColor, redColor } from '../constans/Color';
-import { style } from '../constans/Fonts';
+import { style, spacings } from '../constans/Fonts';
 import ScreenHeader, { screenContentStyles } from '../components/ScreenHeader';
+import {
+  TERMS_ZERO_TOLERANCE_BODY,
+  TERMS_ZERO_TOLERANCE_HEADING,
+} from '../constans/Constants';
 import RichTextInline from '../components/RichTextInline';
 import { getPublicPageApi } from '../services/publicService';
 import { heightPercentageToDP as hp } from '../utils';
@@ -55,6 +59,9 @@ const StaticPageScreen = ({ navigation, route }) => {
   const slug = route.params?.slug;
   const fallbackTitle = route.params?.title || '';
   const hideHeaderActions = Boolean(route.params?.hideHeaderActions);
+  // The zero-tolerance clause App Store guideline 1.2 requires. Rendered from
+  // the app until the backend terms content carries it (see Constants).
+  const showZeroTolerance = String(slug || '').toLowerCase() === 'terms';
 
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -100,16 +107,30 @@ const StaticPageScreen = ({ navigation, route }) => {
           </View>
         ) : error ? (
           <Text style={[styles.error, style.fontWeightThin]}>{error}</Text>
-        ) : blocks.length ? (
-          blocks.map((block, index) => (
-            <RichTextInline
-              key={index}
-              html={block.html}
-              style={[styles.body, block.heading ? styles.heading : style.fontWeightThin]}
-            />
-          ))
         ) : (
-          <Text style={[styles.body, style.fontWeightThin]}>—</Text>
+          <>
+            {showZeroTolerance ? (
+              <View style={styles.noticeBox}>
+                <Text style={[styles.noticeTitle, style.fontWeightMedium]}>
+                  {TERMS_ZERO_TOLERANCE_HEADING}
+                </Text>
+                <Text style={[styles.noticeText, style.fontWeightThin]}>
+                  {TERMS_ZERO_TOLERANCE_BODY}
+                </Text>
+              </View>
+            ) : null}
+            {blocks.length ? (
+              blocks.map((block, index) => (
+                <RichTextInline
+                  key={index}
+                  html={block.html}
+                  style={[styles.body, block.heading ? styles.heading : style.fontWeightThin]}
+                />
+              ))
+            ) : !showZeroTolerance ? (
+              <Text style={[styles.body, style.fontWeightThin]}>—</Text>
+            ) : null}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -120,6 +141,22 @@ export default StaticPageScreen;
 
 const styles = StyleSheet.create({
   loader: { paddingVertical: hp(10) },
+  noticeBox: {
+    backgroundColor: '#FDECEC',
+    borderRadius: 12,
+    padding: spacings.large,
+    marginBottom: hp(2),
+  },
+  noticeTitle: {
+    fontSize: style.fontSizeNormal2x.fontSize,
+    color: redColor,
+    marginBottom: spacings.small,
+  },
+  noticeText: {
+    fontSize: style.fontSizeSmall2x.fontSize,
+    color: blackColor,
+    lineHeight: 20,
+  },
   body: {
     fontSize: style.fontSizeNormal2x.fontSize,
     color: blackColor,

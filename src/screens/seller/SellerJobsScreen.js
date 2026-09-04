@@ -48,6 +48,9 @@ import {
 import SearchBar from '../../components/SearchBar';
 import ScreenHeader from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
+import ReportContentModal from '../../components/modal/ReportContentModal';
+import { useModeration } from '../../utils/useModeration';
+import { CONTENT_BLOCKED_MESSAGE, containsObjectionableContent } from '../../utils/contentFilter';
 import PlaceBidModal from '../../components/modal/PlaceBidModal';
 import SuccessModal from '../../components/modal/SuccessModal';
 import { selectAuth } from '../../redux/slices/authSlice';
@@ -232,6 +235,14 @@ const SellerJobsScreen = ({ navigation }) => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [categoryOptions, setCategoryOptions] = useState(SELLER_JOB_CATEGORIES);
   const [jobs, setJobs] = useState([]);
+  const {
+    blockedIds,
+    reportTarget,
+    reporting,
+    closeReport,
+    submitReport,
+    openModerationMenu,
+  } = useModeration();
   const [isInitialLoading, setIsInitialLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [placeBidModal, setPlaceBidModal] = useState({
@@ -335,6 +346,15 @@ const SellerJobsScreen = ({ navigation }) => {
     const job = placeBidModal.job;
     if (!token || !job?.id || placeBidModal.loading) return;
 
+    // Objectionable-content filter (App Store 1.2).
+    const dirty = [form?.proposal, ...(form?.answers || [])].some(v =>
+      containsObjectionableContent(v),
+    );
+    if (dirty) {
+      setPlaceBidModal(prev => ({ ...prev, error: CONTENT_BLOCKED_MESSAGE }));
+      return;
+    }
+
     setPlaceBidModal(prev => ({ ...prev, loading: true, error: '' }));
     try {
       await placeSellerJobBidApi(token, job.id, form);
@@ -386,16 +406,18 @@ const SellerJobsScreen = ({ navigation }) => {
   );
 
   const filteredJobs = useMemo(() => {
-    if (!searchQuery.trim()) return jobs;
+    // Jobs from blocked buyers disappear from the feed instantly (App Store 1.2).
+    const visible = jobs.filter(job => !job.buyerId || !blockedIds.includes(String(job.buyerId)));
+    if (!searchQuery.trim()) return visible;
     const q = searchQuery.trim().toLowerCase();
-    return jobs.filter(
+    return visible.filter(
       job =>
         job.title.toLowerCase().includes(q) ||
         job.category.toLowerCase().includes(q) ||
         job.description.toLowerCase().includes(q) ||
         job.client.toLowerCase().includes(q),
     );
-  }, [jobs, searchQuery]);
+  }, [jobs, searchQuery, blockedIds]);
 
   const renderJobCard = ({ item: job }) => {
     const bidButton = getBidButtonConfig(job);
@@ -405,7 +427,22 @@ const SellerJobsScreen = ({ navigation }) => {
       <View style={styles.jobCard}>
         <View style={[styles.jobHeader, flexDirectionRow, justifyContentSpaceBetween, alignItemsCenter]}>
           <Text style={[styles.jobTitle, style.fontWeightMedium]}>{job.title}</Text>
-          <Text style={[styles.jobBudget, style.fontWeightMedium]}>{job.budget}</Text>
+          <View style={[flexDirectionRow, alignItemsCenter, styles.jobHeaderRight]}>
+            <Text style={[styles.jobBudget, style.fontWeightMedium]}>{job.budget}</Text>
+            <TouchableOpacity
+              onPress={() =>
+                openModerationMenu({
+                  type: 'job',
+                  id: job.id,
+                  title: job.title,
+                  userId: job.buyerId,
+                  userName: job.client,
+                })
+              }
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Icon name="more-vertical" size={18} color={grayColor} />
+            </TouchableOpacity>
+          </View>
         </View>
         {job.category && job.category !== '—' ? (
           <View style={[styles.jobCategoryRow, flexDirectionRow, alignItemsCenter]}>
@@ -572,6 +609,14 @@ const SellerJobsScreen = ({ navigation }) => {
         message={SELLER_PLACE_BID_MODAL.successMessage}
         onPress={() => setBidSuccessVisible(false)}
       />
+      <ReportContentModal
+        visible={Boolean(reportTarget)}
+        target={reportTarget}
+        loading={reporting}
+        onClose={closeReport}
+        onSubmit={submitReport}
+      />
+
     </SafeAreaView>
   );
 };
@@ -613,6 +658,7 @@ const styles = StyleSheet.create({
     color: grayColor,
   },
   categoryTextActive: { color: whiteColor },
+  jobHeaderRight: { gap: spacings.small },
   jobCard: {
     backgroundColor: whiteColor,
     borderRadius: 12,

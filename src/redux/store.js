@@ -3,6 +3,7 @@ import authReducer from './slices/authSlice';
 import notificationsReducer from './slices/notificationsSlice';
 import chatReducer from './slices/chatSlice';
 import supportReducer from './slices/supportSlice';
+import blockedUsersReducer from './slices/blockedUsersSlice';
 
 const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ const store = configureStore({
     notifications: notificationsReducer,
     chat: chatReducer,
     support: supportReducer,
+    blockedUsers: blockedUsersReducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({

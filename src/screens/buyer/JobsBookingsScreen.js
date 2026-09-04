@@ -126,6 +126,7 @@ import {
   POST_JOB_ATTACHMENTS_HINT,
   POST_JOB_BTN,
   POST_JOB_LABELS,
+  CONTENT_BLOCKED_TITLE,
   ESCROW_CHECKOUT_TITLE,
   ERROR_ESCROW_CHECKOUT_FAILED,
   MAX_JOB_QUESTIONS,
@@ -175,6 +176,9 @@ import JobDetailModal from '../../components/modal/JobDetailModal';
 import BookingDetailModal from '../../components/modal/BookingDetailModal';
 import WorkEntryActionModal from '../../components/modal/WorkEntryActionModal';
 import SplitMilestonesModal from '../../components/modal/SplitMilestonesModal';
+import ReportContentModal from '../../components/modal/ReportContentModal';
+import { useModeration } from '../../utils/useModeration';
+import { CONTENT_BLOCKED_MESSAGE, containsObjectionableContent } from '../../utils/contentFilter';
 import BuyerServiceDetailModal from '../../components/modal/BuyerServiceDetailModal';
 import ConfirmBookingModal from '../../components/modal/ConfirmBookingModal';
 import SubmitReviewModal from '../../components/modal/SubmitReviewModal';
@@ -792,6 +796,14 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     job: null,
     error: '',
   });
+  const {
+    blockedIds,
+    reportTarget,
+    reporting,
+    closeReport,
+    submitReport,
+    openModerationMenu,
+  } = useModeration();
   const [bookingDetailModal, setBookingDetailModal] = useState({
     visible: false,
     loading: false,
@@ -1859,6 +1871,15 @@ const JobsBookingsScreen = ({ navigation, route }) => {
   const handlePostJob = async () => {
     if (isPostingJob) return;
 
+    // Objectionable-content filter (App Store 1.2).
+    const dirtyWordIn = [postJobForm.title, postJobForm.description, postJobForm.skills].find(
+      value => containsObjectionableContent(value),
+    );
+    if (dirtyWordIn) {
+      Alert.alert(CONTENT_BLOCKED_TITLE, CONTENT_BLOCKED_MESSAGE);
+      return;
+    }
+
     const fieldErrors = {
       title: postJobForm.title.trim() ? '' : ERROR_JOB_TITLE_REQUIRED,
       category: postJobForm.category.trim() ? '' : ERROR_JOB_CATEGORY_REQUIRED,
@@ -2316,6 +2337,19 @@ const JobsBookingsScreen = ({ navigation, route }) => {
             ]}>
             <Text style={[styles.servicePrice, style.fontWeightMedium]}>{service.price}</Text>
             <View style={[flexDirectionRow, alignItemsCenter, styles.serviceRatingRow]}>
+              <TouchableOpacity
+                onPress={() =>
+                  openModerationMenu({
+                    type: 'service',
+                    id: service.id,
+                    title: service.title,
+                    userId: service.sellerId,
+                    userName: service.sellerName,
+                  })
+                }
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Icon name="more-vertical" size={16} color={grayColor} />
+              </TouchableOpacity>
               <Icon name="star" size={12} color={goldColor} />
               <Text style={[styles.serviceRatingText, style.fontWeightMedium]}>
                 {service.rating}
@@ -2477,7 +2511,9 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         {renderServiceCategoryFilters()}
       </View>
       <FlatList
-        data={services}
+        data={services.filter(
+          item => !item.sellerId || !blockedIds.includes(String(item.sellerId)),
+        )}
         keyExtractor={item => String(item.id)}
         renderItem={renderServiceCard}
         ListHeaderComponent={renderServicesHeader}
@@ -3145,6 +3181,14 @@ const JobsBookingsScreen = ({ navigation, route }) => {
         onClose={closeReviewModal}
         onSubmit={handleSubmitReview}
       />
+      <ReportContentModal
+        visible={Boolean(reportTarget)}
+        target={reportTarget}
+        loading={reporting}
+        onClose={closeReport}
+        onSubmit={submitReport}
+      />
+
     </SafeAreaView>
   );
 };

@@ -46,6 +46,19 @@ export const STATIC_PAGES = [
 // Promotional banner placement used on both dashboards (GET /banners?position=).
 export const BANNER_POSITION_HOME = 'Home Top';
 
+/**
+ * In-app purchase of Connects (seller bidding credits).
+ *
+ * Apple treats Connects as digital content, so selling them inside the app
+ * requires In-App Purchase (guideline 3.1.1) — App Review flagged this under
+ * 2.1(b). While this is false the app only shows the balance and history, with
+ * a plain note (no button, no link — guideline 3.1.1 forbids steering users to
+ * an external purchase). Flip to true to bring the plan cards back.
+ */
+export const CONNECTS_PURCHASE_ENABLED = false;
+export const SELLER_CONNECTS_WEB_NOTE =
+  'Connects are managed from your MatchCreatorz account on the web.';
+
 export const AUTH_LEGAL_PREFIX = 'By continuing you agree to our';
 // Escrow payment mode
 export const ESCROW_BANNER_TITLE = 'Complete payment';
@@ -55,6 +68,34 @@ export const ESCROW_BANNER_BUTTON = 'Pay now';
 export const ESCROW_HELD_BADGE = 'Escrow protected';
 export const ESCROW_CHECKOUT_TITLE = 'Escrow Payment';
 export const ERROR_ESCROW_CHECKOUT_FAILED = 'Could not start the payment. Please try again.';
+
+// Content moderation (App Store guideline 1.2)
+export const REPORT_MODAL_TITLE = 'Report content';
+export const REPORT_MODAL_SUBTITLE = 'We review every report within 24 hours.';
+export const REPORT_REASON_LABEL = 'WHY ARE YOU REPORTING THIS?';
+export const REPORT_NOTE_LABEL = 'MORE DETAILS (OPTIONAL)';
+export const REPORT_NOTE_PLACEHOLDER = 'Tell us what happened';
+export const REPORT_SUBMIT = 'Submit report';
+export const REPORT_ACTION = 'Report';
+export const BLOCK_ACTION = 'Block user';
+export const UNBLOCK_ACTION = 'Unblock user';
+export const REPORT_SENT_TITLE = 'Report sent';
+export const REPORT_SENT_MESSAGE =
+  'Thanks for telling us. Our moderation team reviews every report within 24 hours, removes content that breaks our rules, and removes the accounts responsible.';
+export const BLOCK_CONFIRM_TITLE = 'Block this user?';
+export const BLOCK_CONFIRM_MESSAGE =
+  'You will stop seeing their jobs, services and messages, and our team will be notified to review them.';
+export const BLOCK_DONE_TITLE = 'User blocked';
+export const BLOCK_DONE_MESSAGE =
+  'Their jobs, services and messages are hidden from you straight away, and our moderation team has been notified to review this account within 24 hours.';
+export const UNBLOCK_DONE_TITLE = 'User unblocked';
+export const UNBLOCK_DONE_MESSAGE = 'You will see their content again.';
+export const CONTENT_BLOCKED_TITLE = 'Content not allowed';
+export const CHAT_BLOCKED_TITLE = 'You blocked this user';
+export const CHAT_BLOCKED_MESSAGE =
+  'Unblock them from the menu at the top of this chat to send messages again.';
+export const ERROR_REPORT_REASON_REQUIRED = 'Please pick a reason.';
+export const ERROR_REPORT_FAILED = 'Could not send the report. Please try again.';
 
 export const CONTACT_US_TITLE = 'Contact Us';
 export const CONTACT_US_SUBTITLE = 'We usually reply within 24 hours';
@@ -141,6 +182,15 @@ export const FULL_NAME = 'Full name';
 export const CONFIRM_PASSWORD = 'Confirm password';
 export const ACCEPT_TERMS = 'I accept the';
 export const TERMS_AND_CONDITIONS = 'Terms and Conditions';
+// Shown at the top of the in-app Terms of Service page. TEMPORARY: the same
+// clause is being added to the terms content in the admin panel — remove this
+// block once the backend copy contains it, so it isn't shown twice.
+export const TERMS_ZERO_TOLERANCE_HEADING = 'Community rules — zero tolerance';
+export const TERMS_ZERO_TOLERANCE_BODY =
+  'Zero tolerance for objectionable content and abusive users. You agree not to post content that is unlawful, obscene, hateful, harassing, defamatory or otherwise objectionable, and not to abuse other users. We review every report within 24 hours and will remove offending content and permanently terminate the accounts of users who violate this policy.';
+
+export const TERMS_ZERO_TOLERANCE_NOTE =
+  'MatchCreatorz has zero tolerance for objectionable content or abusive users. Reported content is reviewed within 24 hours and offending accounts are removed.';
 export const SMS_CONSENT = 'I consent to receive SMS messages for verification.';
 export const ALREADY_HAVE_ACCOUNT = 'Already have an account?';
 export const SELECTED = 'Selected';
@@ -1065,6 +1115,8 @@ export const mapApiRoleToAppRole = role => {
 };
 
 export const AUTH_TOKEN_KEY = 'matchcreators_auth_token';
+// Locally blocked users (App Store 1.2 — hide their content instantly).
+export const BLOCKED_USERS_KEY = 'blocked_user_ids';
 export const AUTH_USER_KEY = 'matchcreators_auth_user';
 export const AUTH_ROLE_KEY = 'matchcreators_auth_role';
 

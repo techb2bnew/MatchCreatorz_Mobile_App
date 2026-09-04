@@ -46,6 +46,7 @@ import {
 import SearchBar from '../components/SearchBar';
 import ScreenHeader, { screenContentStyles } from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
+import { useModeration } from '../utils/useModeration';
 import SupportNewTicketModal from '../components/modal/SupportNewTicketModal';
 import { selectAuth } from '../redux/slices/authSlice';
 import { getConversationsApi } from '../services/chatService';
@@ -167,6 +168,7 @@ const ChatScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('chat');
   const [searchQuery, setSearchQuery] = useState('');
   const [conversations, setConversations] = useState([]);
+  const { blockedIds } = useModeration();
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -340,14 +342,18 @@ const ChatScreen = ({ navigation }) => {
   );
 
   const filteredConversations = useMemo(() => {
-    if (!searchQuery.trim()) return conversations;
+    // Blocked users disappear from the list immediately (App Store 1.2).
+    const visible = conversations.filter(
+      c => !c.otherUserId || !blockedIds.includes(String(c.otherUserId)),
+    );
+    if (!searchQuery.trim()) return visible;
     const q = searchQuery.trim().toLowerCase();
-    return conversations.filter(
+    return visible.filter(
       c =>
         c.name.toLowerCase().includes(q) ||
         c.lastMessage.toLowerCase().includes(q),
     );
-  }, [conversations, searchQuery]);
+  }, [conversations, searchQuery, blockedIds]);
 
   const openConversation = conversation => {
     setConversations(prev =>

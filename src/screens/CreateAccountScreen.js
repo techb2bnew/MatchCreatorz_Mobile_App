@@ -71,6 +71,7 @@ import {
   SMS_CONSENT,
   SUCCEED,
   TERMS_AND_CONDITIONS,
+  TERMS_ZERO_TOLERANCE_NOTE,
   USER_ROLES,
   SIGNUP_STEPS,
   JOIN_CREATORS_SUBTITLE,
@@ -204,7 +205,7 @@ const CreateAccountScreen = ({ navigation }) => {
       phone: validatePhone(phone, { required: false }),
       password: isSeller ? '' : validatePassword(password),
       confirmPassword: isSeller ? '' : validateConfirmPassword(password, confirmPassword),
-      terms: isSeller ? '' : validateTerms(acceptTerms),
+      terms: validateTerms(acceptTerms),
     };
     setErrors(newErrors);
     return !Object.values(newErrors).some(Boolean);
@@ -636,32 +637,50 @@ const CreateAccountScreen = ({ navigation }) => {
                 <Text style={[styles.sellerHint, style.fontWeightThin]}>{SELLER_PASSWORD_HINT}</Text>
               )}
 
-              {!isSeller ? (
-                <>
+              <>
+                {/* EULA gate — every user accepts the terms before an account is
+                    created, and the terms themselves are one tap away. */}
+                <View style={[styles.checkboxRow, flexDirectionRow]}>
                   <TouchableOpacity
-                    style={[styles.checkboxRow, flexDirectionRow]}
                     onPress={() => {
                       setAcceptTerms(p => !p);
                       clearError('terms');
-                    }}>
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <View style={[styles.checkbox, acceptTerms && styles.checkboxChecked]}>
                       {acceptTerms ? <Icon name="check" size={12} color={whiteColor} /> : null}
                     </View>
-                    <Text style={[styles.checkboxText, style.fontWeightThin]}>
-                      {ACCEPT_TERMS} <Text style={styles.linkText}>{TERMS_AND_CONDITIONS}</Text>
-                      <Text style={styles.requiredMark}> *</Text>
-                    </Text>
                   </TouchableOpacity>
-                  {errors.terms ? <Text style={styles.termsError}>{errors.terms}</Text> : null}
+                  <Text style={[styles.checkboxText, style.fontWeightThin]}>
+                    {ACCEPT_TERMS}{' '}
+                    <Text
+                      style={styles.linkText}
+                      onPress={() =>
+                        navigation.navigate(SCREEN_NAMES.STATIC_PAGE, {
+                          slug: 'terms',
+                          title: TERMS_AND_CONDITIONS,
+                          hideHeaderActions: true,
+                        })
+                      }>
+                      {TERMS_AND_CONDITIONS}
+                    </Text>
+                    <Text style={styles.requiredMark}> *</Text>
+                  </Text>
+                </View>
+                {errors.terms ? <Text style={styles.termsError}>{errors.terms}</Text> : null}
+                <Text style={[styles.termsNote, style.fontWeightThin]}>
+                  {TERMS_ZERO_TOLERANCE_NOTE}
+                </Text>
 
+                {!isSeller ? (
                   <TouchableOpacity style={[styles.checkboxRow, flexDirectionRow]} onPress={() => setAcceptSms(p => !p)}>
                     <View style={[styles.checkbox, acceptSms && styles.checkboxChecked]}>
                       {acceptSms ? <Icon name="check" size={12} color={whiteColor} /> : null}
                     </View>
                     <Text style={[styles.checkboxText, style.fontWeightThin]}>{SMS_CONSENT}</Text>
                   </TouchableOpacity>
-                </>
-              ) : null}
+                ) : null}
+              </>
             </>
           ) : null}
 
@@ -945,6 +964,12 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeSmall1x.fontSize,
     marginTop: spacings.xsmall,
     marginLeft: spacings.xsmall,
+  },
+  termsNote: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: grayColor,
+    marginBottom: hp(1),
+    lineHeight: 17,
   },
   termsError: {
     color: redColor,

@@ -38,6 +38,8 @@ import {
 } from '../../constans/Color';
 import { style, spacings } from '../../constans/Fonts';
 import { isEscrowBooking } from '../../utils/escrow';
+import { useModeration } from '../../utils/useModeration';
+import ReportContentModal from '../../components/modal/ReportContentModal';
 import {
   BID_STATUS_COUNTERED,
   BIDS_SUFFIX,
@@ -201,6 +203,14 @@ const ViewBidsScreen = ({ navigation, route }) => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [bids, setBids] = useState([]);
+  const {
+    blockedIds,
+    reportTarget,
+    reporting,
+    closeReport,
+    submitReport,
+    openModerationMenu,
+  } = useModeration();
   const [jobInfo, setJobInfo] = useState(routeJob || null);
   const [isLoading, setIsLoading] = useState(false);
   const [hireModal, setHireModal] = useState({
@@ -294,16 +304,18 @@ const ViewBidsScreen = ({ navigation, route }) => {
   );
 
   const filteredBids = useMemo(() => {
-    if (!searchQuery.trim()) return bids;
+    // Bids from blocked sellers disappear instantly (App Store 1.2).
+    const visible = bids.filter(b => !b.sellerId || !blockedIds.includes(String(b.sellerId)));
+    if (!searchQuery.trim()) return visible;
     const q = searchQuery.trim().toLowerCase();
-    return bids.filter(
+    return visible.filter(
       b =>
         b.creatorName.toLowerCase().includes(q) ||
         b.email.toLowerCase().includes(q) ||
         b.proposal.toLowerCase().includes(q) ||
         b.statusLabel.toLowerCase().includes(q),
     );
-  }, [bids, searchQuery]);
+  }, [bids, searchQuery, blockedIds]);
 
   const openHireModal = bid => {
     if (!bid?.id || bid.hired || bid.rejected || isHiring || isRejecting) return;
@@ -547,6 +559,20 @@ const ViewBidsScreen = ({ navigation, route }) => {
                           {bid.delivery}
                         </Text>
                       </View>
+                      <TouchableOpacity
+                        onPress={() =>
+                          openModerationMenu({
+                            type: 'bid',
+                            id: bid.id,
+                            title: bid.creatorName,
+                            userId: bid.sellerId,
+                            userName: bid.creatorName,
+                          })
+                        }
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={styles.bidMoreBtn}>
+                        <Icon name="more-vertical" size={18} color={grayColor} />
+                      </TouchableOpacity>
                     </View>
 
                     {bid.proposal ? (
@@ -719,6 +745,14 @@ const ViewBidsScreen = ({ navigation, route }) => {
         onClose={closeCounterModal}
         onSubmit={handleSubmitCounter}
       />
+      <ReportContentModal
+        visible={Boolean(reportTarget)}
+        target={reportTarget}
+        loading={reporting}
+        onClose={closeReport}
+        onSubmit={submitReport}
+      />
+
     </SafeAreaView>
   );
 };
@@ -834,6 +868,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: hp(1.5),
   },
+  bidMoreBtn: { paddingLeft: spacings.small },
   answersWrap: {
     backgroundColor: inputBgColor,
     borderRadius: 10,

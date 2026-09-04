@@ -41,6 +41,14 @@ import {
   EMPTY_CHATS_TITLE,
 } from '../constans/Constants';
 import EmptyState from '../components/EmptyState';
+import ReportContentModal from '../components/modal/ReportContentModal';
+import { useModeration } from '../utils/useModeration';
+import { CONTENT_BLOCKED_MESSAGE, containsObjectionableContent } from '../utils/contentFilter';
+import {
+  CHAT_BLOCKED_MESSAGE,
+  CHAT_BLOCKED_TITLE,
+  CONTENT_BLOCKED_TITLE,
+} from '../constans/Constants';
 import UploadOptionsModal from '../components/modal/UploadOptionsModal';
 import { selectAuth } from '../redux/slices/authSlice';
 import { fetchChatUnreadCount } from '../redux/slices/chatSlice';
@@ -98,6 +106,15 @@ const ChatConversationScreen = ({ navigation, route }) => {
   const dispatch = useDispatch();
   const conversationId = route.params?.conversationId;
   const otherUser = route.params?.otherUser || {};
+  const {
+    isBlocked,
+    reportTarget,
+    reporting,
+    closeReport,
+    submitReport,
+    openModerationMenu,
+  } = useModeration();
+  const otherUserBlocked = isBlocked(otherUser?.id);
   const listRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
@@ -325,6 +342,17 @@ const ChatConversationScreen = ({ navigation, route }) => {
     const body = text || pendingAttachment?.name || '';
     if (!body || isSending || !conversationId || !token) return;
 
+    if (otherUserBlocked) {
+      Alert.alert(CHAT_BLOCKED_TITLE, CHAT_BLOCKED_MESSAGE);
+      return;
+    }
+
+    // Objectionable-content filter (App Store 1.2) — never send it in the first place.
+    if (containsObjectionableContent(text)) {
+      Alert.alert(CONTENT_BLOCKED_TITLE, CONTENT_BLOCKED_MESSAGE);
+      return;
+    }
+
     const attachmentPayload = pendingAttachment
       ? { url: pendingAttachment.url, name: pendingAttachment.name }
       : undefined;
@@ -498,6 +526,21 @@ const ChatConversationScreen = ({ navigation, route }) => {
             </View>
           </View>
         </View>
+
+        <TouchableOpacity
+          style={styles.moreBtn}
+          onPress={() =>
+            openModerationMenu({
+              type: 'profile',
+              id: otherUser?.id,
+              title: otherUser?.name || 'User',
+              userId: otherUser?.id,
+              userName: otherUser?.name || '',
+            })
+          }
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Icon name="more-vertical" size={20} color={blackColor} />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -541,6 +584,14 @@ const ChatConversationScreen = ({ navigation, route }) => {
             }
           />
         )}
+
+        {otherUserBlocked ? (
+          <View style={styles.blockedBar}>
+            <Text style={[styles.blockedBarText, style.fontWeightMedium]}>
+              You blocked this user. Unblock them from the menu to chat again.
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.inputSection}>
           {pendingAttachment ? (
@@ -594,6 +645,14 @@ const ChatConversationScreen = ({ navigation, route }) => {
         onClose={() => setShowUploadOptions(false)}
         onSelect={handleUploadOption}
       />
+      <ReportContentModal
+        visible={Boolean(reportTarget)}
+        target={reportTarget}
+        loading={reporting}
+        onClose={closeReport}
+        onSubmit={submitReport}
+      />
+
     </SafeAreaView>
   );
 };
@@ -611,6 +670,23 @@ const styles = StyleSheet.create({
     backgroundColor: whiteColor,
     gap: wp(1.5),
     zIndex: 1,
+  },
+  moreBtn: {
+    width: wp(9),
+    height: wp(9),
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  blockedBar: {
+    backgroundColor: '#FDECEC',
+    paddingVertical: spacings.normal,
+    paddingHorizontal: spacings.large,
+  },
+  blockedBarText: {
+    fontSize: style.fontSizeSmall1x.fontSize,
+    color: redColor,
+    textAlign: 'center',
   },
   backBtn: {
     width: wp(9),

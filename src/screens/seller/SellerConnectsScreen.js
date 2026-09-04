@@ -17,6 +17,7 @@ import {
   borderLightColor,
   grayColor,
   greenColor,
+  inputBgColor,
   redColor,
   screenBgColor,
   whiteColor,
@@ -31,6 +32,8 @@ import {
   SELLER_CONNECTS_BUY_CONFIRM_MESSAGE,
   SELLER_CONNECTS_BUY_CONFIRM_TITLE,
   SELLER_CONNECTS_BUY_TITLE,
+  CONNECTS_PURCHASE_ENABLED,
+  SELLER_CONNECTS_WEB_NOTE,
   SELLER_CONNECTS_HISTORY,
   SELLER_CONNECTS_MOST_POPULAR,
   SELLER_CONNECTS_PURCHASED,
@@ -243,6 +246,8 @@ const SellerConnectsScreen = ({ navigation }) => {
               </View>
             </View>
 
+            {CONNECTS_PURCHASE_ENABLED ? (
+              <>
             <Text style={[styles.sectionTitle, style.fontWeightMedium]}>{SELLER_CONNECTS_BUY_TITLE}</Text>
             {plans.map(plan => (
               <View key={plan.id} style={[styles.planCard, plan.popular && styles.planCardPopular]}>
@@ -276,6 +281,14 @@ const SellerConnectsScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
             ))}
+              </>
+            ) : (
+              <View style={styles.webNoteBox}>
+                <Text style={[styles.webNoteText, style.fontWeightThin]}>
+                  {SELLER_CONNECTS_WEB_NOTE}
+                </Text>
+              </View>
+            )}
 
             <Text style={[styles.sectionTitle, style.fontWeightMedium]}>{SELLER_CONNECTS_HISTORY}</Text>
             {history.length === 0 ? (
@@ -372,6 +385,18 @@ const styles = StyleSheet.create({
     fontSize: style.fontSizeMedium1x.fontSize,
     color: blackColor,
     marginBottom: spacings.normal,
+  },
+  webNoteBox: {
+    backgroundColor: inputBgColor,
+    borderRadius: 12,
+    padding: spacings.large,
+    marginBottom: hp(2),
+  },
+  webNoteText: {
+    fontSize: style.fontSizeSmall2x.fontSize,
+    color: grayColor,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   planCard: {
     backgroundColor: whiteColor,
