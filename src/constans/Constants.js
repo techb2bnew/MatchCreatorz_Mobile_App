@@ -83,10 +83,16 @@ export const PAYMENT_CHOICE_DIRECT = 'Pay now';
 export const PAYMENT_CHOICE_DIRECT_NOTE =
   'Your card is charged straight away and the money is released to the seller.';
 export const PAYMENT_CHOICE_HOLD = 'Pay & Hold';
-export const PAYMENT_CHOICE_HOLD_NOTE = days =>
-  `Your card is only authorised — nothing is charged. The amount stays on hold for up to ${days} day${
-    Number(days) === 1 ? '' : 's'
-  }, and is charged when you release it.`;
+/**
+ * Split into three parts so the middle one — how long the money is tied up —
+ * can be highlighted. That's the term buyers most often miss, and it's the one
+ * that decides whether "Pay & Hold" is the right choice for them.
+ */
+export const PAYMENT_CHOICE_HOLD_NOTE_PREFIX =
+  'Your card is only authorised — nothing is charged. ';
+export const PAYMENT_CHOICE_HOLD_NOTE_HIGHLIGHT = days =>
+  `The amount stays on hold for up to ${days} day${Number(days) === 1 ? '' : 's'}`;
+export const PAYMENT_CHOICE_HOLD_NOTE_SUFFIX = ', and is charged when you release it.';
 
 export const HOLD_BADGE = 'On hold';
 export const HOLD_RELEASE_BUTTON = 'Release & Pay';

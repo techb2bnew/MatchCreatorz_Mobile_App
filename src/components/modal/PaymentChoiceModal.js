@@ -18,7 +18,9 @@ import {
   PAYMENT_CHOICE_DIRECT,
   PAYMENT_CHOICE_DIRECT_NOTE,
   PAYMENT_CHOICE_HOLD,
-  PAYMENT_CHOICE_HOLD_NOTE,
+  PAYMENT_CHOICE_HOLD_NOTE_HIGHLIGHT,
+  PAYMENT_CHOICE_HOLD_NOTE_PREFIX,
+  PAYMENT_CHOICE_HOLD_NOTE_SUFFIX,
   PAYMENT_CHOICE_SUBTITLE,
   PAYMENT_CHOICE_TITLE,
 } from '../../constans/Constants';
@@ -65,7 +67,11 @@ const PaymentChoiceModal = ({
       key: PAYMENT_TYPES.HOLD,
       icon: 'clock',
       title: PAYMENT_CHOICE_HOLD,
-      note: PAYMENT_CHOICE_HOLD_NOTE(holdDays),
+      note: PAYMENT_CHOICE_HOLD_NOTE_PREFIX,
+      // Called out in red: how long the money is tied up is the term buyers
+      // most often miss, and the one that decides whether this is right.
+      highlight: PAYMENT_CHOICE_HOLD_NOTE_HIGHLIGHT(holdDays),
+      noteAfter: PAYMENT_CHOICE_HOLD_NOTE_SUFFIX,
     },
   ];
 
@@ -131,7 +137,15 @@ const PaymentChoiceModal = ({
                     {active ? <Icon name="check" size={12} color={whiteColor} /> : null}
                   </View>
                 </View>
-                <Text style={[styles.optionNote, style.fontWeightThin]}>{option.note}</Text>
+                <Text style={[styles.optionNote, style.fontWeightThin]}>
+                  {option.note}
+                  {option.highlight ? (
+                    <Text style={[styles.optionNoteHighlight, style.fontWeightMedium]}>
+                      {option.highlight}
+                    </Text>
+                  ) : null}
+                  {option.noteAfter || ''}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -202,6 +216,7 @@ const styles = StyleSheet.create({
   },
   radioActive: { borderColor: redColor, backgroundColor: redColor },
   optionNote: { fontSize: style.fontSizeSmall1x.fontSize, color: grayColor, lineHeight: 18 },
+  optionNoteHighlight: { color: redColor },
   confirmBtn: {
     minHeight: 48,
     borderRadius: 12,
