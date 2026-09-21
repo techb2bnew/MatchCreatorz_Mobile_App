@@ -31,8 +31,16 @@ import {
 } from '../../constans/Color';
 import { style, spacings } from '../../constans/Fonts';
 import {
+  EMPTY_WALLET_SELLER_HOLDS_MESSAGE,
+  EMPTY_WALLET_SELLER_HOLDS_TITLE,
   EMPTY_WALLET_TRANSACTIONS_MESSAGE,
   EMPTY_WALLET_TRANSACTIONS_TITLE,
+  TXN_HOLD_STATUS_META,
+  TXN_STATUS_META,
+  TXN_TYPE_HOLD,
+  WALLET_TAB_ALL,
+  WALLET_TAB_HOLD,
+  WALLET_TABS,
   SELLER_WALLET_ALL_TIME,
   SELLER_WALLET_AVAILABLE,
   SELLER_WALLET_AVAILABLE_SUB,
@@ -49,12 +57,16 @@ import {
   SELLER_WALLET_WITHDRAW_MODAL_TITLE,
   SELLER_WALLET_WITHDRAW_REQUESTED,
   SELLER_WALLET_PAYOUTS_READY,
+  SELLER_WALLET_PENDING_PAYOUT,
+  SELLER_WALLET_PENDING_PAYOUT_SUB,
   SCREEN_NAMES,
   CONFIRM_CANCEL,
 } from '../../constans/Constants';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import CustomButton from '../../components/CustomButton';
 import EmptyState from '../../components/EmptyState';
+import WalletTransactionRow from '../../components/WalletTransactionRow';
+import { extractTxnList, mapWalletTxn } from '../../utils/walletTransactions';
 import { selectAuth } from '../../redux/slices/authSlice';
 import { getApiErrorMessage } from '../../services/apiClient';
 import {
@@ -82,44 +94,22 @@ const n = v => {
   return Number.isFinite(x) ? x : 0;
 };
 
-const formatTxnDate = dateStr => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return String(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-};
-
+/**
+ * GET /wallet returns { balance, available, pending_withdraw, total_in,
+ * total_out, currency, ... }. Everything that has ever come into the wallet is
+ * total_in (earnings) and everything that has left is total_out (withdrawals) —
+ * there are no total_earnings / total_withdrawn fields, so reading those left
+ * both cards permanently at $0. The older names stay as fallbacks in case an
+ * older backend build is in front of the app.
+ */
 const extractSummary = res => {
   const d = res?.data ?? res ?? {};
   return {
     balance: n(d.balance ?? d.available ?? d.available_balance),
-    totalEarnings: n(d.total_earnings ?? d.totalEarnings ?? d.earnings ?? d.total_earned),
-    totalWithdrawn: n(d.total_withdrawn ?? d.totalWithdrawn ?? d.withdrawn),
-    pending: n(d.pending ?? d.pending_balance),
-  };
-};
-
-const extractTxnList = res => {
-  const d = res?.data;
-  if (Array.isArray(d)) return d;
-  if (Array.isArray(d?.transactions)) return d.transactions;
-  if (Array.isArray(d?.data)) return d.data;
-  if (Array.isArray(d?.items)) return d.items;
-  if (Array.isArray(d?.rows)) return d.rows;
-  if (Array.isArray(res?.transactions)) return res.transactions;
-  return [];
-};
-
-const mapTxn = t => {
-  const amount = n(t?.amount ?? t?.value);
-  const rawType = String(t?.type || t?.direction || '').toLowerCase();
-  const isCredit = rawType ? /credit|earning|payout_in|refund|in\b/.test(rawType) : amount >= 0;
-  return {
-    id: String(t?.id ?? t?._id ?? `${t?.created_at}-${amount}`),
-    title: t?.description || t?.title || t?.reason || (isCredit ? 'Earning' : 'Withdrawal'),
-    date: formatTxnDate(t?.created_at || t?.createdAt || t?.date),
-    amount: Math.abs(amount),
-    type: isCredit ? 'credit' : 'debit',
+    totalEarnings: n(d.total_in ?? d.total_earnings ?? d.totalEarnings ?? d.earnings),
+    totalWithdrawn: n(d.total_out ?? d.total_withdrawn ?? d.totalWithdrawn ?? d.withdrawn),
+    // Withdrawals sitting with the admin for approval — held out of `balance`.
+    pending: n(d.pending_withdraw ?? d.pendingWithdraw ?? d.pending),
   };
 };
 
@@ -135,6 +125,8 @@ const SellerWalletScreen = ({ navigation }) => {
 
   const [walletStats, setWalletStats] = useState({ balance: 0, totalEarnings: 0, totalWithdrawn: 0, pending: 0 });
   const [transactions, setTransactions] = useState([]);
+  const [holdTransactions, setHoldTransactions] = useState([]);
+  const [activeTab, setActiveTab] = useState(WALLET_TAB_ALL);
   const [payoutsEnabled, setPayoutsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -149,13 +141,18 @@ const SellerWalletScreen = ({ navigation }) => {
       if (isRefresh) setIsRefreshing(true);
       else setIsLoading(true);
       try {
-        const [summaryRes, txnRes, statusRes] = await Promise.all([
+        // The hold list is its own request rather than a filter over the first
+        // page: holds are rare next to ordinary activity, so filtering locally
+        // would show an empty tab whenever they fall outside page 1.
+        const [summaryRes, txnRes, holdRes, statusRes] = await Promise.all([
           getWalletSummaryApi(token),
           getWalletTransactionsApi(token, { page: 1, limit: 30 }),
+          getWalletTransactionsApi(token, { page: 1, limit: 30, type: TXN_TYPE_HOLD }),
           getConnectStatusApi(token).catch(() => null),
         ]);
         setWalletStats(extractSummary(summaryRes));
-        setTransactions(extractTxnList(txnRes).map(mapTxn));
+        setTransactions(extractTxnList(txnRes).map(t => mapWalletTxn(t, { role: 'seller' })));
+        setHoldTransactions(extractTxnList(holdRes).map(t => mapWalletTxn(t, { role: 'seller' })));
         if (statusRes) setPayoutsEnabled(isPayoutsEnabled(statusRes));
       } catch (error) {
         // keep values on failure
@@ -226,6 +223,24 @@ const SellerWalletScreen = ({ navigation }) => {
     }
   };
 
+  // Opens a single transaction's receipt. The status label is resolved here so
+  // the receipt reads exactly what the row does (a hold's status means
+  // something different from an ordinary transaction's — see Constants).
+  const openReceipt = item => {
+    const meta = item.isHold
+      ? TXN_HOLD_STATUS_META[item.status] || TXN_HOLD_STATUS_META.pending
+      : TXN_STATUS_META[item.status] || TXN_STATUS_META.completed;
+    navigation.navigate(SCREEN_NAMES.RECEIPT, {
+      item,
+      role: 'seller',
+      currency: '$',
+      statusLabel: meta.label,
+    });
+  };
+
+  const isHoldTab = activeTab === WALLET_TAB_HOLD;
+  const visibleTransactions = isHoldTab ? holdTransactions : transactions;
+
   const statCards = [
     {
       id: 'balance',
@@ -253,6 +268,17 @@ const SellerWalletScreen = ({ navigation }) => {
       icon: 'trending-up',
       iconBg: '#E8F0F8',
       iconColor: blueColor,
+    },
+    {
+      // Requested withdrawals the admin hasn't approved yet. They're held out
+      // of `balance` on purpose, so without this card that money looks lost.
+      id: 'pending',
+      label: SELLER_WALLET_PENDING_PAYOUT,
+      value: formatCurrency(walletStats.pending),
+      subtitle: SELLER_WALLET_PENDING_PAYOUT_SUB,
+      icon: 'clock',
+      iconBg: '#FFF6E5',
+      iconColor: '#B26A00',
     },
   ];
 
@@ -338,55 +364,43 @@ const SellerWalletScreen = ({ navigation }) => {
             )}
 
             <Text style={[styles.sectionTitle, style.fontWeightMedium]}>{SELLER_WALLET_HISTORY}</Text>
+
+            <View style={[styles.tabRow, flexDirectionRow]}>
+              {WALLET_TABS.map(tab => {
+                const isActive = activeTab === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={[styles.tab, alignJustifyCenter, isActive && styles.tabActive]}
+                    onPress={() => setActiveTab(tab.key)}
+                    activeOpacity={0.85}>
+                    <Text
+                      style={[styles.tabText, style.fontWeightMedium, isActive && styles.tabTextActive]}>
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             <View style={styles.listCard}>
-              {transactions.length === 0 ? (
+              {visibleTransactions.length === 0 ? (
                 <EmptyState
                   icon="credit-card"
-                  title={EMPTY_WALLET_TRANSACTIONS_TITLE}
-                  message={EMPTY_WALLET_TRANSACTIONS_MESSAGE}
+                  title={isHoldTab ? EMPTY_WALLET_SELLER_HOLDS_TITLE : EMPTY_WALLET_TRANSACTIONS_TITLE}
+                  message={isHoldTab ? EMPTY_WALLET_SELLER_HOLDS_MESSAGE : EMPTY_WALLET_TRANSACTIONS_MESSAGE}
                   compact
                 />
               ) : (
-                transactions.map((item, index) => {
-                  const isCredit = item.type === 'credit';
-                  return (
-                    <View
-                      key={item.id}
-                      style={[
-                        styles.transactionRow,
-                        flexDirectionRow,
-                        alignItemsCenter,
-                        index < transactions.length - 1 && styles.rowBorder,
-                      ]}>
-                      <View
-                        style={[
-                          styles.transactionIcon,
-                          alignJustifyCenter,
-                          { backgroundColor: isCredit ? '#E8F8EE' : lightPink },
-                        ]}>
-                        <Icon
-                          name={isCredit ? 'arrow-down-left' : 'arrow-up-right'}
-                          size={16}
-                          color={isCredit ? greenColor : redColor}
-                        />
-                      </View>
-                      <View style={styles.transactionInfo}>
-                        <Text style={[styles.transactionTitle, style.fontWeightMedium]} numberOfLines={2}>
-                          {item.title}
-                        </Text>
-                        <Text style={[styles.transactionDate, style.fontWeightThin]}>{item.date}</Text>
-                      </View>
-                      <Text
-                        style={[
-                          styles.transactionAmount,
-                          style.fontWeightMedium,
-                          { color: isCredit ? greenColor : redColor },
-                        ]}>
-                        {isCredit ? '+' : '-'}{formatCurrency(item.amount)}
-                      </Text>
-                    </View>
-                  );
-                })
+                visibleTransactions.map((item, index) => (
+                  <WalletTransactionRow
+                    key={item.id}
+                    item={item}
+                    role="seller"
+                    onDownloadReceipt={openReceipt}
+                    showBorder={index < visibleTransactions.length - 1}
+                  />
+                ))
               )}
             </View>
           </>
@@ -455,9 +469,11 @@ export default SellerWalletScreen;
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: screenBgColor },
   loader: { paddingVertical: hp(10), alignItems: 'center' },
-  statsRow: { gap: spacings.normal, marginBottom: hp(2) },
+  statsRow: { flexWrap: 'wrap', gap: spacings.normal, marginBottom: hp(2) },
   statCard: {
-    flex: 1,
+    // Two per row: `flex: 1` would stretch a wrapped row's single card.
+    flexBasis: '47%',
+    flexGrow: 1,
     backgroundColor: whiteColor,
     borderRadius: 12,
     borderWidth: 1,
@@ -520,6 +536,23 @@ const styles = StyleSheet.create({
     color: blackColor,
     marginBottom: spacings.normal,
   },
+  tabRow: {
+    backgroundColor: whiteColor,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: borderLightColor,
+    padding: 4,
+    marginBottom: hp(1.5),
+    gap: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: spacings.medium,
+    borderRadius: 8,
+  },
+  tabActive: { backgroundColor: redColor },
+  tabText: { fontSize: style.fontSizeSmall1x.fontSize, color: grayColor, textAlign: 'center' },
+  tabTextActive: { color: whiteColor },
   listCard: {
     backgroundColor: whiteColor,
     borderRadius: 12,
@@ -527,32 +560,6 @@ const styles = StyleSheet.create({
     borderColor: borderLightColor,
     overflow: 'hidden',
     marginBottom: hp(2),
-  },
-  transactionRow: {
-    padding: spacings.large,
-    gap: spacings.normal,
-  },
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: borderLightColor,
-  },
-  transactionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  transactionInfo: { flex: 1 },
-  transactionTitle: {
-    fontSize: style.fontSizeNormal2x.fontSize,
-    color: blackColor,
-    marginBottom: 2,
-  },
-  transactionDate: {
-    fontSize: style.fontSizeSmall1x.fontSize,
-    color: grayColor,
-  },
-  transactionAmount: {
-    fontSize: style.fontSizeNormal2x.fontSize,
   },
   modalOverlay: {
     flex: 1,

@@ -21,6 +21,7 @@ export const SCREEN_NAMES = {
   CHAT_CONVERSATION: 'ChatConversation',
   SUPPORT_CHAT: 'SupportChat',
   STRIPE_CHECKOUT: 'StripeCheckout',
+  RECEIPT: 'Receipt',
   WALLET: 'Wallet',
   PROFILE: 'Profile',
   NOTIFICATIONS: 'Notifications',
@@ -68,6 +69,53 @@ export const ESCROW_BANNER_BUTTON = 'Pay now';
 export const ESCROW_HELD_BADGE = 'Escrow protected';
 export const ESCROW_CHECKOUT_TITLE = 'Escrow Payment';
 export const ERROR_ESCROW_CHECKOUT_FAILED = 'Could not start the payment. Please try again.';
+// STRIPE_PUBLISHABLE_KEY reaches the app through react-native-config, a native
+// module — a value added to .env only takes effect after a rebuild.
+export const ERROR_STRIPE_KEY_MISSING =
+  'Payment setup is missing (no Stripe key in this build). Rebuild the app after adding STRIPE_PUBLISHABLE_KEY to .env.';
+
+// Pay now vs Pay & Hold — the buyer's choice the first time they accept an
+// escrow booking / milestone / work entry.
+export const PAYMENT_CHOICE_TITLE = 'How do you want to pay?';
+export const PAYMENT_CHOICE_SUBTITLE = 'Both options are protected — pick what suits you.';
+export const PAYMENT_CHOICE_CONFIRM = 'Continue';
+export const PAYMENT_CHOICE_DIRECT = 'Pay now';
+export const PAYMENT_CHOICE_DIRECT_NOTE =
+  'Your card is charged straight away and the money is released to the seller.';
+export const PAYMENT_CHOICE_HOLD = 'Pay & Hold';
+export const PAYMENT_CHOICE_HOLD_NOTE = days =>
+  `Your card is only authorised — nothing is charged. The amount stays on hold for up to ${days} day${
+    Number(days) === 1 ? '' : 's'
+  }, and is charged when you release it.`;
+
+export const HOLD_BADGE = 'On hold';
+export const HOLD_RELEASE_BUTTON = 'Release & Pay';
+export const HOLD_CANCEL_BUTTON = 'Cancel hold';
+export const HOLD_CANCEL_CONFIRM_TITLE = 'Cancel this hold?';
+export const HOLD_CANCEL_CONFIRM_BODY =
+  'The authorisation on your card is released and nothing is charged. You can pay again later.';
+export const PAYMENT_SUCCESS_TITLE = 'Payment successful';
+export const PAYMENT_SUCCESS_MESSAGE =
+  'Your payment went through. The booking has been updated with its new status.';
+
+export const HOLD_CANCEL_SUCCESS_TITLE = 'Hold cancelled';
+export const HOLD_CANCEL_SUCCESS =
+  'The authorisation on your card has been released. Nothing was charged.';
+
+// Releasing a payment that's already on hold — the only step left is the
+// capture, so this is the last confirmation before the money moves.
+export const MILESTONE_RELEASE_CONFIRM_TITLE = 'Release this payment?';
+export const MILESTONE_RELEASE_CONFIRM_BODY = (title, amount) =>
+  `${amount} for "${title}" will be charged and paid to the seller. This can't be undone.`;
+export const MILESTONE_RELEASE_CONFIRM_BTN = 'Release & Pay';
+
+export const ENTRY_RELEASE_CONFIRM_TITLE = 'Release this payment?';
+export const ENTRY_RELEASE_CONFIRM_BODY = (hours, amount) =>
+  `${amount} for ${hours}h will be charged and paid to the seller. This can't be undone.`;
+export const ENTRY_RELEASE_CONFIRM_BTN = 'Release & Pay';
+export const ERROR_HOLD_CANCEL_FAILED = 'Could not cancel the hold. Please try again.';
+/** Default when wallet config hasn't loaded yet — matches the web app's fallback. */
+export const ESCROW_HOLD_DAYS_FALLBACK = 7;
 
 // Content moderation (App Store guideline 1.2)
 export const REPORT_MODAL_TITLE = 'Report content';
@@ -443,6 +491,10 @@ export const WALLET_TITLE = 'Wallet';
 export const WALLET_BALANCE_LABEL = 'Wallet Balance';
 export const WALLET_AVAILABLE_SUBTITLE = 'Available';
 export const WALLET_TOTAL_SPENT_LABEL = 'Total Spent';
+export const WALLET_PAYMENTS_LABEL = 'Payments';
+export const WALLET_PAYMENTS_SUB = 'Bookings paid';
+export const WALLET_PENDING_PAYMENT_LABEL = 'Pending Payment';
+export const WALLET_PENDING_PAYMENT_SUB = 'Charged when you accept';
 export const WALLET_TOTAL_REFUNDED_LABEL = 'Total Refunded';
 export const WALLET_ALL_TIME = 'All time';
 export const WALLET_ADD_MONEY_TITLE = 'Add Money to Wallet';
@@ -461,6 +513,83 @@ export const WALLET_TOPUP_CANCELLED = 'Payment cancelled.';
 export const WALLET_TOPUP_FAILED = 'Payment could not be completed. Please try again.';
 export const EMPTY_WALLET_TRANSACTIONS_TITLE = 'No transactions yet';
 export const EMPTY_WALLET_TRANSACTIONS_MESSAGE = 'Your wallet activity will show up here.';
+
+// Buyers pay bookings by card through Stripe, so there is no wallet to top up
+// any more — this screen is now a record of what was paid and what's on hold.
+export const WALLET_CARD_ONLY_NOTE =
+  'Bookings are paid by card through Stripe. Refunds land back in this wallet.';
+
+/**
+ * WalletTransaction types the buyer's history shows specially. Both are
+ * informational receipts the backend records with amount 0, because the payment
+ * went to Stripe and never moved the wallet balance:
+ *   escrow_hold    — a "Pay & Hold" authorisation was placed on the card.
+ *   escrow_payment — a booking / milestone / work entry was paid by card.
+ */
+export const TXN_TYPE_HOLD = 'escrow_hold';
+export const TXN_TYPE_PAYMENT = 'escrow_payment';
+/** Mirrors the backend's own TYPE_LABELS, plus the two escrow receipt types. */
+export const TXN_TYPE_LABELS = {
+  [TXN_TYPE_HOLD]: 'Payment on hold',
+  [TXN_TYPE_PAYMENT]: 'Paid via Stripe',
+  topup: 'Wallet top-up',
+  booking_payment: 'Booking payment',
+  booking_refund: 'Booking refund',
+  earning: 'Earning',
+  platform_fee: 'Platform fee',
+  withdrawal: 'Withdrawal',
+  withdrawal_reversal: 'Withdrawal reversed',
+  adjustment: 'Adjustment',
+  milestone_release: 'Milestone released',
+};
+
+/** status column on a wallet transaction: pending | completed | failed. */
+export const TXN_STATUS_META = {
+  completed: { label: 'Completed', bg: '#E8F8EE', text: '#1B7A45' },
+  pending: { label: 'Pending', bg: '#FFF6E5', text: '#B26A00' },
+  failed: { label: 'Failed', bg: '#FDECEC', text: '#C42B2B' },
+};
+/**
+ * An escrow_hold row reuses the same status column to carry the hold's own
+ * lifecycle, so "Completed" / "Pending" would read wrong on it:
+ *   pending   — the authorisation is live, nothing charged yet
+ *   completed — the buyer released it, the seller has been paid
+ *   failed    — it was cancelled (or expired) with no charge
+ */
+export const TXN_HOLD_STATUS_META = {
+  pending: { label: 'Hold', bg: '#FFF6E5', text: '#B26A00' },
+  completed: { label: 'Released', bg: '#E8F8EE', text: '#1B7A45' },
+  failed: { label: 'Cancelled', bg: '#F1F1F1', text: '#6B6B6B' },
+};
+/**
+ * Fee breakdown shown when a transaction row is expanded. It reconciles as
+ * gross = platform fee + Stripe fee + net to seller, and buyer and seller see
+ * the same figures for the same settlement so the two sides line up.
+ */
+export const TXN_BREAKDOWN_GROSS = 'Gross payment';
+export const TXN_BREAKDOWN_PLATFORM_FEE = 'Platform fee';
+export const TXN_BREAKDOWN_STRIPE_FEE = 'Other tax (Fee processing)';
+export const TXN_BREAKDOWN_STRIPE_FEE_LATER = 'charged on release';
+export const TXN_BREAKDOWN_NET = 'Net to seller';
+export const TXN_BREAKDOWN_PAID = 'Amount paid';
+export const TXN_RECEIPT_BUTTON = 'Download Receipt';
+export const RECEIPT_SCREEN_TITLE = 'Receipt';
+export const RECEIPT_BRAND = 'MatchCreatorz';
+export const RECEIPT_SUBTITLE = 'Payment Receipt';
+export const RECEIPT_SHARE_BUTTON = 'Share receipt';
+
+export const WALLET_TAB_ALL = 'all';
+export const WALLET_TAB_HOLD = 'hold';
+export const WALLET_TABS = [
+  { key: WALLET_TAB_ALL, label: 'All transactions' },
+  { key: WALLET_TAB_HOLD, label: 'Hold transactions' },
+];
+export const EMPTY_WALLET_HOLDS_TITLE = 'No holds yet';
+export const EMPTY_WALLET_SELLER_HOLDS_TITLE = 'No holds yet';
+export const EMPTY_WALLET_SELLER_HOLDS_MESSAGE =
+  'When a buyer pays with "Pay & Hold", the reserved amount shows up here until they release it to you.';
+export const EMPTY_WALLET_HOLDS_MESSAGE =
+  'When you pay with "Pay & Hold", the authorisation shows up here until you release or cancel it.';
 export const TAB_PROFILE = 'Profile';
 export const PROFILE_TITLE = 'My Account';
 export const PROFILE_PERSONAL_INFO = 'Personal Information';
@@ -847,6 +976,8 @@ export const SELLER_WALLET_TITLE = 'Wallet';
 export const SELLER_WALLET_AVAILABLE = 'Available Balance';
 export const SELLER_WALLET_AVAILABLE_SUB = 'Ready to withdraw';
 export const SELLER_WALLET_TOTAL_EARNINGS = 'Total Earnings';
+export const SELLER_WALLET_PENDING_PAYOUT = 'Pending Payout';
+export const SELLER_WALLET_PENDING_PAYOUT_SUB = 'Awaiting approval';
 export const SELLER_WALLET_TOTAL_WITHDRAWN = 'Total Withdrawn';
 export const SELLER_WALLET_ALL_TIME = 'All time';
 export const SELLER_WALLET_WITHDRAW_TITLE = 'Request Withdrawal';
@@ -1175,10 +1306,13 @@ export const API_ENDPOINTS = {
   BUYER_JOBS: '/buyer/jobs',
   BUYER_JOBS_UPLOAD: '/buyer/jobs/upload',
   BUYER_BOOKINGS: '/buyer/bookings',
-  // Escrow (card-hold) payment mode. NOTE: these two paths are not in swagger yet —
-  // confirm with the backend team before release.
+  // Escrow (card) payment mode — paths confirmed against the backend repo.
   BUYER_ESCROW_CHECKOUT_SUFFIX: '/escrow/checkout',
   BUYER_ESCROW_CONFIRM_SUFFIX: '/escrow/confirm',
+  // Release a "Pay & Hold" authorisation without charging it. One per entity:
+  // /bookings/:id/cancel-hold, .../milestones/:mid/cancel-hold,
+  // .../work-entries/:eid/cancel-hold
+  BUYER_CANCEL_HOLD_SUFFIX: '/cancel-hold',
   BUYER_SERVICES: '/buyer/services',
   BUYER_REVIEWS: '/buyer/reviews',
   BUYER_NOTIFICATIONS: '/buyer/notifications',
@@ -1222,4 +1356,27 @@ export const API_ENDPOINTS = {
 // success/cancel (Stripe redirects here after the hosted checkout finishes).
 export const STRIPE_SUCCESS_URL = Config.STRIPE_SUCCESS_URL;
 export const STRIPE_CANCEL_URL = Config.STRIPE_CANCEL_URL;
+/**
+ * Publishable key for Stripe.js. Needed for EMBEDDED Checkout sessions, which
+ * the backend returns as a client_secret with no hosted URL — the app mounts
+ * Stripe's own checkout iframe in a WebView with it (StripeCheckoutScreen).
+ * Publishable keys are safe to ship in a client; the secret key never is.
+ */
+export const STRIPE_PUBLISHABLE_KEY = Config.STRIPE_PUBLISHABLE_KEY;
+/**
+ * The page Stripe.js is told it's running on. Stripe refuses to load on a
+ * null/opaque origin, which is what a WebView's raw HTML would otherwise be.
+ */
+export const STRIPE_EMBED_BASE_URL = 'https://matchcreatorz.com/app/checkout';
+/**
+ * Stripe redirects to the session's return_url once payment completes. The app
+ * sends its own (STRIPE_SUCCESS_URL), but older backend builds hardcode the web
+ * app's booking/wallet page — so completion is also recognised by the query
+ * flags those pages use.
+ */
+export const STRIPE_RETURN_SUCCESS_FLAGS = [
+  'escrow=success',
+  'topup=success',
+  'purchase=success',
+];
 export const GOOGLE_PLACES_API_KEY = Config.GOOGLE_PLACES_API_KEY;

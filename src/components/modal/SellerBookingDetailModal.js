@@ -35,6 +35,8 @@ import {
   SELLER_BOOKING_DETAIL_MODAL,
 } from '../../constans/Constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
+import HoldNotice from '../HoldNotice';
+import { isHoldHeld } from '../../utils/escrow';
 import MilestonesSection from '../MilestonesSection';
 import WorkEntriesSection from '../WorkEntriesSection';
 
@@ -98,8 +100,15 @@ const SellerBookingDetailModal = ({
   // Split into milestones — shown only while the booking is eligible.
   canSplit = false,
   onSplitMilestones,
+  // Escrow "Pay & Hold": the buyer's card is authorised but not captured yet.
+  // Read-only here — only the buyer can release or cancel it.
+  holdDays = null,
 }) => {
   const statusStyle = getBookingStatusStyle(booking?.status);
+  const raw = booking?.raw || booking;
+  // A whole-booking hold. Milestone / work-entry holds show on their own rows
+  // inside their sections instead.
+  const bookingOnHold = isHoldHeld(raw) && !milestones.length && !isHourly;
 
   return (
     <Modal
@@ -162,6 +171,8 @@ const SellerBookingDetailModal = ({
                       {BOOKING_ID_PREFIX}: #{booking.id}
                     </Text>
                   </View>
+
+                  {bookingOnHold ? <HoldNotice role="seller" days={holdDays} /> : null}
 
                   <View style={[styles.sellerRow, flexDirectionRow, alignItemsCenter]}>
                     <View style={[styles.sellerAvatar, alignJustifyCenter]}>
@@ -241,6 +252,7 @@ const SellerBookingDetailModal = ({
                         weeklyUsed={weeklyUsed}
                         onAcceptCounter={onAcceptWorkEntryCounter}
                         onCounterBack={onCounterWorkEntryBack}
+                        holdDays={holdDays}
                       />
                       {onLogWork ? (
                         <TouchableOpacity
@@ -259,6 +271,7 @@ const SellerBookingDetailModal = ({
                       onSubmit={onSubmitMilestone}
                       onAcceptCounter={onAcceptMilestoneCounter}
                       onCounterBack={onCounterMilestoneBack}
+                      holdDays={holdDays}
                     />
                   )}
                 </>

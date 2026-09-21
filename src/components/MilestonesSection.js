@@ -12,6 +12,9 @@ import {
   whiteColor,
 } from '../constans/Color';
 import { style, spacings } from '../constans/Fonts';
+import { HOLD_RELEASE_BUTTON } from '../constans/Constants';
+import { isHoldHeld } from '../utils/escrow';
+import HoldNotice from './HoldNotice';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -49,6 +52,10 @@ const MilestonesSection = ({
   onCounter,
   onAcceptCounter,
   onCounterBack,
+  // Escrow "Pay & Hold": this stage's card authorisation is placed but not
+  // captured. Buyer-only — releasing it is the same Accept & Pay button.
+  onCancelHold,
+  holdDays = null,
 }) => {
   if (!milestones.length) return null;
 
@@ -79,6 +86,7 @@ const MilestonesSection = ({
         const buyerCountered = m.status === 'countered' && m.counterBy === 'buyer';
         const sellerCountered = m.status === 'countered' && m.counterBy === 'seller';
         const sellerCanRespond = role === 'seller' && buyerCountered;
+        const onHold = isHoldHeld(m.raw || m);
 
         return (
           <View key={String(m.id)} style={styles.card}>
@@ -198,6 +206,15 @@ const MilestonesSection = ({
               </TouchableOpacity>
             ) : null}
 
+            {onHold ? (
+              <HoldNotice
+                role={role}
+                days={holdDays}
+                busy={busy}
+                onCancel={role === 'buyer' && onCancelHold ? () => onCancelHold(m) : undefined}
+              />
+            ) : null}
+
             {buyerSubmitted ? (
               <>
                 <View style={[styles.buyerActions, flexDirectionRow]}>
@@ -226,7 +243,9 @@ const MilestonesSection = ({
                   {busy ? (
                     <ActivityIndicator size="small" color={whiteColor} />
                   ) : (
-                    <Text style={[styles.acceptText, style.fontWeightMedium]}>Accept &amp; Pay</Text>
+                    <Text style={[styles.acceptText, style.fontWeightMedium]}>
+                      {onHold ? HOLD_RELEASE_BUTTON : 'Accept & Pay'}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </>

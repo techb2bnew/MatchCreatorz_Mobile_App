@@ -189,11 +189,15 @@ const SellerConnectsScreen = ({ navigation }) => {
         cancelUrl: STRIPE_CANCEL_URL,
       });
       const data = res?.data || res;
+      // Hosted sessions come back as a url, embedded ones as a client_secret —
+      // StripeCheckoutScreen renders either.
       const url = data?.url;
+      const clientSecret = data?.client_secret || data?.clientSecret;
       const sessionId = data?.session_id || data?.sessionId;
-      if (url) {
+      if (url || clientSecret) {
         navigation.navigate(SCREEN_NAMES.STRIPE_CHECKOUT, {
           checkoutUrl: url,
+          clientSecret,
           title: SELLER_CONNECTS_BUY_TITLE,
           onResult: r => handlePurchaseResult(r, sessionId),
         });

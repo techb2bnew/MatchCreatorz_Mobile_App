@@ -34,9 +34,16 @@ export const getWalletSummaryApi = async token => {
   }
 };
 
-/** GET /wallet/transactions?page&limit */
-export const getWalletTransactionsApi = async (token, { page = 1, limit = 20 } = {}) => {
-  const endpoint = `${API_ENDPOINTS.WALLET_TRANSACTIONS}?page=${page}&limit=${limit}`;
+/**
+ * GET /wallet/transactions?page&limit&type&search
+ * `type` is a WalletTransaction type (e.g. 'escrow_hold') — the backend filters
+ * on it exactly, so an unknown value returns an empty list rather than an error.
+ */
+export const getWalletTransactionsApi = async (token, { page = 1, limit = 20, type, search } = {}) => {
+  const params = [`page=${page}`, `limit=${limit}`];
+  if (type) params.push(`type=${encodeURIComponent(type)}`);
+  if (search) params.push(`search=${encodeURIComponent(search)}`);
+  const endpoint = `${API_ENDPOINTS.WALLET_TRANSACTIONS}?${params.join('&')}`;
   try {
     return await apiRequest(endpoint, { method: 'GET', token });
   } catch (error) {

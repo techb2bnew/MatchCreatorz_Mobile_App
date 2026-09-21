@@ -29,6 +29,9 @@ import {
   getBuyerServicesApi,
   acceptBuyerBookingApi,
   acceptBuyerMilestoneApi,
+  cancelBookingHoldApi,
+  cancelMilestoneHoldApi,
+  cancelWorkEntryHoldApi,
   rejectBuyerMilestoneApi,
   rejectBuyerBookingApi,
   cancelBuyerBookingApi,
@@ -129,6 +132,20 @@ import {
   CONTENT_BLOCKED_TITLE,
   ESCROW_CHECKOUT_TITLE,
   ERROR_ESCROW_CHECKOUT_FAILED,
+  ERROR_HOLD_CANCEL_FAILED,
+  ENTRY_RELEASE_CONFIRM_BODY,
+  ENTRY_RELEASE_CONFIRM_BTN,
+  ENTRY_RELEASE_CONFIRM_TITLE,
+  MILESTONE_RELEASE_CONFIRM_BODY,
+  MILESTONE_RELEASE_CONFIRM_BTN,
+  MILESTONE_RELEASE_CONFIRM_TITLE,
+  HOLD_CANCEL_SUCCESS_TITLE,
+  PAYMENT_SUCCESS_MESSAGE,
+  PAYMENT_SUCCESS_TITLE,
+  HOLD_CANCEL_BUTTON,
+  HOLD_CANCEL_CONFIRM_BODY,
+  HOLD_CANCEL_CONFIRM_TITLE,
+  HOLD_CANCEL_SUCCESS,
   MAX_JOB_QUESTIONS,
   JOB_QUESTIONS_HINT,
   JOB_QUESTION_PLACEHOLDER,
@@ -157,8 +174,11 @@ import {
   extractEscrowCheckout,
   isEscrowBooking,
   isEscrowPaymentRequiredError,
-  needsEscrowPayment,
+  needsPaymentChoice,
+  PAYMENT_TYPES,
 } from '../../utils/escrow';
+import { useEscrowSettings } from '../../utils/useEscrowSettings';
+import PaymentChoiceModal from '../../components/modal/PaymentChoiceModal';
 import {
   extractWorkEntries,
   getBookingHourlyRate,
@@ -172,6 +192,7 @@ import FormLabel from '../../components/FormLabel';
 import SearchBar from '../../components/SearchBar';
 import ScreenHeader, { screenContentStyles } from '../../components/ScreenHeader';
 import ConfirmationModal from '../../components/modal/ConfirmationModal';
+import SuccessModal from '../../components/modal/SuccessModal';
 import JobDetailModal from '../../components/modal/JobDetailModal';
 import BookingDetailModal from '../../components/modal/BookingDetailModal';
 import WorkEntryActionModal from '../../components/modal/WorkEntryActionModal';
@@ -1551,21 +1572,28 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     const bookingId = bookingDetailModal.bookingId;
     const booking = bookingDetailModal.booking;
     if (!token || !bookingId || milestone?.id == null || milestoneBusyId != null) return;
+
+    // Escrow, first accept of this stage: the buyer chooses direct vs hold
+    // BEFORE we call the API, since that choice is what the API is being told.
+    // A stage already on hold is accepted with no payment_type at all — that
+    // second accept is what captures it.
+    // payment_mode lives on the booking, payment_status on the stage itself —
+    // both only on the raw API objects, not the display-mapped ones.
+    let paymentType;
+    if (needsPaymentChoice(booking?.raw || booking, milestone?.raw || milestone)) {
+      paymentType = await askPaymentType(formatCurrency(milestone.amount));
+      if (!paymentType) return;
+    }
+
     setMilestoneBusyId(milestone.id);
     try {
       // Accept releases (and charges) the stage — backend has no separate /pay.
-      const acceptResponse = await acceptBuyerMilestoneApi(token, bookingId, milestone.id);
-      // Escrow bookings don't settle here: the response carries escrow: true +
+      const acceptResponse = await acceptBuyerMilestoneApi(token, bookingId, milestone.id, {
+        paymentType,
+      });
+      // Escrow stages don't settle here: the response carries escrow: true +
       // a checkout_url, and the card is charged on Stripe instead.
-      const escrowCheckout = extractEscrowCheckout(acceptResponse);
-      if (escrowCheckout?.checkoutUrl) {
-        setBookingDetailModal(prev => ({ ...prev, visible: false }));
-        openEscrowCheckout(escrowCheckout.checkoutUrl, {
-          bookingId,
-          sessionId: escrowCheckout.sessionId,
-        });
-        return;
-      }
+      if (handleEscrowCheckoutResponse(acceptResponse, bookingId)) return;
       const result = await loadBuyerBookingDetail(bookingId, { showLoader: false });
       const ms = result?.milestones || [];
       if (ms.length && ms.every(m => m.status === 'paid')) {
@@ -1582,17 +1610,22 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       }
     } catch (error) {
       await loadBuyerBookingDetail(bookingId, { showLoader: false }).catch(() => { });
-      Alert.alert('', getApiErrorMessage(error?.data, error?.message || 'Action failed. Please try again.'));
+      showResult(getApiErrorMessage(error?.data, error?.message || 'Action failed. Please try again.'), {
+        iconName: 'alert-circle',
+      });
     } finally {
       setMilestoneBusyId(null);
     }
   };
 
-  // ---- Escrow (card-hold) payments -----------------------------------------
+  // ---- Escrow (card) payments ----------------------------------------------
   // Escrow bookings charge the buyer's card via Stripe Checkout instead of the
-  // wallet. Fixed-price places a hold right after the booking is created and
-  // captures it on accept; milestones take one charge per stage.
+  // wallet. The buyer picks 'direct' (charge + release now) or 'hold' (authorise
+  // only, capture on a second accept) the first time they accept a booking,
+  // milestone or work entry — see utils/escrow.js.
   const [escrowBusyId, setEscrowBusyId] = useState(null);
+  // Admin's Delayed Payments toggle + how long a hold may sit, from /wallet/config.
+  const escrowSettings = useEscrowSettings(token);
 
   // ---- Split into milestones ------------------------------------------------
   const [splitModal, setSplitModal] = useState({ visible: false, loading: false });
@@ -1632,83 +1665,293 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     }
   };
 
-  const openEscrowCheckout = (checkoutUrl, { bookingId, sessionId = '' } = {}) => {
+  const openEscrowCheckout = ({ checkoutUrl, clientSecret, sessionId = '' } = {}, bookingId) => {
     navigation.navigate(SCREEN_NAMES.STRIPE_CHECKOUT, {
+      // Whichever the backend returned — the checkout screen handles both a
+      // hosted URL and an embedded session mounted through Stripe.js.
       checkoutUrl,
+      clientSecret,
       title: ESCROW_CHECKOUT_TITLE,
       onResult: async result => {
-        if (result === 'success') {
-          // Webhook fallback — make sure the hold is recorded before we refresh.
-          await confirmEscrowPaymentApi(token, bookingId, sessionId).catch(() => {});
+        // Webhook fallback: ask the backend to settle this session before we
+        // refresh. Run it on cancel too — the buyer may have paid and then
+        // closed the screen before Stripe's redirect landed, and the backend
+        // just answers { confirmed: false } when nothing was actually paid.
+        let confirmed = null;
+        if (sessionId) {
+          confirmed = await confirmEscrowPaymentApi(token, bookingId, sessionId).catch(() => null);
         }
         await fetchBuyerBookings();
-        if (bookingDetailModal.bookingId) {
-          loadBuyerBookingDetail(bookingDetailModal.bookingId, { showLoader: false }).catch(() => {});
+        const detailId = bookingDetailModal.bookingId;
+        if (detailId) {
+          await loadBuyerBookingDetail(detailId, { showLoader: false }).catch(() => {});
         }
+
+        const settled = result === 'success' || confirmed?.data?.confirmed === true;
+        if (!settled) return;
+        // Tell the buyer the payment landed. loadBuyerBookingDetail has just
+        // reopened the detail sheet, so close it while this shows and put it
+        // back when the buyer dismisses (iOS can't stack two Modals).
+        setBookingDetailModal(prev => ({ ...prev, visible: false }));
+        setTimeout(
+          () =>
+            setResultModal({
+              visible: true,
+              title: PAYMENT_SUCCESS_TITLE,
+              message: PAYMENT_SUCCESS_MESSAGE,
+              iconName: 'check',
+              reopenDetail: Boolean(detailId),
+            }),
+          250,
+        );
       },
     });
   };
 
-  /** Starts (or retries) the escrow hold for a fixed-price booking. */
-  const startEscrowPayment = async bookingId => {
+  /**
+   * An accept/approve response in escrow mode doesn't settle — it hands back a
+   * Stripe Checkout session for this payment. Returns true when we've taken
+   * over (sent the buyer to checkout or shown why we can't), false when the
+   * response settled normally and the caller should just refresh.
+   */
+  const handleEscrowCheckoutResponse = (response, bookingId) => {
+    const checkout = extractEscrowCheckout(response);
+    if (!checkout) return false;
+    if (!checkout.payable) {
+      showResult(ERROR_ESCROW_CHECKOUT_FAILED, { iconName: 'alert-circle' });
+      return true;
+    }
+    setBookingDetailModal(prev => ({ ...prev, visible: false }));
+    openEscrowCheckout(checkout, bookingId);
+    return true;
+  };
+
+  // The "Pay now vs Pay & Hold" sheet. It's opened from inside other flows
+  // (the booking detail sheet, the accept confirmation), so instead of a
+  // callback it hands back a promise the caller awaits — resolved with the
+  // chosen type, or null if the buyer backed out.
+  const [paymentChoice, setPaymentChoice] = useState({
+    visible: false,
+    amountLabel: '',
+    resolve: null,
+    restoreDetail: false,
+  });
+
+  const settlePaymentChoice = value => {
+    setPaymentChoice(prev => {
+      // Close first, then resolve on the next tick: iOS can't have this sheet
+      // and whatever the caller opens next (checkout, detail) on screen at once.
+      if (prev.resolve) setTimeout(() => prev.resolve(value), 250);
+      // Backing out should put the buyer back where they were, not on a bare
+      // bookings list. On a real choice the caller decides what comes next.
+      if (!value && prev.restoreDetail) {
+        setTimeout(() => setBookingDetailModal(d => ({ ...d, visible: true })), 250);
+      }
+      return { visible: false, amountLabel: '', resolve: null, restoreDetail: false };
+    });
+  };
+
+  /**
+   * Asks the buyer how they want to pay. With the admin's Delayed Payments
+   * toggle off there is nothing to choose, so it resolves to 'direct' straight
+   * away without showing anything.
+   */
+  // Generic yes/no sheet for the money actions inside the booking detail sheet
+  // (release a payment, cancel a hold). Same promise handoff as the payment
+  // choice above — no native Alerts anywhere in this flow.
+  const [actionConfirm, setActionConfirm] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    confirmText: '',
+    confirmColor: undefined,
+    iconName: 'alert-circle',
+    resolve: null,
+    restoreDetail: false,
+  });
+
+  const settleActionConfirm = value => {
+    setActionConfirm(prev => {
+      if (prev.resolve) setTimeout(() => prev.resolve(value), 250);
+      if (!value && prev.restoreDetail) {
+        setTimeout(() => setBookingDetailModal(d => ({ ...d, visible: true })), 250);
+      }
+      return { ...prev, visible: false, resolve: null, restoreDetail: false };
+    });
+  };
+
+  // Result message for the same flow — a popup, not a native Alert.
+  const [resultModal, setResultModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    iconName: 'check',
+    // Set when this popup replaced the booking detail sheet, so dismissing it
+    // puts the buyer back where they were instead of on the bookings list.
+    reopenDetail: false,
+  });
+
+  const showResult = (message, { title = '', iconName = 'check' } = {}) =>
+    setResultModal({ visible: true, title, message, iconName, reopenDetail: false });
+
+  const closeResultModal = () => {
+    setResultModal(prev => {
+      if (prev.reopenDetail) {
+        setTimeout(() => setBookingDetailModal(d => ({ ...d, visible: true })), 250);
+      }
+      return { ...prev, visible: false, reopenDetail: false };
+    });
+  };
+
+  const askConfirm = ({ title, message, confirmText, confirmColor, iconName = 'alert-circle' }) => {
+    const restoreDetail = bookingDetailModal.visible;
+    setBookingDetailModal(prev => ({ ...prev, visible: false }));
+    return new Promise(resolve => {
+      setTimeout(
+        () =>
+          setActionConfirm({
+            visible: true,
+            title,
+            message,
+            confirmText,
+            confirmColor,
+            iconName,
+            resolve,
+            restoreDetail,
+          }),
+        250,
+      );
+    });
+  };
+
+  const askPaymentType = amountLabel => {
+    if (!escrowSettings.holdEnabled) return Promise.resolve(PAYMENT_TYPES.DIRECT);
+    // Whatever sheet we were called from has to go first (iOS modal stacking).
+    const restoreDetail = bookingDetailModal.visible;
+    setBookingDetailModal(prev => ({ ...prev, visible: false }));
+    return new Promise(resolve => {
+      setTimeout(
+        () =>
+          setPaymentChoice({
+            visible: true,
+            amountLabel: amountLabel || '',
+            resolve,
+            restoreDetail,
+          }),
+        250,
+      );
+    });
+  };
+
+  /** Starts (or retries) the escrow payment for a fixed-price booking. */
+  const startEscrowPayment = async (bookingId, paymentType) => {
     if (!token || !bookingId || escrowBusyId != null) return false;
     setEscrowBusyId(bookingId);
     try {
-      const response = await createEscrowCheckoutApi(token, bookingId);
-      const data = response?.data || response || {};
-      const url = data.checkout_url || data.checkoutUrl || '';
-      if (!url) {
-        Alert.alert('', ERROR_ESCROW_CHECKOUT_FAILED);
-        return false;
-      }
-      setBookingDetailModal(prev => ({ ...prev, visible: false }));
-      openEscrowCheckout(url, {
-        bookingId,
-        sessionId: data.session_id || data.sessionId || '',
-      });
-      return true;
+      const response = await createEscrowCheckoutApi(token, bookingId, { paymentType });
+      return handleEscrowCheckoutResponse(response, bookingId);
     } catch (error) {
-      Alert.alert('', getApiErrorMessage(error?.data, error?.message || ERROR_ESCROW_CHECKOUT_FAILED));
+      showResult(getApiErrorMessage(error?.data, error?.message || ERROR_ESCROW_CHECKOUT_FAILED), {
+        iconName: 'alert-circle',
+      });
       return false;
     } finally {
       setEscrowBusyId(null);
     }
   };
 
-  // ---- Hourly work entries -------------------------------------------------
-  const handleApproveWorkEntry = entry => {
+  /**
+   * Releases a "Pay & Hold" authorisation without charging it — distinct from
+   * Reject/Cancel Booking, which pass judgment on the work itself. Only offered
+   * while payment_status is still 'held'.
+   */
+  const cancelHold = async (label, request) => {
     const bookingId = bookingDetailModal.bookingId;
+    if (!token || !bookingId || escrowBusyId != null) return;
+
+    const ok = await askConfirm({
+      title: HOLD_CANCEL_CONFIRM_TITLE,
+      message: HOLD_CANCEL_CONFIRM_BODY,
+      confirmText: HOLD_CANCEL_BUTTON,
+      iconName: 'x-circle',
+    });
+    if (!ok) return;
+
+    setEscrowBusyId(label);
+    try {
+      await request(bookingId);
+      showResult(HOLD_CANCEL_SUCCESS, { title: HOLD_CANCEL_SUCCESS_TITLE });
+    } catch (error) {
+      showResult(getApiErrorMessage(error?.data, error?.message || ERROR_HOLD_CANCEL_FAILED), {
+        iconName: 'alert-circle',
+      });
+    } finally {
+      setEscrowBusyId(null);
+      await loadBuyerBookingDetail(bookingId, { showLoader: false }).catch(() => {});
+      fetchBuyerBookings();
+    }
+  };
+
+  const handleCancelBookingHold = () =>
+    cancelHold('booking', bookingId => cancelBookingHoldApi(token, bookingId));
+
+  const handleCancelMilestoneHold = milestone =>
+    cancelHold(`milestone:${milestone?.id}`, bookingId =>
+      cancelMilestoneHoldApi(token, bookingId, milestone.id),
+    );
+
+  const handleCancelWorkEntryHold = entry =>
+    cancelHold(`entry:${entry?.id}`, bookingId =>
+      cancelWorkEntryHoldApi(token, bookingId, entry.id),
+    );
+
+  // ---- Hourly work entries -------------------------------------------------
+  const handleApproveWorkEntry = async entry => {
+    const bookingId = bookingDetailModal.bookingId;
+    const booking = bookingDetailModal.booking;
     if (!token || !bookingId || entry?.id == null || workEntryBusyId != null) return;
 
-    Alert.alert(
-      'Approve & Pay',
-      `Pay for ${entry.hours}h on this entry? The amount is released to the seller and cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Approve & Pay',
-          onPress: async () => {
-            setWorkEntryBusyId(entry.id);
-            try {
-              await approveWorkEntryApi(token, bookingId, entry.id);
-            } catch (error) {
-              // 409 = this entry was already settled (double tap / retry).
-              // Not an error for the user — just refresh and show current state.
-              if (error?.status !== 409) {
-                Alert.alert(
-                  '',
-                  getApiErrorMessage(error?.data, error?.message || 'Could not approve this entry.'),
-                );
-              }
-            } finally {
-              await loadBuyerBookingDetail(bookingId, { showLoader: false }).catch(() => {});
-              setWorkEntryBusyId(null);
-              fetchBuyerBookings();
-            }
-          },
-        },
-      ],
-    );
+    // Escrow, first approval of this entry: the payment sheet IS the
+    // confirmation, so we go straight to it. An entry already on hold is
+    // approved with no payment_type — that second approval captures it, and
+    // only that case needs its own confirm.
+    let paymentType;
+    if (needsPaymentChoice(booking?.raw || booking, entry?.raw || entry)) {
+      paymentType = await askPaymentType(formatCurrency(entry?.amount));
+      if (!paymentType) return;
+    } else {
+      const ok = await askConfirm({
+        title: ENTRY_RELEASE_CONFIRM_TITLE,
+        message: ENTRY_RELEASE_CONFIRM_BODY(entry?.hours, formatCurrency(entry?.amount)),
+        confirmText: ENTRY_RELEASE_CONFIRM_BTN,
+        iconName: 'check-circle',
+      });
+      if (!ok) return;
+    }
+
+    setWorkEntryBusyId(entry.id);
+    // Escrow handed us off to Stripe: the detail sheet is already closed and
+    // refreshing it here would pop it back open behind the checkout screen.
+    // openEscrowCheckout refreshes on return instead.
+    let handedToCheckout = false;
+    try {
+      const response = await approveWorkEntryApi(token, bookingId, entry.id, { paymentType });
+      handedToCheckout = handleEscrowCheckoutResponse(response, bookingId);
+    } catch (error) {
+      // 409 = this entry was already settled (double tap / retry). Not an error
+      // for the user — just refresh and show current state.
+      if (error?.status !== 409) {
+        showResult(getApiErrorMessage(error?.data, error?.message || 'Could not approve this entry.'), {
+          iconName: 'alert-circle',
+        });
+      }
+    } finally {
+      setWorkEntryBusyId(null);
+      if (!handedToCheckout) {
+        await loadBuyerBookingDetail(bookingId, { showLoader: false }).catch(() => {});
+        fetchBuyerBookings();
+      }
+    }
   };
 
   const openEntryActionModal = (mode, entry, target = 'entry') => {
@@ -1754,16 +1997,23 @@ const JobsBookingsScreen = ({ navigation, route }) => {
     }
   };
 
-  const handleAcceptPayMilestone = milestone => {
+  const handleAcceptPayMilestone = async milestone => {
     if (milestoneBusyId != null) return;
-    Alert.alert(
-      'Accept & Pay',
-      `Accept "${milestone?.title}" and release ${formatCurrency(milestone?.amount)} to the seller?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Accept & Pay', onPress: () => runAcceptPayMilestone(milestone) },
-      ],
-    );
+    // When a payment choice is coming, that sheet IS the confirmation — asking
+    // twice for the same tap is just friction. Only a release with nothing left
+    // to choose (hold capture, or Delayed Payments off) needs its own confirm.
+    const booking = bookingDetailModal.booking;
+    if (needsPaymentChoice(booking?.raw || booking, milestone?.raw || milestone)) {
+      runAcceptPayMilestone(milestone);
+      return;
+    }
+    const ok = await askConfirm({
+      title: MILESTONE_RELEASE_CONFIRM_TITLE,
+      message: MILESTONE_RELEASE_CONFIRM_BODY(milestone?.title, formatCurrency(milestone?.amount)),
+      confirmText: MILESTONE_RELEASE_CONFIRM_BTN,
+      iconName: 'check-circle',
+    });
+    if (ok) runAcceptPayMilestone(milestone);
   };
 
   const handleRejectMilestone = async milestone => {
@@ -2011,11 +2261,25 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       return;
     }
 
+    const targetBooking = bookings.find(item => String(item.id) === String(bookingId));
+
+    // Escrow, first accept of this booking: the buyer picks direct vs hold
+    // before we call the API. A booking already on hold is accepted with no
+    // payment_type — that second accept captures it and pays the seller.
+    let paymentType;
+    if (actionType === 'accept' && needsPaymentChoice(targetBooking?.raw || targetBooking)) {
+      // The confirmation sheet has to close before the choice sheet opens —
+      // iOS can't show two Modals at once.
+      setConfirmModal(prev => ({ ...prev, visible: false }));
+      paymentType = await askPaymentType(formatCurrency(targetBooking?.total));
+      if (!paymentType) return;
+    }
+
     setIsConfirmingBooking(true);
     try {
       const acceptedBooking =
         actionType === 'accept'
-          ? bookings.find(item => String(item.id) === String(bookingId)) || {
+          ? targetBooking || {
             id: String(bookingId),
             title: 'Booking',
             sellerName: '',
@@ -2023,7 +2287,13 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           : null;
 
       if (actionType === 'accept') {
-        await acceptBuyerBookingApi(token, bookingId);
+        const response = await acceptBuyerBookingApi(token, bookingId, { paymentType });
+        // Escrow: nothing settled — pay on Stripe, then accept again if it was
+        // a hold. Skips the review prompt, there's nothing completed yet.
+        if (handleEscrowCheckoutResponse(response, bookingId)) {
+          setConfirmModal(prev => ({ ...prev, visible: false, reason: '', reasonError: '' }));
+          return;
+        }
       } else if (actionType === 'reject') {
         await rejectBuyerBookingApi(token, bookingId, reason);
       } else if (actionType === 'cancel') {
@@ -2050,13 +2320,13 @@ const JobsBookingsScreen = ({ navigation, route }) => {
       // instead of showing an error; accepting again captures it.
       if (actionType === 'accept' && isEscrowPaymentRequiredError(error)) {
         setConfirmModal(prev => ({ ...prev, visible: false }));
-        await startEscrowPayment(bookingId);
+        await startEscrowPayment(bookingId, paymentType);
         return;
       }
-      Alert.alert(
-        confirmModal.title,
-        getApiErrorMessage(error?.data, error?.message || ERROR_BOOKING_ACTION_FAILED),
-      );
+      showResult(getApiErrorMessage(error?.data, error?.message || ERROR_BOOKING_ACTION_FAILED), {
+        title: confirmModal.title,
+        iconName: 'alert-circle',
+      });
     } finally {
       setIsConfirmingBooking(false);
     }
@@ -3130,12 +3400,47 @@ const JobsBookingsScreen = ({ navigation, route }) => {
           bookingDetailModal.milestones,
         )}
         onSplitMilestones={openSplitModal}
-        onPayEscrow={b => startEscrowPayment(b?.id || bookingDetailModal.bookingId)}
+        onPayEscrow={async b => {
+          const id = b?.id || bookingDetailModal.bookingId;
+          const paymentType = await askPaymentType(formatCurrency(b?.total));
+          if (paymentType) startEscrowPayment(id, paymentType);
+        }}
+        holdDays={escrowSettings.holdDays}
+        onCancelBookingHold={handleCancelBookingHold}
+        onCancelMilestoneHold={handleCancelMilestoneHold}
+        onCancelWorkEntryHold={handleCancelWorkEntryHold}
         escrowBusy={escrowBusyId != null}
         onApproveWorkEntry={handleApproveWorkEntry}
         onCounterWorkEntry={entry => openEntryActionModal('counter', entry)}
         onDisputeWorkEntry={entry => openEntryActionModal('dispute', entry)}
         onClose={closeBookingDetailModal}
+      />
+
+      <ConfirmationModal
+        visible={actionConfirm.visible}
+        title={actionConfirm.title}
+        message={actionConfirm.message}
+        confirmText={actionConfirm.confirmText}
+        confirmColor={actionConfirm.confirmColor}
+        iconName={actionConfirm.iconName}
+        onConfirm={() => settleActionConfirm(true)}
+        onCancel={() => settleActionConfirm(false)}
+      />
+
+      <SuccessModal
+        visible={resultModal.visible}
+        title={resultModal.title}
+        message={resultModal.message}
+        iconName={resultModal.iconName}
+        onPress={closeResultModal}
+      />
+
+      <PaymentChoiceModal
+        visible={paymentChoice.visible}
+        amountLabel={paymentChoice.amountLabel}
+        holdDays={escrowSettings.holdDays}
+        onConfirm={settlePaymentChoice}
+        onClose={() => settlePaymentChoice(null)}
       />
 
       <SplitMilestonesModal

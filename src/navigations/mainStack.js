@@ -7,6 +7,7 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import BookingDetailsScreen from '../screens/buyer/BookingDetailsScreen';
 import StripeCheckoutScreen from '../screens/StripeCheckoutScreen';
 import StaticPageScreen from '../screens/StaticPageScreen';
+import ReceiptScreen from '../screens/ReceiptScreen';
 import { SCREEN_NAMES, USER_ROLES } from '../constans/Constants';
 import { selectAppRole } from '../redux/slices/authSlice';
 
@@ -35,6 +36,11 @@ const MainStack = () => {
       <Stack.Screen
         name={SCREEN_NAMES.STRIPE_CHECKOUT}
         component={StripeCheckoutScreen}
+        options={{ statusBarStyle: 'dark', animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name={SCREEN_NAMES.RECEIPT}
+        component={ReceiptScreen}
         options={{ statusBarStyle: 'dark', animation: 'slide_from_bottom' }}
       />
       <Stack.Screen

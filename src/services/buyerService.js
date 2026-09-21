@@ -1,5 +1,22 @@
-import { API_ENDPOINTS } from '../constans/Constants';
+import { API_ENDPOINTS, STRIPE_CANCEL_URL, STRIPE_SUCCESS_URL } from '../constans/Constants';
 import { apiRequest } from './apiClient';
+
+/**
+ * Where Stripe should send the browser back to once a Checkout session is done.
+ * The app has no web pages of its own — StripeCheckoutScreen's WebView watches
+ * for these two URLs and intercepts the navigation before it ever loads, so
+ * they only have to be stable strings, not real pages.
+ *
+ * Sent on every escrow request so the backend builds a MOBILE hosted session
+ * instead of falling back to its web default
+ * (`{CLIENT_URL}/buyer/bookings/:id?escrow=success`), which the WebView would
+ * never recognise. Backends that ignore these fields are unaffected.
+ */
+const stripeReturnUrls = () => ({
+  return_url: `${STRIPE_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
+  cancel_url: STRIPE_CANCEL_URL,
+  hosted: true,
+});
 
 /**
  * GET /api/v1/buyer/profile
@@ -749,13 +766,22 @@ export const getBuyerBookingByIdApi = async (token, bookingId) => {
 /**
  * PATCH /api/v1/buyer/bookings/:id/accept
  * Accept completed work (amidst_completion -> completed)
+ *
+ * Escrow mode, FIRST accept only: pass paymentType ('direct' | 'hold') to pick
+ * how this booking is paid. The response then carries
+ * { escrow: true, checkout_url, session_id } instead of settling — pay first.
+ * On a 'hold' booking the SECOND accept takes no paymentType: it captures the
+ * held amount and releases it to the seller.
+ * Wallet-mode bookings ignore all of this (no body at all).
  */
-export const acceptBuyerBookingApi = async (token, bookingId) => {
+export const acceptBuyerBookingApi = async (token, bookingId, { paymentType } = {}) => {
   const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/accept`;
+  const body = paymentType ? { payment_type: paymentType, ...stripeReturnUrls() } : undefined;
   console.log('[BuyerBookingAccept] Payload >>>', {
     endpoint,
     method: 'PATCH',
     bookingId,
+    body,
     hasToken: Boolean(token),
   });
 
@@ -763,6 +789,7 @@ export const acceptBuyerBookingApi = async (token, bookingId) => {
     const response = await apiRequest(endpoint, {
       method: 'PATCH',
       headers: { Accept: '*/*' },
+      ...(body ? { body } : {}),
       token,
     });
     console.log('[BuyerBookingAccept] Response <<<', JSON.stringify(response, null, 2));
@@ -799,13 +826,20 @@ export const payBuyerBookingApi = async (token, bookingId) => {
 
 /**
  * PATCH /api/v1/buyer/bookings/{id}/milestones/{milestoneId}/accept
- * Accept a submitted milestone — releases that stage's payout. No body.
+ * Accept a submitted milestone — releases that stage's payout.
+ * Escrow mode: same two-step 'direct' | 'hold' flow as acceptBuyerBookingApi.
  */
-export const acceptBuyerMilestoneApi = async (token, bookingId, milestoneId) => {
+export const acceptBuyerMilestoneApi = async (token, bookingId, milestoneId, { paymentType } = {}) => {
   const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/milestones/${milestoneId}/accept`;
-  console.log('[BuyerMilestoneAccept] Payload >>>', { endpoint, bookingId, milestoneId });
+  const body = paymentType ? { payment_type: paymentType, ...stripeReturnUrls() } : undefined;
+  console.log('[BuyerMilestoneAccept] Payload >>>', { endpoint, bookingId, milestoneId, body });
   try {
-    const response = await apiRequest(endpoint, { method: 'PATCH', headers: { Accept: '*/*' }, token });
+    const response = await apiRequest(endpoint, {
+      method: 'PATCH',
+      headers: { Accept: '*/*' },
+      ...(body ? { body } : {}),
+      token,
+    });
     console.log('[BuyerMilestoneAccept] Response <<<', JSON.stringify(response, null, 2));
     return response;
   } catch (error) {
@@ -869,14 +903,13 @@ export const createBuyerMilestonesApi = async (token, bookingId, milestones) => 
  * Starts (or retries) the escrow card payment — returns a Stripe Checkout URL.
  * Safe to retry as long as payment_status is still "unpaid".
  * 400 → booking is not in escrow mode, or already paid.
- *
- * NOTE: not documented in swagger yet — path confirmed with the backend team.
  */
-export const createEscrowCheckoutApi = async (token, bookingId) => {
+export const createEscrowCheckoutApi = async (token, bookingId, { paymentType } = {}) => {
   const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}${API_ENDPOINTS.BUYER_ESCROW_CHECKOUT_SUFFIX}`;
-  console.log('[EscrowCheckout] Payload >>>', { endpoint, bookingId });
+  const body = { ...stripeReturnUrls(), ...(paymentType ? { payment_type: paymentType } : {}) };
+  console.log('[EscrowCheckout] Payload >>>', { endpoint, bookingId, body });
   try {
-    const response = await apiRequest(endpoint, { method: 'POST', token });
+    const response = await apiRequest(endpoint, { method: 'POST', body, token });
     console.log('[EscrowCheckout] Response <<<', JSON.stringify(response, null, 2));
     return response;
   } catch (error) {
@@ -884,6 +917,44 @@ export const createEscrowCheckoutApi = async (token, bookingId) => {
     throw error;
   }
 };
+
+/**
+ * Release a "Pay & Hold" authorisation without charging it.
+ *   PATCH /buyer/bookings/{id}/cancel-hold
+ *   PATCH /buyer/bookings/{id}/milestones/{milestoneId}/cancel-hold
+ *   PATCH /buyer/bookings/{id}/work-entries/{entryId}/cancel-hold
+ * Only valid while payment_type is 'hold' and payment_status is still 'held'.
+ * No body. 400 → nothing is on hold (already captured or cancelled).
+ */
+const cancelHoldApi = async (label, token, path) => {
+  const endpoint = `${path}${API_ENDPOINTS.BUYER_CANCEL_HOLD_SUFFIX}`;
+  console.log(`[${label}] Payload >>>`, { endpoint });
+  try {
+    const response = await apiRequest(endpoint, { method: 'PATCH', headers: { Accept: '*/*' }, token });
+    console.log(`[${label}] Response <<<`, JSON.stringify(response, null, 2));
+    return response;
+  } catch (error) {
+    console.log(`[${label}] Error <<<`, { status: error?.status, message: error?.message, data: error?.data });
+    throw error;
+  }
+};
+
+export const cancelBookingHoldApi = (token, bookingId) =>
+  cancelHoldApi('BookingCancelHold', token, `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}`);
+
+export const cancelMilestoneHoldApi = (token, bookingId, milestoneId) =>
+  cancelHoldApi(
+    'MilestoneCancelHold',
+    token,
+    `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/milestones/${milestoneId}`,
+  );
+
+export const cancelWorkEntryHoldApi = (token, bookingId, entryId) =>
+  cancelHoldApi(
+    'WorkEntryCancelHold',
+    token,
+    `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/work-entries/${entryId}`,
+  );
 
 /**
  * GET /api/v1/buyer/bookings/{id}/escrow/confirm
@@ -908,12 +979,19 @@ export const confirmEscrowPaymentApi = async (token, bookingId, sessionId = '') 
  * PATCH /api/v1/buyer/bookings/{id}/work-entries/{entryId}/approve
  * Approve a logged work entry — pays the seller at its full hours.
  * 409 → already processed (duplicate/retry): treat as a soft success, just refresh.
+ * Escrow mode: same two-step 'direct' | 'hold' flow as acceptBuyerBookingApi.
  */
-export const approveWorkEntryApi = async (token, bookingId, entryId) => {
+export const approveWorkEntryApi = async (token, bookingId, entryId, { paymentType } = {}) => {
   const endpoint = `${API_ENDPOINTS.BUYER_BOOKINGS}/${bookingId}/work-entries/${entryId}/approve`;
-  console.log('[WorkEntryApprove] Payload >>>', { endpoint, bookingId, entryId });
+  const body = paymentType ? { payment_type: paymentType, ...stripeReturnUrls() } : undefined;
+  console.log('[WorkEntryApprove] Payload >>>', { endpoint, bookingId, entryId, body });
   try {
-    const response = await apiRequest(endpoint, { method: 'PATCH', headers: { Accept: '*/*' }, token });
+    const response = await apiRequest(endpoint, {
+      method: 'PATCH',
+      headers: { Accept: '*/*' },
+      ...(body ? { body } : {}),
+      token,
+    });
     console.log('[WorkEntryApprove] Response <<<', JSON.stringify(response, null, 2));
     return response;
   } catch (error) {

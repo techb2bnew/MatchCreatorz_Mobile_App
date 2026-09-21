@@ -40,7 +40,8 @@ import {
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from '../../utils';
 import MilestonesSection, { openAttachment } from '../MilestonesSection';
 import WorkEntriesSection from '../WorkEntriesSection';
-import { isEscrowHeld, needsEscrowPayment } from '../../utils/escrow';
+import { isEscrowHeld, isHoldHeld, needsEscrowPayment } from '../../utils/escrow';
+import HoldNotice from '../HoldNotice';
 
 const { flexDirectionRow, alignItemsCenter, alignJustifyCenter, justifyContentSpaceBetween } =
   BaseStyle;
@@ -100,17 +101,29 @@ const BookingDetailModal = ({
   onApproveWorkEntry,
   onCounterWorkEntry,
   onDisputeWorkEntry,
-  // Escrow: card-hold bookings pay through Stripe, not the wallet.
+  // Escrow: card bookings pay through Stripe, not the wallet.
   onPayEscrow,
   escrowBusy = false,
+  // "Pay & Hold": the card is authorised but not captured. Cancelling releases
+  // the authorisation with no charge; accepting again captures it.
+  holdDays = null,
+  onCancelBookingHold,
+  onCancelMilestoneHold,
+  onCancelWorkEntryHold,
   // Split into milestones — shown only while the booking is eligible.
   canSplit = false,
   onSplitMilestones,
 }) => {
   const statusStyle = getBookingStatusStyle(booking?.status);
   const raw = booking?.raw || booking;
-  const showEscrowBanner = needsEscrowPayment(raw);
+  const showEscrowBanner = needsEscrowPayment(raw, {
+    hasMilestones: milestones.length > 0,
+    isHourly,
+  });
   const showEscrowBadge = isEscrowHeld(raw);
+  // A whole-booking "Pay & Hold" — milestone / work-entry holds are shown on
+  // their own rows inside their sections instead.
+  const bookingOnHold = isHoldHeld(raw) && !milestones.length && !isHourly;
 
   return (
     <Modal
@@ -207,6 +220,14 @@ const BookingDetailModal = ({
                         )}
                       </TouchableOpacity>
                     </View>
+                  ) : null}
+
+                  {bookingOnHold ? (
+                    <HoldNotice
+                      days={holdDays}
+                      busy={escrowBusy}
+                      onCancel={onCancelBookingHold}
+                    />
                   ) : null}
 
                   <View style={[styles.sellerRow, flexDirectionRow, alignItemsCenter]}>
@@ -337,6 +358,8 @@ const BookingDetailModal = ({
                       onApprove={onApproveWorkEntry}
                       onCounter={onCounterWorkEntry}
                       onDispute={onDisputeWorkEntry}
+                      onCancelHold={onCancelWorkEntryHold}
+                      holdDays={holdDays}
                     />
                   ) : (
                     <MilestonesSection
@@ -346,6 +369,8 @@ const BookingDetailModal = ({
                       onAcceptPay={onAcceptPayMilestone}
                       onReject={onRejectMilestone}
                       onCounter={onCounterMilestone}
+                      onCancelHold={onCancelMilestoneHold}
+                      holdDays={holdDays}
                     />
                   )}
                 </>

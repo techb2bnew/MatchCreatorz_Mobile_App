@@ -122,6 +122,7 @@ import {
   isHourlyBooking,
 } from '../../utils/workEntries';
 import { selectAuth } from '../../redux/slices/authSlice';
+import { useEscrowSettings } from '../../utils/useEscrowSettings';
 import { getApiErrorMessage } from '../../services/apiClient';
 import { createOrGetConversationApi } from '../../services/chatService';
 import {
@@ -361,6 +362,9 @@ const mapApiBidToUi = bid => {
 
 const SellerWorkScreen = ({ navigation, route }) => {
   const { token } = useSelector(selectAuth);
+  // Hold terms (how long a Pay & Hold authorisation lasts), shown read-only to
+  // the seller on any booking the buyer has placed a hold on.
+  const escrowSettings = useEscrowSettings(token);
   const bidsFetchingRef = useRef(false);
   const hasMoreBidsRef = useRef(true);
   const bidsPageRef = useRef(1);
@@ -1783,6 +1787,7 @@ const SellerWorkScreen = ({ navigation, route }) => {
       />
 
       <SellerBookingDetailModal
+        holdDays={escrowSettings.holdDays}
         visible={bookingDetailModal.visible}
         loading={bookingDetailModal.loading}
         error={bookingDetailModal.error}

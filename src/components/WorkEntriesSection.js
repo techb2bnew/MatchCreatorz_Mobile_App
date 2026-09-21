@@ -12,6 +12,9 @@ import {
   whiteColor,
 } from '../constans/Color';
 import { style, spacings } from '../constans/Fonts';
+import { HOLD_RELEASE_BUTTON } from '../constans/Constants';
+import { isHoldHeld } from '../utils/escrow';
+import HoldNotice from './HoldNotice';
 import { formatAppCurrency } from '../utils/currency';
 import {
   WORK_ENTRY_STATUS_META,
@@ -46,6 +49,10 @@ const WorkEntriesSection = ({
   onDispute,
   onAcceptCounter,
   onCounterBack,
+  // Escrow "Pay & Hold": this entry's card authorisation is placed but not
+  // captured. Buyer-only — releasing it is the same Approve & Pay button.
+  onCancelHold,
+  holdDays = null,
 }) => {
   const totals = summarizeWorkEntries(entries);
 
@@ -86,6 +93,7 @@ const WorkEntriesSection = ({
             const sellerCountered = entry.status === 'countered' && entry.counterBy === 'seller';
             const buyerCanAct = role === 'buyer' && entry.status === 'pending';
             const sellerCanRespond = role === 'seller' && buyerCountered;
+            const onHold = isHoldHeld(entry.raw || entry);
 
             return (
               <View key={String(entry.id)} style={styles.card}>
@@ -182,6 +190,15 @@ const WorkEntriesSection = ({
                   </View>
                 ) : null}
 
+                {onHold ? (
+                  <HoldNotice
+                    role={role}
+                    days={holdDays}
+                    busy={busy}
+                    onCancel={role === 'buyer' && onCancelHold ? () => onCancelHold(entry) : undefined}
+                  />
+                ) : null}
+
                 {buyerCanAct ? (
                   <>
                     <View style={[styles.actionRow, flexDirectionRow]}>
@@ -209,7 +226,7 @@ const WorkEntriesSection = ({
                         <ActivityIndicator size="small" color={whiteColor} />
                       ) : (
                         <Text style={[styles.primaryText, style.fontWeightMedium]}>
-                          Approve &amp; Pay {money(entry.amount)}
+                          {onHold ? HOLD_RELEASE_BUTTON : 'Approve & Pay'} {money(entry.amount)}
                         </Text>
                       )}
                     </TouchableOpacity>
